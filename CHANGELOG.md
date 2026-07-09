@@ -22,7 +22,7 @@
 - **自选股初始加载竞态导致永卡 loading 骨架屏**：`onMounted` 中 `loadWatchlist`（async，`await getWatchlist`）与 `handleSearch→loadStock` 并发执行。若 `loadStock` 先完成，其末尾调用的 `updateWatchlistPrices` 因 `watchlist` 仍为空数组而 `return`；等 `loadWatchlist` 随后设好 `watchlist` 后，无人再触发更新 → 自选股永远卡在 loading 骨架屏，表现为"功能没实现"。已在 `loadWatchlist` 设好 `watchlist` 后补调：若 `loadStock` 已完成（`currentSymbol` + `startDate` + `endDate` 均有值）则调用 `updateWatchlistPrices`。
 - **真实模式下自选股列表非当前股票全部 404（严重）**：`updateWatchlistPrices` 调用 `getKLines(sym, ...)` 时 `sym` 是原始代码（如 `"AAPL"`），但后端要求美股带 `us` 前缀（`loadStock` 用 `querySymbol = 'us' + code`）。缺少前缀导致后端返回 404，**真实模式下非当前自选股全部加载失败**（卡 loading 或显示 `--`），仅当前股票因复用 `klineData` 而正常。已在真实模式分支补 `querySym = sym.startsWith('US') ? sym : 'us' + sym`，`getKLines` 与 `cacheKey` 均使用 `querySym`，与 `loadStock` 保持一致。
 - **测试模式下自选股 mock 数据每次刷新都变（价格随机跳动）**：`updateWatchlistPrices` 在测试模式下每次调用都重新 `generateMockKLines`，导致非当前股票的价格和涨跌幅每次都不同，用户误以为功能有 bug。已改为测试模式也用 `watchlistKlineCache` 缓存（key 加 `mock_` 前缀区分），mock 数据每 `(symbol, period)` 只生成一次。
-- **测试模式标识不够醒目**：自选股列表区新增琥珀色警告条"模拟数据，非真实行情"（仅测试模式显示），避免用户将 mock 数据误认为真实行情。
+- **切换测试/真实模式后自选股仍显示旧 mock 数据（数据混合）**：`watch(useMockData)` 只重新加载当前股票，没有清空 `watchlistKlineCache` 与 `watchlistPriceMap`，导致从测试模式切到真实模式后，非当前自选股仍残留测试模式生成的 mock 数值（如 MU 顶部已显示真实 $948.80 +1.11%，左侧列表仍显示 mock 的 $1032.28 -10.57%）。已在模式切换 watcher 中先 `clear` 自选股缓存、重置 priceMap，再重新加载当前股票，确保切换模式后所有自选股都用新数据源重新计算。
 
 ---
 
