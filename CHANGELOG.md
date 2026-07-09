@@ -20,6 +20,7 @@
 - **自选股列表初始加载崩溃（白屏，严重）**：`loadWatchlist`（异步）完成后立即渲染自选股列表，但 `updateWatchlistPrices` 要等 `loadStock` 完成后才调用，此间 `watchlistPriceMap` 为空 `{}`；模板守卫用 `price !== null` 无法挡住 `undefined`（`undefined !== null` 为 `true`），导致走进分支执行 `undefined.toFixed()` 抛 TypeError，组件崩溃白屏——**每次页面初始加载必现**。已将模板守卫改为 `!= null`（同时排除 `null` 与 `undefined`）并增加 `change` 判断；`loadWatchlist` 设置自选股后同步把 `watchlistPriceMap` 初始化为全 `loading` 态，消除渲染空窗期；`loadStock` 加载失败时清除自选股 `loading` 态，避免骨架屏永转。
 - **自选股涨跌幅不随 K 线周期变化（显示的是区间累计涨跌）**：`calcPriceInRange` 原本计算"区间起始 close → 区间末尾 close"的累计涨跌，当日期范围为"全部"时日K 与周K 的起止 close 相同，**切换周期涨跌不变**，表现为"功能没实现/不更新"。已改为：价格取区间末尾（`time<=endDate`）那根 K 线的收盘价，涨跌幅 = 该根 close vs 前一根 close——即**日K 显示当日涨跌、周K 显示本周涨跌、月K 显示本月涨跌**，切换周期即时变化；改结束日期则末尾那根随之改变，涨跌同步更新。
 - **自选股初始加载竞态导致永卡 loading 骨架屏**：`onMounted` 中 `loadWatchlist`（async，`await getWatchlist`）与 `handleSearch→loadStock` 并发执行。若 `loadStock` 先完成，其末尾调用的 `updateWatchlistPrices` 因 `watchlist` 仍为空数组而 `return`；等 `loadWatchlist` 随后设好 `watchlist` 后，无人再触发更新 → 自选股永远卡在 loading 骨架屏，表现为"功能没实现"。已在 `loadWatchlist` 设好 `watchlist` 后补调：若 `loadStock` 已完成（`currentSymbol` + `startDate` + `endDate` 均有值）则调用 `updateWatchlistPrices`。
+- **真实模式下自选股列表非当前股票全部 404（严重）**：`updateWatchlistPrices` 调用 `getKLines(sym, ...)` 时 `sym` 是原始代码（如 `"AAPL"`），但后端要求美股带 `us` 前缀（`loadStock` 用 `querySymbol = 'us' + code`）。缺少前缀导致后端返回 404，**真实模式下非当前自选股全部加载失败**（卡 loading 或显示 `--`），仅当前股票因复用 `klineData` 而正常。已在真实模式分支补 `querySym = sym.startsWith('US') ? sym : 'us' + sym`，`getKLines` 与 `cacheKey` 均使用 `querySym`，与 `loadStock` 保持一致。
 
 ---
 
