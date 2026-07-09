@@ -56,13 +56,18 @@ def validate_klines(df: "pd.DataFrame", period: str) -> bool:
       1Y -> 中位数间隔应 <= 400 天 (真实年线 ~365 天)
       4h -> 含时分, 单独放行
     """
-    if df is None or len(df) < 5:
+    # 聚合周期（季/半年/年）由日线重采样而来，天然 bar 数少:
+    #   一只上市 1.4 年的股票(如退市股 SNDK) 只有约 2-3 根半年线 / 1-2 根年线。
+    #   对这类周期放宽最小根数门槛，允许 ≥1 根通过粒度校验（粒度仍严格校验）。
+    _MIN_BARS = {'4h': 1, '1d': 5, '1w': 3, '1M': 2, '3M': 1, '6M': 1, '1Y': 1}
+    min_bars = _MIN_BARS.get(period, 5)
+    if df is None or len(df) < min_bars:
         return False
     try:
         if period == '4h':
             return True
         dates = pd.to_datetime(df['date'], errors='coerce').dropna().sort_values()
-        if len(dates) < 5:
+        if len(dates) < min_bars:
             return False
         gaps = dates.diff().dropna()
         # 仅保留正向且合理的间隔 (<=400 天, 过滤极端异常)

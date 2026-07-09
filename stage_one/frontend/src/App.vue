@@ -1526,10 +1526,20 @@ const handleSearch = async () => {
     // currentSymbol 保持纯净的无前缀大写代码（如 AAPL），和 UI 对齐
     currentSymbol.value = code;
 
-    // 真实模式下，若日K返回根数过少，提示数据可能不完整
-    // (例如 Yahoo 被限流导致后端退回腾讯 ~320 根上限)
-    if (!useMockData.value && currentPeriod.value === '1d' && klines.length > 0 && klines.length < 400) {
-      dataWarning.value = `⚠️ 当前仅返回 ${klines.length} 根日K线，可能不是该股票的完整历史（数据源被限流或网络异常时会发生）。请稍后重试，或确认后端 Yahoo 数据源可用。`;
+    // 真实模式下，若返回根数过少，提示数据可能不完整
+    // - 日K <400 根：可能被限流/退回腾讯上限
+    // - 聚合周期(季/半年/年) 根数少：该股票历史长度不足(如退市股 SNDK 只有 ~1.4 年日线)
+    if (!useMockData.value && klines.length > 0) {
+      const p = currentPeriod.value;
+      const n = klines.length;
+      if (p === '1d' && n < 400) {
+        dataWarning.value = `⚠️ 当前仅返回 ${n} 根日K线，可能不是该股票的完整历史（数据源被限流或网络异常时会发生）。请稍后重试，或确认后端 Yahoo 数据源可用。`;
+      } else if ((p === '3M' && n < 4) || (p === '6M' && n < 2) || (p === '1Y' && n < 2)) {
+        const labels: Record<string, string> = { '3M': '季K', '6M': '半年K', '1Y': '年K' };
+        dataWarning.value = `⚠️ 该股票历史数据较短，当前仅 ${n} 根${labels[p] || p}（可能是退市/新上市股票）。建议切换到更短周期（如日K）查看更多细节。`;
+      } else {
+        dataWarning.value = '';
+      }
     } else {
       dataWarning.value = '';
     }
