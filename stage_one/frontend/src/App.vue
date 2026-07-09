@@ -747,26 +747,36 @@ const watchlistPriceMap = ref<Record<string, WatchlistPriceInfo>>({});
 // 缓存已拉取的自选股K线（切换日期范围时复用，避免重复请求）
 const watchlistKlineCache = new Map<string, KLinePoint[]>();
 
-/** 从 K 线数据中提取指定日期区间内的起止价格与涨跌幅 */
-function calcPriceInRange(klines: KLinePoint[], sDate: string, eDate: string): { price: number | null; change: number | null } {
+/** 从 K 线数据中提取区间末尾价格与"最新一根 K 线的涨跌幅"
+ *  - price  = 区间内最后一根(time<=eDate)K线的收盘价
+ *  - change = 该根 close vs 前一根 close 的涨跌幅 %
+ *  这样: 日K→当日涨跌, 周K→本周涨跌, 月K→本月涨跌, 切周期即变;
+ *        改结束日期(eDate)则末尾那根随之改变 → 涨跌同步更新。
+ *  起始日期(sDate)不影响单根涨跌, 仅主图缩放使用, 故参数保留但不参与计算。
+ */
+function calcPriceInRange(klines: KLinePoint[], _sDate: string, eDate: string): { price: number | null; change: number | null } {
   if (!klines.length) return { price: null, change: null };
-  let startClose: number | null = null;
-  let endClose: number | null = null;
-
+  // 找区间内最后一根 K 线 (time <= eDate)
+  let lastIdx = -1;
   for (let i = 0; i < klines.length; i++) {
-    const t = klines[i].time;
-    if (t >= sDate && startClose === null) startClose = klines[i].close;
-    if (t <= eDate) endClose = klines[i].close;
+    if (klines[i].time <= eDate) lastIdx = i;
     else break; // 已超出结束日期，后续更晚
   }
-  // 兜底：没找到区间起始点则用第一根
-  if (startClose === null && klines.length > 0) startClose = klines[0].close;
-  // 兜底：没找到区间结束点则用最后一根
-  if (endClose === null && klines.length > 0) endClose = klines[klines.length - 1].close;
-
-  if (!startClose || !endClose || startClose === 0) return { price: null, change: null };
-  const change = ((endClose - startClose) / startClose) * 100;
-  return { price: endClose, change };
+  if (lastIdx < 0) {
+    // eDate 早于所有 K 线，兜底用第一根
+    lastIdx = 0;
+  }
+  const price = klines[lastIdx].close;
+  // 涨跌幅 = 最后一根 close vs 前一根 close
+  if (lastIdx > 0) {
+    const prevClose = klines[lastIdx - 1].close;
+    if (prevClose && prevClose !== 0) {
+      const change = ((price - prevClose) / prevClose) * 100;
+      return { price, change };
+    }
+  }
+  // 仅有第一根 K 线，无法算涨跌
+  return { price, change: null };
 }
 
 /** 测试模式各股票基准价（与 loadStock 中一致） */
