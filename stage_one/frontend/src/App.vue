@@ -197,19 +197,26 @@
                     </svg>
                   </button>
                 </div>
-                <!-- 显示当前股票的价格和涨跌幅 -->
-                <div class="text-right" v-if="currentSymbol === item && latestPrice">
-                  <div class="text-xs font-bold font-mono tabular-nums" 
-                    :class="latestChange >= 0 ? 'text-rose-600' : 'text-teal-600'">
-                    ${{ latestPrice.toFixed(2) }}
+                <!-- 显示每只股票在当前日期区间的价格和涨跌幅 -->
+                <div class="text-right min-w-[70px]">
+                  <!-- 加载中 -->
+                  <div v-if="(watchlistPriceMap[item] || {}).loading" class="space-y-0.5">
+                    <div class="h-3 w-12 bg-slate-200 dark:bg-slate-600 rounded animate-pulse mx-auto"></div>
+                    <div class="h-2.5 w-9 bg-slate-200 dark:bg-slate-600 rounded animate-pulse mx-auto"></div>
                   </div>
-                  <div class="text-[10px] font-semibold"
-                    :class="latestChange >= 0 ? 'text-rose-500' : 'text-teal-500'">
-                    {{ latestChange >= 0 ? '+' : '' }}{{ latestChange.toFixed(2) }}%
-                  </div>
-                </div>
-                <div class="text-right" v-else>
-                  <span class="text-xs text-slate-400">--</span>
+                  <!-- 已加载：显示价格 + 区间涨跌幅 -->
+                  <template v-else-if="(watchlistPriceMap[item] || {}).price !== null">
+                    <div class="text-xs font-bold font-mono tabular-nums"
+                      :class="(watchlistPriceMap[item] || {}).change! >= 0 ? 'text-rose-600' : 'text-teal-600'">
+                      ${{ (watchlistPriceMap[item] || {}).price!.toFixed(2) }}
+                    </div>
+                    <div class="text-[10px] font-semibold"
+                      :class="(watchlistPriceMap[item] || {}).change! >= 0 ? 'text-rose-500' : 'text-teal-500'">
+                      {{ (watchlistPriceMap[item] || {}).change! >= 0 ? '+' : '' }}{{ (watchlistPriceMap[item] || {}).change!.toFixed(2) }}%
+                    </div>
+                  </template>
+                  <!-- 无数据 / 加载失败 -->
+                  <span v-else class="text-xs text-slate-400">--</span>
                 </div>
               </div>
               <div class="text-[10px] text-slate-400">
@@ -730,6 +737,91 @@ const latestChange = computed(() => {
   return ((current - previous) / previous) * 100;
 });
 
+// ================== 自选股价格与区间涨跌幅 ==================
+interface WatchlistPriceInfo {
+  price: number | null;      // 区间末尾的收盘价
+  change: number | null;     // 区间涨跌幅 % (起始close → 结束close)
+  loading: boolean;          // 是否正在加载中
+}
+const watchlistPriceMap = ref<Record<string, WatchlistPriceInfo>>({});
+// 缓存已拉取的自选股K线（切换日期范围时复用，避免重复请求）
+const watchlistKlineCache = new Map<string, KLinePoint[]>();
+
+/** 从 K 线数据中提取指定日期区间内的起止价格与涨跌幅 */
+function calcPriceInRange(klines: KLinePoint[], sDate: string, eDate: string): { price: number | null; change: number | null } {
+  if (!klines.length) return { price: null, change: null };
+  let startClose: number | null = null;
+  let endClose: number | null = null;
+
+  for (let i = 0; i < klines.length; i++) {
+    const t = klines[i].time;
+    if (t >= sDate && startClose === null) startClose = klines[i].close;
+    if (t <= eDate) endClose = klines[i].close;
+    else break; // 已超出结束日期，后续更晚
+  }
+  // 兜底：没找到区间起始点则用第一根
+  if (startClose === null && klines.length > 0) startClose = klines[0].close;
+  // 兜底：没找到区间结束点则用最后一根
+  if (endClose === null && klines.length > 0) endClose = klines[klines.length - 1].close;
+
+  if (!startClose || !endClose || startClose === 0) return { price: null, change: null };
+  const change = ((endClose - startClose) / startClose) * 100;
+  return { price: endClose, change };
+}
+
+/** 测试模式各股票基准价（与 loadStock 中一致） */
+const MOCK_BASE_PRICES: Record<string, number> = {
+  'AAPL': 180, 'NVDA': 450, 'TSLA': 250, 'MSFT': 370,
+  'GOOGL': 140, 'AMZN': 175, 'META': 480, 'AMD': 160, 'MU': 130, 'SNDK': 95,
+};
+
+/** 更新所有自选股的价格与涨跌幅（基于当前日期范围 + 周期） */
+async function updateWatchlistPrices() {
+  const symbols = watchlist.value.slice();
+  const sd = startDate.value;
+  const ed = endDate.value;
+  if (!symbols.length || !sd || !ed) return;
+
+  // 先标记所有股票为 loading
+  const newMap: Record<string, WatchlistPriceInfo> = {};
+  for (const sym of symbols) {
+    const prev = watchlistPriceMap.value[sym];
+    newMap[sym] = prev ? { ...prev, loading: true } : { price: null, change: null, loading: true };
+  }
+  watchlistPriceMap.value = newMap;
+
+  // 并行获取每只股票的数据
+  await Promise.allSettled(symbols.map(async (sym) => {
+    try {
+      let klines: KLinePoint[];
+      if (sym === currentSymbol.value) {
+        // 当前查看的股票直接复用已加载的 K 线
+        klines = klineData.value;
+      } else if (useMockData.value) {
+        // 测试模式：生成模拟数据 + 按周期重采样
+        klines = resampleMockKLines(
+          generateMockKLines(sym, 4500, MOCK_BASE_PRICES[sym] || 150),
+          currentPeriod.value
+        );
+      } else {
+        // 真实数据模式：优先用缓存，未命中则请求后端
+        const key = cacheKey(sym, currentPeriod.value);
+        if (watchlistKlineCache.has(key)) {
+          klines = watchlistKlineCache.get(key)!;
+        } else {
+          klines = await getKLines(sym, currentPeriod.value);
+          watchlistKlineCache.set(key, klines); // 写入自选股专用缓存
+        }
+      }
+      const result = calcPriceInRange(klines, sd, ed);
+      watchlistPriceMap.value[sym] = { price: result.price, change: result.change, loading: false };
+    } catch (e) {
+      console.warn(`[自选股价格] ${sym} 获取失败:`, e);
+      watchlistPriceMap.value[sym] = { price: null, change: null, loading: false };
+    }
+  }));
+}
+
 // 自选股列表 (存纯大写代码，如 AAPL, TSLA)
 const watchlist = ref<string[]>([]);
 
@@ -1035,10 +1127,14 @@ const toggleWatchlist = (sym: string) => {
 
   if (idx > -1) {
     watchlist.value.splice(idx, 1);
+    // 从价格地图中移除
+    delete watchlistPriceMap.value[target];
   } else {
     watchlist.value.push(target);
   }
   persistWatchlist();
+  // 增删后刷新自选股价格（新增的会开始加载，删除的不再显示）
+  updateWatchlistPrices();
 };
 
 const removeFromWatchlist = (sym: string) => {
@@ -1046,6 +1142,7 @@ const removeFromWatchlist = (sym: string) => {
   const idx = watchlist.value.indexOf(target);
   if (idx > -1) {
     watchlist.value.splice(idx, 1);
+    delete watchlistPriceMap.value[target];
     persistWatchlist();
   }
 };
@@ -1573,6 +1670,8 @@ const handleSearch = async () => {
     }
 
     await runAnalysis();
+    // 更新自选股列表中每只股票的价格与区间涨跌幅（不阻塞 UI，后台静默更新）
+    updateWatchlistPrices();
   } catch (err: any) {
     errorMsg.value = err.message || '网络连接失败，无法加载行情图';
     klineData.value = [];
@@ -1636,6 +1735,7 @@ const handleReCalculate = async () => {
   startDate.value = inputStartDate.value;
   endDate.value = inputEndDate.value;
   await runAnalysis();
+  updateWatchlistPrices();
 };
 
 // 快捷区间预设：一键设定起止日期并重新计算，免去抠原生日历
