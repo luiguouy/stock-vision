@@ -59,6 +59,10 @@ def validate_klines(df: "pd.DataFrame", period: str) -> bool:
     # 聚合周期（季/半年/年）由日线重采样而来，天然 bar 数少:
     #   一只上市 1.4 年的股票(如退市股 SNDK) 只有约 2-3 根半年线 / 1-2 根年线。
     #   对这类周期放宽最小根数门槛，允许 ≥1 根通过粒度校验（粒度仍严格校验）。
+    #   注意: 放宽最小根数 ≠ 放宽粒度。聚合周期必须用「区间带」拒绝粒度错位:
+    #     6M 真实间隔≈182天, 若源误返回季度桩(90天)或年线(365天)必须拒绝;
+    #     1Y 真实间隔≈365天, 若源误返回半年(182天)或季度(90天)必须拒绝。
+    #     单纯用「上限」阈值(如 6M<=200)会让季度桩(90)混入 → 用「下界+上界」区间带。
     _MIN_BARS = {'4h': 1, '1d': 5, '1w': 3, '1M': 2, '3M': 1, '6M': 1, '1Y': 1}
     min_bars = _MIN_BARS.get(period, 5)
     if df is None or len(df) < min_bars:
@@ -82,11 +86,14 @@ def validate_klines(df: "pd.DataFrame", period: str) -> bool:
         if period == '1M':
             return median_gap <= 45
         if period == '3M':
-            return median_gap <= 100
+            # 季线真实间隔≈91天, 拒绝月线(≤45)及更粗; 上限留余量到130
+            return 45 < median_gap <= 130
         if period == '6M':
-            return median_gap <= 200
+            # 半年线真实间隔≈182天, 拒绝季度(≤100)及年线(≥260); 区间带
+            return 100 < median_gap <= 260
         if period == '1Y':
-            return median_gap <= 400
+            # 年线真实间隔≈365天, 拒绝半年(≤260)及更细; 上限到400
+            return 260 < median_gap <= 400
         return True
     except Exception:
         # 解析异常时保守放行, 避免误杀正常数据

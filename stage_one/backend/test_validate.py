@@ -75,6 +75,26 @@ def monthly_dates(n=150, start=date(2010, 1, 31)):
     return out
 
 
+def semiannual_dates(n=10, start=date(2010, 1, 1)):
+    """半年一根 (≈182 天, 模拟真实 6M 重采样)"""
+    out = []
+    d = start
+    for _ in range(n):
+        out.append(d)
+        d += timedelta(days=182)
+    return out
+
+
+def annual_dates(n=10, start=date(2010, 1, 1)):
+    """每年一根 (≈365 天, 模拟真实 1Y 重采样)"""
+    out = []
+    d = start
+    for _ in range(n):
+        out.append(d)
+        d += timedelta(days=365)
+    return out
+
+
 def check(name, got, expect):
     status = "PASS" if got == expect else "FAIL"
     print(f"[{status}] {name}: got={got} expect={expect}")
@@ -92,6 +112,19 @@ if __name__ == "__main__":
     results.append(check("quarterly->1d rejected", validate_klines(q, "1d"), False))
     results.append(check("quarterly->1w rejected", validate_klines(q, "1w"), False))
     results.append(check("quarterly->1M rejected", validate_klines(q, "1M"), False))
+
+    # 聚合周期粒度守卫（半年K/年K 由日线重采样，天然 bar 数少但间隔必须严格）:
+    # 季度桩(90天) 冒充 半年K/年K 必须拒绝; 半年(182天) 冒充 年K 必须拒绝。
+    sa = make_df(semiannual_dates(n=4))   # 4 根半年线 (≈182 天间隔)
+    an = make_df(annual_dates(n=3))       # 3 根年线 (≈365 天间隔)
+    results.append(check("semiannual->6M accepted", validate_klines(sa, "6M"), True))
+    results.append(check("annual->1Y accepted", validate_klines(an, "1Y"), True))
+    results.append(check("quarterly->6M rejected", validate_klines(q, "6M"), False))
+    results.append(check("quarterly->1Y rejected", validate_klines(q, "1Y"), False))
+    results.append(check("semiannual->1Y rejected", validate_klines(sa, "1Y"), False))
+    # 短历史股票(如 SNDK 分拆后仅 ~1.4 年): 半年K 仅 3 根也应通过
+    short_sa = make_df(semiannual_dates(n=3))
+    results.append(check("short 3bars->6M accepted", validate_klines(short_sa, "6M"), True))
 
     # 正常数据: 各自周期应判定为「匹配」(通过)
     results.append(check("daily->1d accepted", validate_klines(d, "1d"), True))

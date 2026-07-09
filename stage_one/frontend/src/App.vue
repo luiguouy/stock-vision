@@ -1833,9 +1833,13 @@ watch(klineData, (newData) => {
     // 恢复记忆的缩放比例：鼠标滚轮缩放 / 日期范围选择都会被记忆，
     // 并在切换股票、周期、数据模式时按比例还原，保持用户当前视角。
     const n = clean.length;
-    if (zoomMemory && n > 1) {
-      const from = zoomMemory.fromFrac * n;
-      const to = zoomMemory.toFrac * n;
+    // 关键: 仅当数据足够长(n>10)才按比例还原缩放。短历史股票(退市/新上市/分拆股,
+    // 如 SNDK 半年K 仅 3-4 根、年K 仅 2 根)若套用长股票(如 AAPL 4500 根)留下的
+    // 高比例缩放记忆, 会把仅有的几根 K 线推到屏幕外 → 看似"无法显示"。
+    // 短数据集一律 fitContent 全量展示。
+    if (zoomMemory && n > 1 && n > 10) {
+      const from = Math.max(0, Math.min(n, zoomMemory.fromFrac * n));
+      const to = Math.max(0, Math.min(n, zoomMemory.toFrac * n));
       if (to - from >= 1) {
         suppressRangeEvents = true;
         chartInstance?.timeScale().setVisibleLogicalRange({ from, to });
