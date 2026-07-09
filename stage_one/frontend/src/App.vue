@@ -542,20 +542,32 @@
               </div>
             </div>
 
-            <!-- 时间选择表单 -->
-            <div class="space-y-3 mb-4">
-              <div class="group">
-                <label
-                  class="text-[10px] font-bold text-slate-400 uppercase block mb-1 transition-colors group-focus-within:text-teal-500">起始日期</label>
-                <input type="date" v-model="inputStartDate"
-                  class="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg p-2 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all" />
-              </div>
-              <div class="group">
-                <label
-                  class="text-[10px] font-bold text-slate-400 uppercase block mb-1 transition-colors group-focus-within:text-teal-500">结束日期</label>
-                <input type="date" v-model="inputEndDate"
-                  class="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg p-2 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all" />
-              </div>
+            <!-- 快捷区间 -->
+            <div class="flex flex-wrap gap-1.5 mb-3">
+              <button
+                v-for="p in rangePresets"
+                :key="p.value"
+                type="button"
+                @click="applyRangePreset(p.value)"
+                :class="[
+                  'px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all active:scale-[0.97] cursor-pointer',
+                  isPresetActive(p.value)
+                    ? 'border-teal-500 bg-teal-50 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300'
+                    : 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-500',
+                ]"
+              >
+                {{ p.label }}
+              </button>
+            </div>
+
+            <!-- 时间选择表单（自定义丝滑日期选择器） -->
+            <div class="mb-4">
+              <DateRangePicker
+                v-model:modelStart="inputStartDate"
+                v-model:modelEnd="inputEndDate"
+                :min-date="klineData.length ? klineData[0].time : ''"
+                :max-date="klineData.length ? klineData[klineData.length - 1].time : ''"
+              />
             </div>
 
             <!-- 重新计算按钮 -->
@@ -642,6 +654,7 @@ import { getKLines, getStockAnalysis, searchStocks, generateMockKLines, getWatch
 import type { KLinePoint, SRLevel, StockInfo, AnalysisResponse, Period } from './utils/api';
 import { getChartOptions } from './utils/chartUtils';
 import { calculateSRLevels, calculateRangeStats } from './utils/mockEngine';
+import DateRangePicker from './components/DateRangePicker.vue';
 
 const symbolInput = ref('AAPL');
 const currentSymbol = ref('');
@@ -727,6 +740,40 @@ const endDate = ref('');
 const inputStartDate = ref('');
 const inputEndDate = ref('');
 const rangeStats = ref<any>(null);
+
+// 每支股票的区间选择记忆（localStorage 持久化）
+interface RangePref { start: string; end: string; }
+const RANGE_PREFS_KEY = 'stockvision_range_prefs';
+const rangePrefs = ref<Record<string, RangePref>>(loadRangePrefs());
+
+function loadRangePrefs(): Record<string, RangePref> {
+  try {
+    const raw = localStorage.getItem(RANGE_PREFS_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, RangePref>) : {};
+  } catch {
+    return {};
+  }
+}
+function saveRangePrefs() {
+  try {
+    localStorage.setItem(RANGE_PREFS_KEY, JSON.stringify(rangePrefs.value));
+  } catch {
+    /* 忽略写入失败（如隐私模式） */
+  }
+}
+function clampDate(d: string, min: string, max: string): string {
+  if (min && d < min) return min;
+  if (max && d > max) return max;
+  return d;
+}
+// 把"当前生效的区间"记到对应股票下，下次切回该股票时恢复
+function persistCurrentRange() {
+  const sym = currentSymbol.value;
+  if (!sym || !startDate.value || !endDate.value || startDate.value > endDate.value) return;
+  const next = { ...rangePrefs.value, [sym]: { start: startDate.value, end: endDate.value } };
+  rangePrefs.value = next;
+  saveRangePrefs();
+}
 
 // 数据完整性提示 (真实模式下返回根数过少时给出警告)
 const dataWarning = ref('');
@@ -1493,10 +1540,24 @@ const handleSearch = async () => {
     markersPlugin?.setMarkers([]);
 
     if (klines.length > 0) {
-      startDate.value = klines[0].time;
-      endDate.value = klines[klines.length - 1].time;
-      inputStartDate.value = startDate.value;
-      inputEndDate.value = endDate.value;
+      const minD = klines[0].time;
+      const maxD = klines[klines.length - 1].time;
+      // 恢复该股票上次记住的区间；没有记录则用全量历史
+      const saved = rangePrefs.value[code];
+      let s = minD;
+      let e = maxD;
+      if (saved && saved.start && saved.end && saved.start <= saved.end) {
+        s = clampDate(saved.start, minD, maxD);
+        e = clampDate(saved.end, minD, maxD);
+        if (s > e) {
+          s = minD;
+          e = maxD;
+        }
+      }
+      startDate.value = s;
+      endDate.value = e;
+      inputStartDate.value = s;
+      inputEndDate.value = e;
     }
 
     await runAnalysis();
@@ -1565,6 +1626,45 @@ const handleReCalculate = async () => {
   await runAnalysis();
 };
 
+// 快捷区间预设：一键设定起止日期并重新计算，免去抠原生日历
+const rangePresets = [
+  { label: '近1月', value: 'r1m' },
+  { label: '近3月', value: 'r3m' },
+  { label: '近6月', value: 'r6m' },
+  { label: '近1年', value: 'r1y' },
+  { label: '全部', value: 'all' },
+];
+const PRESET_MONTHS: Record<string, number> = { r1m: 1, r3m: 3, r6m: 6, r1y: 12 };
+
+function presetRange(value: string): { start: string; end: string } | null {
+  if (!klineData.value.length) return null;
+  const maxD = klineData.value[klineData.value.length - 1].time;
+  const minD = klineData.value[0].time;
+  if (value === 'all') return { start: minD, end: maxD };
+  const months = PRESET_MONTHS[value];
+  if (!months) return null;
+  const d = new Date(maxD + 'T00:00:00');
+  d.setMonth(d.getMonth() - months);
+  let start = toLocalDateStr(d);
+  if (start < minD) start = minD;
+  return { start, end: maxD };
+}
+
+function applyRangePreset(value: string) {
+  const r = presetRange(value);
+  if (!r) return;
+  inputStartDate.value = r.start;
+  inputEndDate.value = r.end;
+  handleReCalculate();
+}
+
+// 高亮当前生效的预设（用于按钮 active 态）
+function isPresetActive(value: string): boolean {
+  const r = presetRange(value);
+  if (!r) return false;
+  return r.start === inputStartDate.value && r.end === inputEndDate.value;
+}
+
 // ================== 计算技术分析 ==================
 const runAnalysis = async () => {
   if (!klineData.value.length || !currentSymbol.value) return;
@@ -1608,6 +1708,9 @@ const runAnalysis = async () => {
 
     srLevels.value = res.sr_levels;
     rangeStats.value = res.statistics;
+
+    // 记住当前股票的分析区间（切回时恢复）
+    persistCurrentRange();
 
     // 触发数字动画
     if (res.statistics) {
