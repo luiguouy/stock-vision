@@ -815,11 +815,13 @@ async function updateWatchlistPrices() {
         );
       } else {
         // 真实数据模式：优先用缓存，未命中则请求后端
-        const key = cacheKey(sym, currentPeriod.value);
+        // ⚠️ 必须加 us 前缀，与 loadStock 保持一致，否则后端 404
+        const querySym = sym.startsWith('US') ? sym : 'us' + sym;
+        const key = cacheKey(querySym, currentPeriod.value);
         if (watchlistKlineCache.has(key)) {
           klines = watchlistKlineCache.get(key)!;
         } else {
-          klines = await getKLines(sym, currentPeriod.value);
+          klines = await getKLines(querySym, currentPeriod.value);
           watchlistKlineCache.set(key, klines); // 写入自选股专用缓存
         }
       }
