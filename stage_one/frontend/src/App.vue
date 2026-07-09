@@ -1589,7 +1589,10 @@ const runAnalysis = async () => {
       };
     } else {
       // 调用后端API：优先命中缓存
-      const aKey = cacheKey(querySymbol, currentPeriod.value);
+      // 注意: 分析结果里的"区间统计"依赖起止日期，缓存键必须包含日期区间，
+      // 否则改了起止日期点"重新计算"会命中旧缓存、返回旧区间的统计(表现为"无反应")。
+      // SR 支撑阻力位仅依赖 symbol+period(全量K线)，但键里带上日期只会让其随日期重算(结果一致)，不影响正确性。
+      const aKey = `${querySymbol}_${currentPeriod.value}_${startDate.value}_${endDate.value}`;
       if (analysisCache.has(aKey)) {
         console.log(`[缓存命中] 直接复用 ${aKey} 的分析结果`);
         res = analysisCache.get(aKey)!;
