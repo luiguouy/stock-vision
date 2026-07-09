@@ -2004,8 +2004,10 @@ watch(klineData, (newData) => {
   }
 });
 
-// 切换测试/真实数据模式时，若已加载股票则自动重新拉取并重算
+// 切换测试/真实数据模式时，清空自选股缓存并重新拉取，避免两种数据源混合显示
 watch(useMockData, () => {
+  watchlistKlineCache.clear();
+  watchlistPriceMap.value = {};
   if (currentSymbol.value) {
     console.log(`[模式切换] 切换到 ${useMockData.value ? '测试模式' : '真实数据模式'}，重新加载 ${currentSymbol.value}`);
     handleSearch();
