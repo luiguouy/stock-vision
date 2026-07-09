@@ -1,5 +1,6 @@
-// 前端技术分析纯计算引擎 (移植自 prior_sample.html)
+// 前端技术分析纯计算引擎 (移植自后端 analysis.py)
 // 用于当后端 API 发生 CORS 错误或不可用时，前端自包含降级运行计算分析
+// 支持多周期: 支撑阻力位会随K线周期自适应调整半衰期
 
 export interface KLinePoint {
   time: string;
@@ -29,6 +30,16 @@ export interface RangeStats {
   max_fall: RangeStatPoint;
 }
 
+// 多周期算法参数表 (与后端 analysis.py PERIOD_PARAMS 保持一致)
+const PERIOD_PARAMS: Record<string, { half_life: number; window: number }> = {
+  '1d': { half_life: 60, window: 5 },
+  '1w': { half_life: 26, window: 4 },
+  '1M': { half_life: 12, window: 3 },
+  '3M': { half_life: 8, window: 3 },
+  '6M': { half_life: 5, window: 3 },
+  '1Y': { half_life: 4, window: 3 },
+};
+
 /**
  * 局部极值寻找算法 (保留价格和K线位置索引)
  */
@@ -48,15 +59,25 @@ function findExtrema(data: KLinePoint[], windowSize: number = 5) {
 }
 
 /**
- * 前端自适应阻力支撑位计算逻辑 (与后端算法完全一致)
+ * 前端自适应阻力支撑位计算逻辑 (与后端算法完全一致，支持多周期)
+ * @param data K线数据
+ * @param windowSize 局部极值窗口 (默认5)
+ * @param period K线周期 '1d'/'1w'/'1M'，决定半衰期 (默认 '1d')
  */
-export function calculateSRLevels(data: KLinePoint[], windowSize: number = 5): SRLevel[] {
+export function calculateSRLevels(data: KLinePoint[], windowSize: number = 5, period: string = '1d'): SRLevel[] {
   const totalLen = data.length;
-  if (totalLen < windowSize * 2 + 1) return [];
+  
+  // 根据周期获取参数
+  const params = PERIOD_PARAMS[period] || PERIOD_PARAMS['1d'];
+  const halfLife = params.half_life;
+  // 若调用方未显式指定非默认 window，则使用周期对应的默认值
+  const win = (windowSize === 5 && period !== '1d') ? params.window : windowSize;
+  
+  if (totalLen < win * 2 + 1) return [];
 
   const latestPrice = data[totalLen - 1].close;
 
-  // 1. 自适应合并阈值：最近 20 天均日内波幅
+  // 1. 自适应合并阈值：最近 20 根K线均波幅
   const lookback = Math.min(20, totalLen);
   let totalRange = 0;
   for (let i = totalLen - lookback; i < totalLen; i++) {
@@ -70,18 +91,18 @@ export function calculateSRLevels(data: KLinePoint[], windowSize: number = 5): S
   const absThreshold = Math.max(minDist, Math.min(atrApprox * 0.8, maxDist));
 
   // 2. 提取局部极值点
-  const extrema = findExtrema(data, windowSize);
+  const extrema = findExtrema(data, win);
   if (extrema.length === 0) return [];
 
   // 按价格从低到高排序
   extrema.sort((a, b) => a.price - b.price);
 
-  // 3. 价格合并与时间衰减权重累加 (半衰期为60天)
+  // 3. 价格合并与时间衰减权重累加 (半衰期随周期变化)
   const clusters: { price: number; weight: number; count: number }[] = [];
 
   extrema.forEach(({ price, idx }) => {
-    const daysAgo = totalLen - 1 - idx;
-    const weight = Math.pow(0.5, daysAgo / 60.0);
+    const barsAgo = totalLen - 1 - idx;
+    const weight = Math.pow(0.5, barsAgo / halfLife);
 
     let merged = false;
     for (const c of clusters) {

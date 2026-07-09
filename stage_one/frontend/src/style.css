@@ -1,7 +1,96 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
 html, body, #app {
   -webkit-font-smoothing: subpixel-antialiased;
   -moz-osx-font-smoothing: auto;
   text-rendering: optimizeLegibility;
+}
+
+/* ==================== CSS 变量 - 主题色统一管理 ==================== */
+:root {
+  /* 基础色 */
+  --color-bg-primary: #ffffff;
+  --color-bg-secondary: #f8fafc;
+  --color-bg-tertiary: #f1f5f9;
+  
+  /* 涨跌色 */
+  --color-rising: #22c55e;
+  --color-rising-light: #86efac;
+  --color-rising-dark: #16a34a;
+  --color-rising-bg: #f0fdf4;
+  
+  --color-falling: #ef4444;
+  --color-falling-light: #fca5a5;
+  --color-falling-dark: #dc2626;
+  --color-falling-bg: #fef2f2;
+  
+  /* 文字色 */
+  --color-text-primary: #1e293b;
+  --color-text-secondary: #64748b;
+  --color-text-muted: #94a3b8;
+  
+  /* 边框色 */
+  --color-border: #e2e8f0;
+  --color-border-light: #f1f5f9;
+  
+  /* 阴影 */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+}
+
+/* 深色模式变量 */
+.dark {
+  --color-bg-primary: #0f172a;
+  --color-bg-secondary: #1e293b;
+  --color-bg-tertiary: #334155;
+  --color-text-primary: #f1f5f9;
+  --color-text-secondary: #94a3b8;
+  --color-text-muted: #64748b;
+  --color-border: #334155;
+  --color-border-light: #1e293b;
+}
+
+/* 深色模式滚动条 */
+.dark .scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+.dark .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+/* 深色模式骨架屏 */
+.dark .skeleton {
+  background: linear-gradient(
+    90deg,
+    #1e293b 25%,
+    #334155 50%,
+    #1e293b 75%
+  );
+  background-size: 200% 100%;
+}
+
+/* 深色模式面板卡片 */
+.dark .panel-card {
+  background: #1e293b;
+  border-color: #334155;
+}
+.dark .panel-card:hover {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+}
+
+/* 深色模式玻璃态 */
+.dark .glass_card,
+.dark .glass {
+  background: rgba(15, 23, 42, 0.8);
+  border-color: rgba(51, 65, 85, 0.5);
+}
+
+/* 深色模式渐变边框 */
+.dark .gradient-border {
+  background: #1e293b;
 }
 
 /* ==================== 全局动画样式 ==================== */
@@ -216,6 +305,47 @@ html, body, #app {
 .card-hover-3d:hover {
   transform: translateY(-2px) scale(1.01);
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+}
+
+/* ==================== 卡片样式 - 右侧面板 ==================== */
+
+.panel-card {
+  background: white;
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--color-border-light);
+  transition: all 0.2s ease;
+}
+
+.panel-card:hover {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+}
+
+/* 卡片头部渐变下划线 */
+.panel-card-header {
+  position: relative;
+  padding-bottom: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.panel-card-header::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #0d9488, #0891b2, transparent);
+  border-radius: 1px;
+}
+
+/* 玻璃态卡片 */
+.glass-card {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.5);
 }
 
 /* ==================== 玻璃态效果 ==================== */

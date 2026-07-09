@@ -3,6 +3,7 @@ import { CrosshairMode, LineStyle } from 'lightweight-charts';
 
 export const getChartOptions = (): DeepPartial<ChartOptions> => {
   return {
+    autoSize: true,
     layout: {
       background: { color: '#ffffff' },
       textColor: '#475569',
@@ -53,6 +54,16 @@ export const getChartOptions = (): DeepPartial<ChartOptions> => {
     timeScale: {
       borderColor: '#e2e8f0',
       timeVisible: true,
+    },
+    // 显式开启鼠标滚轮缩放 / 触控板捏合缩放 / 拖拽平移
+    handleScale: {
+      mouseWheel: true,
+      pinch: true,
+      axisPressedMouseMove: true,
+    },
+    handleScroll: {
+      mouseWheel: true,
+      pressedMouseMove: true,
     },
   };
 };

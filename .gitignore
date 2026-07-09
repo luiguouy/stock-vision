@@ -31,3 +31,8 @@ yarn-error.log*
 .codebuddy/
 .workbuddy/
 .agents/
+
+# Runtime artifacts (regenerated locally)
+stage_one/backend/stock_data.db
+stage_one/backend/backend.log
+stage_one/backend/watchlist.json
