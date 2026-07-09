@@ -41,6 +41,58 @@ const PERIOD_PARAMS: Record<string, { half_life: number; window: number }> = {
 };
 
 /**
+ * 将日线 K 线按目标周期重采样 (测试模式下使用)。
+ *
+ * 测试模式默认生成的是 4500 根日线；若不重采样，选周K/月K/季K/半年K/年K 时
+ * 会直接把日线渲染出来，导致「周K、月K 显示成了日K」。此函数复刻后端
+ * PERIOD_MAP 的聚合行为 (周->按周一归桶 / 月->按月 / 季->按季 / 半年 / 年)，
+ * open=桶内首根, high=max, low=min, close=桶内末根, volume=求和, 标签取桶内首根日期。
+ */
+function parseYMD(t: string): [number, number, number] {
+  const [y, m, d] = t.split('-').map(Number);
+  return [y, m, d];
+}
+
+function bucketKey(t: string, period: string): string {
+  const [y, m, d] = parseYMD(t);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  const dow = dt.getUTCDay(); // 0=周日
+  if (period === '1w') {
+    const diff = (dow + 6) % 7; // 距离本周一的天数
+    const monday = new Date(Date.UTC(y, m - 1, d - diff));
+    return monday.toISOString().slice(0, 10);
+  }
+  if (period === '1M') return `${y}-${String(m).padStart(2, '0')}`;
+  if (period === '3M') return `${y}-Q${Math.floor((m - 1) / 3)}`;
+  if (period === '6M') return `${y}-H${Math.floor((m - 1) / 6)}`;
+  if (period === '1Y') return `${y}`;
+  return t;
+}
+
+export function resampleMockKLines(daily: KLinePoint[], period: string): KLinePoint[] {
+  if (period === '1d' || !daily.length) return daily;
+  const groups = new Map<string, KLinePoint[]>();
+  for (const bar of daily) {
+    const key = bucketKey(bar.time, period);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(bar);
+  }
+  const out: KLinePoint[] = [];
+  for (const group of groups.values()) {
+    out.push({
+      time: group[0].time,
+      open: group[0].open,
+      high: Math.max(...group.map((g) => g.high)),
+      low: Math.min(...group.map((g) => g.low)),
+      close: group[group.length - 1].close,
+      volume: group.reduce((s, g) => s + g.volume, 0),
+    });
+  }
+  out.sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0));
+  return out;
+}
+
+/**
  * 局部极值寻找算法 (保留价格和K线位置索引)
  */
 function findExtrema(data: KLinePoint[], windowSize: number = 5) {

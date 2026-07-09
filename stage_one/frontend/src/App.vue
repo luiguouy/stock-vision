@@ -653,7 +653,7 @@ import type { IChartApi } from 'lightweight-charts';
 import { getKLines, getStockAnalysis, searchStocks, generateMockKLines, getWatchlist, saveWatchlist, SUPPORTED_PERIODS, PERIOD_LABELS } from './utils/api';
 import type { KLinePoint, SRLevel, StockInfo, AnalysisResponse, Period } from './utils/api';
 import { getChartOptions } from './utils/chartUtils';
-import { calculateSRLevels, calculateRangeStats } from './utils/mockEngine';
+import { calculateSRLevels, calculateRangeStats, resampleMockKLines } from './utils/mockEngine';
 import DateRangePicker from './components/DateRangePicker.vue';
 
 const symbolInput = ref('AAPL');
@@ -1506,6 +1506,8 @@ const handleSearch = async () => {
       const basePrice = basePriceMap[code] || 150;
       // 测试模式也生成"上市以来"的长历史 (约 4500 交易日 ≈ 18 年)，便于直观查看全量K线
       klines = generateMockKLines(code, 4500, basePrice);
+      // 按当前周期重采样：否则周K/月K/季K等会把 4500 根日线直接渲染出来（"成了日K的显示"）
+      klines = resampleMockKLines(klines, currentPeriod.value);
     } else {
       // 真实API模式：优先命中缓存，避免重复请求
       const key = cacheKey(querySymbol, currentPeriod.value);
