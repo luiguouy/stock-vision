@@ -1120,6 +1120,13 @@ const loadWatchlist = async () => {
     initMap[s] = { price: null, change: null, loading: true };
   }
   watchlistPriceMap.value = initMap;
+  // 竞态保护: onMounted 中 loadWatchlist(async, await getWatchlist) 与
+  // handleSearch→loadStock 并发执行。若 loadStock 先完成, 它末尾调用的
+  // updateWatchlistPrices 会因 watchlist 仍为空而 return; 等 loadWatchlist
+  // 在此设好 watchlist 后, 无人再触发更新 → 自选股永卡 loading。故此处补调一次。
+  if (currentSymbol.value && startDate.value && endDate.value) {
+    updateWatchlistPrices();
+  }
 };
 
 // 同时写后端 + 本地兜底
