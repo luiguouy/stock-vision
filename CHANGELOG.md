@@ -16,6 +16,9 @@
 ### 新增
 - **自选股列表全量显示价格与区间涨跌幅**：左侧自选股面板不再仅当前股票显示价格/涨跌幅（其余显示 `--`），现在**所有自选股均显示**各自在当前选定日期区间内的最新价与区间涨跌幅（起始日 close → 结束日 close）。切换日期范围（快捷预设 / 自定义选择器 / 重新计算）时所有股票的价格数据同步更新；新增/删除自选股也即时刷新。当前查看的股票复用已加载 K 线（零延迟），其他股票后台并行获取并带 loading 骨架屏动画；真实模式下有专用 `watchlistKlineCache` 缓存避免切换日期时重复请求。
 
+### 修复
+- **自选股列表初始加载崩溃（白屏，严重）**：`loadWatchlist`（异步）完成后立即渲染自选股列表，但 `updateWatchlistPrices` 要等 `loadStock` 完成后才调用，此间 `watchlistPriceMap` 为空 `{}`；模板守卫用 `price !== null` 无法挡住 `undefined`（`undefined !== null` 为 `true`），导致走进分支执行 `undefined.toFixed()` 抛 TypeError，组件崩溃白屏——**每次页面初始加载必现**。已将模板守卫改为 `!= null`（同时排除 `null` 与 `undefined`）并增加 `change` 判断；`loadWatchlist` 设置自选股后同步把 `watchlistPriceMap` 初始化为全 `loading` 态，消除渲染空窗期；`loadStock` 加载失败时清除自选股 `loading` 态，避免骨架屏永转。
+
 ---
 
 ## [0.3.0] - 2026-07-09

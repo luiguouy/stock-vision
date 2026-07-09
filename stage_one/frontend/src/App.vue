@@ -205,7 +205,7 @@
                     <div class="h-2.5 w-9 bg-slate-200 dark:bg-slate-600 rounded animate-pulse mx-auto"></div>
                   </div>
                   <!-- 已加载：显示价格 + 区间涨跌幅 -->
-                  <template v-else-if="(watchlistPriceMap[item] || {}).price !== null">
+                  <template v-else-if="(watchlistPriceMap[item] || {}).price != null && (watchlistPriceMap[item] || {}).change != null">
                     <div class="text-xs font-bold font-mono tabular-nums"
                       :class="(watchlistPriceMap[item] || {}).change! >= 0 ? 'text-rose-600' : 'text-teal-600'">
                       ${{ (watchlistPriceMap[item] || {}).price!.toFixed(2) }}
@@ -1084,23 +1084,32 @@ const loadWatchlist = async () => {
     if (Array.isArray(remote) && remote.length) {
       watchlist.value = remote;
       localStorage.setItem('stock_watchlist', JSON.stringify(remote)); // 同步本地兜底
-      return;
     }
   } catch {
     // 后端不可用时忽略，回退本地
   }
   // 回退：本地 localStorage
-  const local = localStorage.getItem('stock_watchlist');
-  if (local) {
-    try {
-      watchlist.value = JSON.parse(local);
-    } catch {
+  if (!watchlist.value.length) {
+    const local = localStorage.getItem('stock_watchlist');
+    if (local) {
+      try {
+        watchlist.value = JSON.parse(local);
+      } catch {
+        watchlist.value = ['AAPL', 'NVDA', 'TSLA'];
+      }
+    } else {
       watchlist.value = ['AAPL', 'NVDA', 'TSLA'];
+      localStorage.setItem('stock_watchlist', JSON.stringify(watchlist.value));
     }
-  } else {
-    watchlist.value = ['AAPL', 'NVDA', 'TSLA'];
-    localStorage.setItem('stock_watchlist', JSON.stringify(watchlist.value));
   }
+  // 初始化价格地图为 loading 态：updateWatchlistPrices 要等 loadStock 完成后才调用，
+  // 此间 watchlist 已有值但 watchlistPriceMap 为空 → 模板取到 undefined 会崩溃。
+  // 预先填 loading 条目，既防崩溃又让初始显示骨架屏而非 "--" 闪烁。
+  const initMap: Record<string, WatchlistPriceInfo> = {};
+  for (const s of watchlist.value) {
+    initMap[s] = { price: null, change: null, loading: true };
+  }
+  watchlistPriceMap.value = initMap;
 };
 
 // 同时写后端 + 本地兜底
@@ -1676,6 +1685,10 @@ const handleSearch = async () => {
     errorMsg.value = err.message || '网络连接失败，无法加载行情图';
     klineData.value = [];
     currentSymbol.value = '';
+    // 加载失败：清除自选股 loading 态，避免骨架屏永转（显示 "--"）
+    for (const s of watchlist.value) {
+      if (watchlistPriceMap.value[s]) watchlistPriceMap.value[s].loading = false;
+    }
   } finally {
     // 保证骨架屏至少展示 MIN_SKELETON_MS 毫秒，让扫光动画可被感知
     const elapsed = performance.now() - startedAt;
