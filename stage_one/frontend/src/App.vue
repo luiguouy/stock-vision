@@ -169,6 +169,17 @@
             </h3>
           </div>
 
+          <!-- 测试模式警告条 -->
+          <div v-if="useMockData && watchlist.length"
+            class="px-4 py-1.5 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-700/50">
+            <p class="text-[10px] text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1">
+              <svg class="w-3 h-3 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+              </svg>
+              模拟数据，非真实行情
+            </p>
+          </div>
+
           <!-- 空状态 -->
           <div v-if="!watchlist.length"
             class="p-8 text-center text-xs text-slate-400">
@@ -808,11 +819,17 @@ async function updateWatchlistPrices() {
         // 当前查看的股票直接复用已加载的 K 线
         klines = klineData.value;
       } else if (useMockData.value) {
-        // 测试模式：生成模拟数据 + 按周期重采样
-        klines = resampleMockKLines(
-          generateMockKLines(sym, 4500, MOCK_BASE_PRICES[sym] || 150),
-          currentPeriod.value
-        );
+        // 测试模式：生成模拟数据 + 按周期重采样（缓存，避免每次调用都重新随机生成导致数值跳动）
+        const mockKey = 'mock_' + cacheKey(sym, currentPeriod.value);
+        if (watchlistKlineCache.has(mockKey)) {
+          klines = watchlistKlineCache.get(mockKey)!;
+        } else {
+          klines = resampleMockKLines(
+            generateMockKLines(sym, 4500, MOCK_BASE_PRICES[sym] || 150),
+            currentPeriod.value
+          );
+          watchlistKlineCache.set(mockKey, klines);
+        }
       } else {
         // 真实数据模式：优先用缓存，未命中则请求后端
         // ⚠️ 必须加 us 前缀，与 loadStock 保持一致，否则后端 404
