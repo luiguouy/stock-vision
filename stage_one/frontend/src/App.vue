@@ -1628,23 +1628,32 @@ const handleReCalculate = async () => {
 
 // 快捷区间预设：一键设定起止日期并重新计算，免去抠原生日历
 const rangePresets = [
+  { label: '近1周', value: 'r1w' },
   { label: '近1月', value: 'r1m' },
   { label: '近3月', value: 'r3m' },
   { label: '近6月', value: 'r6m' },
   { label: '近1年', value: 'r1y' },
   { label: '全部', value: 'all' },
 ];
-const PRESET_MONTHS: Record<string, number> = { r1m: 1, r3m: 3, r6m: 6, r1y: 12 };
+// 各预设相对"最新交易日"的回溯偏移（支持按天或按月）
+const PRESET_OFFSETS: Record<string, { months?: number; days?: number }> = {
+  r1w: { days: 7 },
+  r1m: { months: 1 },
+  r3m: { months: 3 },
+  r6m: { months: 6 },
+  r1y: { months: 12 },
+};
 
 function presetRange(value: string): { start: string; end: string } | null {
   if (!klineData.value.length) return null;
   const maxD = klineData.value[klineData.value.length - 1].time;
   const minD = klineData.value[0].time;
   if (value === 'all') return { start: minD, end: maxD };
-  const months = PRESET_MONTHS[value];
-  if (!months) return null;
+  const off = PRESET_OFFSETS[value];
+  if (!off) return null;
   const d = new Date(maxD + 'T00:00:00');
-  d.setMonth(d.getMonth() - months);
+  if (off.months) d.setMonth(d.getMonth() - off.months);
+  if (off.days) d.setDate(d.getDate() - off.days);
   let start = toLocalDateStr(d);
   if (start < minD) start = minD;
   return { start, end: maxD };

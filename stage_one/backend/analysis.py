@@ -187,7 +187,15 @@ def calculate_sr_levels(
 
 def calculate_range_stats(df: pd.DataFrame, start_date: str, end_date: str) -> Dict[str, Any]:
     """
-    计算特定日期区间内的最大上涨与最大下跌幅度及相应的起始和结束日期。
+    计算特定日期区间内的最大连贯上涨与最大连贯下跌幅度及相应的起始和结束日期。
+
+    采用"运行谷值 / 运行峰值"的最大反弹 / 最大回撤算法：
+      - 最大连贯上涨：扫描区间内每个低点（运行中的最低点），记录从该谷值到其后
+        最高点的累计涨幅峰值。不再只锁定"全局最低点之后"，对任何区间都会响应。
+      - 最大连贯下跌（最大回撤）：扫描区间内每个高点（运行中的最高点），记录从该
+        峰值到其后最低点的最大跌幅。旧算法只取"全局最高点之后"的最低点，当区间
+        最高点落在末尾时（近期上涨行情极常见）会退化为 0 且不随区间变化，故改为
+        全程跟踪运行峰值，能正确捕获发生在最高点之前的大跌。
 
     参数:
         df: 包含 ['date', 'high', 'low'] 字段的 Pandas DataFrame。
@@ -195,7 +203,7 @@ def calculate_range_stats(df: pd.DataFrame, start_date: str, end_date: str) -> D
         end_date: 区间结束日期 (YYYY-MM-DD 或 YYYY-MM-DD HH:MM)。
 
     返回:
-        字典，包含 max_rise (最大上涨) 和 max_fall (最大下跌) 信息。
+        字典，包含 max_rise (最大连贯上涨) 和 max_fall (最大连贯下跌) 信息。
     """
     default_result = {
         "max_rise": {"pct": 0.0, "start": "", "end": ""},
@@ -214,47 +222,47 @@ def calculate_range_stats(df: pd.DataFrame, start_date: str, end_date: str) -> D
         if sub_df.empty:
             return default_result
 
-        # 1. 计算最大上涨 (寻找区间内的最低点，以及该最低点之后的最高点)
-        min_idx = int(sub_df['low'].idxmin())
-        after_min_df = sub_df.loc[min_idx:]
+        highs = sub_df['high'].values.astype(float)
+        lows = sub_df['low'].values.astype(float)
+        dates = sub_df['date'].values
 
-        if not after_min_df.empty:
-            max_after_min_idx = int(after_min_df['high'].idxmax())
-            low_price = float(sub_df.loc[min_idx]['low'])
-            high_price = float(sub_df.loc[max_after_min_idx]['high'])
+        # 1. 最大连贯上涨：从运行谷值到其后最高点的区间涨幅峰值
+        max_rise_pct = 0.0
+        rise_start = dates[0]
+        rise_end = dates[0]
+        trough_low = lows[0]
+        trough_date = dates[0]
+        for i in range(len(sub_df)):
+            if lows[i] < trough_low:
+                trough_low = lows[i]
+                trough_date = dates[i]
+            if trough_low > 0:
+                rally = (highs[i] - trough_low) / trough_low * 100
+                if rally > max_rise_pct:
+                    max_rise_pct = rally
+                    rise_start = trough_date
+                    rise_end = dates[i]
 
-            if low_price > 0:
-                max_up_pct = ((high_price - low_price) / low_price) * 100
-            else:
-                max_up_pct = 0.0
-
-            up_start = sub_df.loc[min_idx]['date']
-            up_end = sub_df.loc[max_after_min_idx]['date']
-        else:
-            max_up_pct, up_start, up_end = 0.0, "", ""
-
-        # 2. 计算最大下跌 (寻找区间内的最高点，以及该最高点之后的最低点)
-        max_idx = int(sub_df['high'].idxmax())
-        after_max_df = sub_df.loc[max_idx:]
-
-        if not after_max_df.empty:
-            min_after_max_idx = int(after_max_df['low'].idxmin())
-            high_price = float(sub_df.loc[max_idx]['high'])
-            low_price = float(sub_df.loc[min_after_max_idx]['low'])
-
-            if high_price > 0:
-                max_down_pct = ((low_price - high_price) / high_price) * 100
-            else:
-                max_down_pct = 0.0
-
-            down_start = sub_df.loc[max_idx]['date']
-            down_end = sub_df.loc[min_after_max_idx]['date']
-        else:
-            max_down_pct, down_start, down_end = 0.0, "", ""
+        # 2. 最大连贯下跌（最大回撤）：从运行峰值到其后最低点的区间跌幅谷值
+        max_fall_pct = 0.0
+        fall_start = dates[0]
+        fall_end = dates[0]
+        peak_high = highs[0]
+        peak_date = dates[0]
+        for i in range(len(sub_df)):
+            if highs[i] > peak_high:
+                peak_high = highs[i]
+                peak_date = dates[i]
+            if peak_high > 0:
+                drawdown = (lows[i] - peak_high) / peak_high * 100
+                if drawdown < max_fall_pct:
+                    max_fall_pct = drawdown
+                    fall_start = peak_date
+                    fall_end = dates[i]
 
         return {
-            "max_rise": {"pct": round(max_up_pct, 2), "start": up_start, "end": up_end},
-            "max_fall": {"pct": round(max_down_pct, 2), "start": down_start, "end": down_end}
+            "max_rise": {"pct": round(max_rise_pct, 2), "start": str(rise_start), "end": str(rise_end)},
+            "max_fall": {"pct": round(max_fall_pct, 2), "start": str(fall_start), "end": str(fall_end)}
         }
 
     except Exception as e:

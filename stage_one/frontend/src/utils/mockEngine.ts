@@ -169,45 +169,59 @@ export function calculateSRLevels(data: KLinePoint[], windowSize: number = 5, pe
 
 /**
  * 前端区间最大涨跌统计
+ *
+ * 采用"运行峰值 / 运行谷值"的最大回撤 / 最大反弹算法：
+ *   - 最大连贯上涨：扫描区间内每一个低点（运行中的最低点），记录从该谷值到其后
+ *     最高点的累计涨幅峰值。不再只锁定"全局最低点之后"，因此对任何区间都会响应。
+ *   - 最大连贯下跌：扫描区间内每一个高点（运行中的最高点），记录从该峰值到其后
+ *     最低点的最大跌幅（最大回撤）。旧算法只取"全局最高点之后"的最低点，当区间
+ *     最高点落在末尾时（近期上涨行情极常见）会退化为 0 且不随区间变化，故改为
+ *     全程跟踪运行峰值，能正确捕获发生在最高点之前的大跌。
+ *
+ * 该实现与后端 analysis.calculate_range_stats 保持一致。
  */
 export function calculateRangeStats(data: KLinePoint[], sDate: string, eDate: string): RangeStats | null {
   const rangeData = data.filter(d => d.time >= sDate && d.time <= eDate);
   if (rangeData.length === 0) return null;
 
-  // 寻找最大上涨（最低点之后寻找最高点）
-  let minPoint = rangeData[0], minIdx = 0;
-  for (let i = 1; i < rangeData.length; i++) {
-    if (rangeData[i].low < minPoint.low) {
-      minPoint = rangeData[i];
-      minIdx = i;
+  // 最大连贯上涨：从运行谷值到其后最高点的区间涨幅峰值
+  let trough = rangeData[0];
+  let maxRisePct = 0;
+  let riseStart = trough.time;
+  let riseEnd = trough.time;
+  for (let i = 0; i < rangeData.length; i++) {
+    const d = rangeData[i];
+    if (d.low < trough.low) trough = d;
+    if (trough.low > 0) {
+      const rally = ((d.high - trough.low) / trough.low) * 100;
+      if (rally > maxRisePct) {
+        maxRisePct = rally;
+        riseStart = trough.time;
+        riseEnd = d.time;
+      }
     }
   }
-  let maxAfterMin = minPoint;
-  for (let i = minIdx; i < rangeData.length; i++) {
-    if (rangeData[i].high > maxAfterMin.high) {
-      maxAfterMin = rangeData[i];
-    }
-  }
-  const maxRisePct = minPoint.low > 0 ? ((maxAfterMin.high - minPoint.low) / minPoint.low) * 100 : 0;
 
-  // 寻找最大下跌（最高点之后寻找最低点）
-  let maxPoint = rangeData[0], maxIdx = 0;
-  for (let i = 1; i < rangeData.length; i++) {
-    if (rangeData[i].high > maxPoint.high) {
-      maxPoint = rangeData[i];
-      maxIdx = i;
+  // 最大连贯下跌（最大回撤）：从运行峰值到其后最低点的区间跌幅谷值
+  let peak = rangeData[0];
+  let maxFallPct = 0;
+  let fallStart = peak.time;
+  let fallEnd = peak.time;
+  for (let i = 0; i < rangeData.length; i++) {
+    const d = rangeData[i];
+    if (d.high > peak.high) peak = d;
+    if (peak.high > 0) {
+      const drawdown = ((d.low - peak.high) / peak.high) * 100;
+      if (drawdown < maxFallPct) {
+        maxFallPct = drawdown;
+        fallStart = peak.time;
+        fallEnd = d.time;
+      }
     }
   }
-  let minAfterMax = maxPoint;
-  for (let i = maxIdx; i < rangeData.length; i++) {
-    if (rangeData[i].low < minAfterMax.low) {
-      minAfterMax = rangeData[i];
-    }
-  }
-  const maxFallPct = maxPoint.high > 0 ? ((minAfterMax.low - maxPoint.high) / maxPoint.high) * 100 : 0;
 
   return {
-    max_rise: { pct: maxRisePct, start: minPoint.time, end: maxAfterMin.time },
-    max_fall: { pct: maxFallPct, start: maxPoint.time, end: minAfterMax.time }
+    max_rise: { pct: maxRisePct, start: riseStart, end: riseEnd },
+    max_fall: { pct: maxFallPct, start: fallStart, end: fallEnd }
   };
 }
