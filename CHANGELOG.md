@@ -13,16 +13,37 @@
 
 > 下次更新的内容先记录在这里，发布时再移动到新的版本号下。
 
+---
+
+## [0.4.0] - 2026-07-16
+
+本期是一次跨市场能力大升级：打通美股 / A股 / 港股三市场（代码、搜索、行情、自选），新增「多市场实时行情」与「全局证券搜索（命令面板）」，并把自选股从扁平列表重构为专业终端式的「分组 + 居中 Modal」交互；同时修复了港股 / A股 K 线 404、A股/港股错路由到 Yahoo、全局搜索仅限美股池等多处缺陷。
+
 ### 新增
-- **自选股列表全量显示价格与区间涨跌幅**：左侧自选股面板不再仅当前股票显示价格/涨跌幅（其余显示 `--`），现在**所有自选股均显示**各自在当前周期下的最新价与涨跌幅（日K=当日涨跌、周K=本周涨跌，随周期与结束日期同步更新）。切换日期范围（快捷预设 / 自定义选择器 / 重新计算）时所有股票的价格数据同步更新；新增/删除自选股也即时刷新。当前查看的股票复用已加载 K 线（零延迟），其他股票后台并行获取并带 loading 骨架屏动画；真实模式下有专用 `watchlistKlineCache` 缓存避免切换日期时重复请求。
+- **多市场实时行情（美股 / A股 / 港股）**：后端新增 `GET /api/quote` + `GET /api/quote_config`（腾讯公开行情源 `qt.gtimg.cn/q=`），内置服务端限流护盾——单标的最低刷新间隔、单 IP 滑动窗口计数（超额自动降速）、限流 / 空数据 / 超时后全局冷却 30s 再重试，从根上避免被数据源封禁。前端 `utils/quote.ts` 实现「分层刷新」引擎：本地定时器按各市场合规最低间隔轮询、价格与涨跌幅均未变化则不去重不重渲染、连续无新行情的冷门标的自适应降频、美股按美东时间区分盘前 / 盘中 / 盘后三套刷新配置；受限 / 冷却时进入冷却态而非高频重试。
+- **全局证券搜索（命令面板式）**：新增 `components/GlobalSecuritySearch.vue`，常驻头部搜索框 + `Ctrl/⌘K` 全局唤起；支持最近搜索历史（可单条删除 / 清空）、热门推荐、键盘上下导航回车进入、♥ 一键加入 / 取消自选；后端 `/api/search` 升级为全市场五维匹配（代码 / 中英文名 / 拼音缩写 / 全拼），本地池未命中走腾讯全量证券搜索兜底，任意证券可定位。
+- **自选股分组功能重构（专业终端式交互）**：从旧版「多选数组 + 下拉内联编辑」重构为「单选高亮分组 + 居中 Modal」——侧边栏顶部平铺 `全部` / `我的特选` Tab 与分组切换下拉；`＋ 创建分组` / `📁 分组管理` / `添加自选` 三个居中 Modal（磨砂玻璃阴影）分别处理建组、重命名 / 删除、向空分组搜索加股；空白分组显示空状态插画 + 一键添加，解耦了侧边栏的拥挤与保存冲突。后端 `/api/watchlist` 数据模型由扁平 `symbols` 升级为 `groups[{id,name,stocks}]`，旧版扁平 list 自动迁移进默认分组。
+- **自选股列表全量显示价格与区间涨跌幅**：左侧自选股面板不再仅当前股票显示价格/涨跌幅（其余显示 `--`），现在**所有自选股均显示**各自在当前周期下的最新价与涨跌幅（日K=当日涨跌、周K=本周涨跌，随周期与结束日期同步更新）。切换日期范围时所有股票价格同步更新；真实模式专用 `watchlistKlineCache` 缓存避免切换日期时重复请求。
 
 ### 修复
-- **自选股列表初始加载崩溃（白屏，严重）**：`loadWatchlist`（异步）完成后立即渲染自选股列表，但 `updateWatchlistPrices` 要等 `loadStock` 完成后才调用，此间 `watchlistPriceMap` 为空 `{}`；模板守卫用 `price !== null` 无法挡住 `undefined`（`undefined !== null` 为 `true`），导致走进分支执行 `undefined.toFixed()` 抛 TypeError，组件崩溃白屏——**每次页面初始加载必现**。已将模板守卫改为 `!= null`（同时排除 `null` 与 `undefined`）并增加 `change` 判断；`loadWatchlist` 设置自选股后同步把 `watchlistPriceMap` 初始化为全 `loading` 态，消除渲染空窗期；`loadStock` 加载失败时清除自选股 `loading` 态，避免骨架屏永转。
-- **自选股涨跌幅不随 K 线周期变化（显示的是区间累计涨跌）**：`calcPriceInRange` 原本计算"区间起始 close → 区间末尾 close"的累计涨跌，当日期范围为"全部"时日K 与周K 的起止 close 相同，**切换周期涨跌不变**，表现为"功能没实现/不更新"。已改为：价格取区间末尾（`time<=endDate`）那根 K 线的收盘价，涨跌幅 = 该根 close vs 前一根 close——即**日K 显示当日涨跌、周K 显示本周涨跌、月K 显示本月涨跌**，切换周期即时变化；改结束日期则末尾那根随之改变，涨跌同步更新。
-- **自选股初始加载竞态导致永卡 loading 骨架屏**：`onMounted` 中 `loadWatchlist`（async，`await getWatchlist`）与 `handleSearch→loadStock` 并发执行。若 `loadStock` 先完成，其末尾调用的 `updateWatchlistPrices` 因 `watchlist` 仍为空数组而 `return`；等 `loadWatchlist` 随后设好 `watchlist` 后，无人再触发更新 → 自选股永远卡在 loading 骨架屏，表现为"功能没实现"。已在 `loadWatchlist` 设好 `watchlist` 后补调：若 `loadStock` 已完成（`currentSymbol` + `startDate` + `endDate` 均有值）则调用 `updateWatchlistPrices`。
-- **真实模式下自选股列表非当前股票全部 404（严重）**：`updateWatchlistPrices` 调用 `getKLines(sym, ...)` 时 `sym` 是原始代码（如 `"AAPL"`），但后端要求美股带 `us` 前缀（`loadStock` 用 `querySymbol = 'us' + code`）。缺少前缀导致后端返回 404，**真实模式下非当前自选股全部加载失败**（卡 loading 或显示 `--`），仅当前股票因复用 `klineData` 而正常。已在真实模式分支补 `querySym = sym.startsWith('US') ? sym : 'us' + sym`，`getKLines` 与 `cacheKey` 均使用 `querySym`，与 `loadStock` 保持一致。
-- **测试模式下自选股 mock 数据每次刷新都变（价格随机跳动）**：`updateWatchlistPrices` 在测试模式下每次调用都重新 `generateMockKLines`，导致非当前股票的价格和涨跌幅每次都不同，用户误以为功能有 bug。已改为测试模式也用 `watchlistKlineCache` 缓存（key 加 `mock_` 前缀区分），mock 数据每 `(symbol, period)` 只生成一次。
-- **切换测试/真实模式后自选股仍显示旧 mock 数据（数据混合）**：`watch(useMockData)` 只重新加载当前股票，没有清空 `watchlistKlineCache` 与 `watchlistPriceMap`，导致从测试模式切到真实模式后，非当前自选股仍残留测试模式生成的 mock 数值（如 MU 顶部已显示真实 $948.80 +1.11%，左侧列表仍显示 mock 的 $1032.28 -10.57%）。已在模式切换 watcher 中先 `clear` 自选股缓存、重置 priceMap，再重新加载当前股票，确保切换模式后所有自选股都用新数据源重新计算。
+- **港股 / A股 K 线 404（严重）**：腾讯 k 线接口对市场前缀大小写敏感（`HK00700` / `SH600519` 直接返回 `param error`），前端与 `/api/watchlist` 统一返回大写前缀导致港股 / A股全部 404。新增 `norm_market_prefix` 在 `get_klines_df` 入口统一规范为小写，并修正 `_get_symbol_candidates` 对 sh/sz/hk 候选转小写返回；缓存键同步归一化。美股分支因自带小写 `us` 前缀不受影响。
+- **A股 / 港股被错路由到 Yahoo（取数不稳定 / 取不到）**：`fetch_klines` 此前对非美股也走 Yahoo(主) / 腾讯(备)，但 Yahoo 对 A股 / 港股覆盖差。改为非美股仅走腾讯证券（原生支持 sh/sz/hk），美股仍 Yahoo 优先 + 腾讯兜底。
+- **Yahoo ticker 映射错误（A股 / 港股）**：`_to_yahoo_ticker` 此前未处理 sh/sz/hk，兜底时生成的 ticker 不正确。补 `sh → .SS` / `sz → .SZ` / `hk → 5 位 .HK` 映射。
+- **全局搜索仅限美股池（中文名 / 拼音 / 港股 / A股都搜不到）**：旧 `/api/search` 只在本地美股池匹配、纯字母硬拼 `us` 前缀。改为全市场五维匹配，本地池未命中走腾讯全量搜索兜底；自然语言无果直接返回空，不再生成 `US台积电` 这类假代码。
+- **自选股列表初始加载崩溃（白屏，严重）**：`loadWatchlist` 异步完成即渲染，但 `updateWatchlistPrices` 要等 `loadStock` 完成，此间 `watchlistPriceMap` 为空 `{}`；模板守卫 `price !== null` 挡不住 `undefined`，导致 `undefined.toFixed()` 抛 TypeError 白屏——**每次初始加载必现**。已将守卫改为 `!= null`，并在 `loadWatchlist` 设好自选股后初始化 priceMap 为全 loading 态。
+- **自选股涨跌幅不随 K 线周期变化**：`calcPriceInRange` 原计算区间起止 close 累计涨跌，当范围为"全部"时日K/周K 起止相同、切换周期不变。改为取区间末尾那根 close vs 前一根 close——日K 当日、周K 本周、月K 本月涨跌，切换周期即时变化。
+- **自选股初始加载竞态导致永卡 loading 骨架屏**：`loadWatchlist` 与 `loadStock` 并发，`loadStock` 先完成时 `updateWatchlistPrices` 因 `watchlist` 为空而 return，后续无人再触发更新。已在 `loadWatchlist` 设好自选股后补调更新（若 `loadStock` 已完成）。
+- **真实模式下自选股列表非当前股票全部 404（严重）**：`updateWatchlistPrices` 用原始代码（如 `"AAPL"`）请求，缺 `us` 前缀导致后端 404。已在真实模式分支补 `us` 前缀并与 `cacheKey` 保持一致。
+- **测试模式下自选股 mock 数据每次刷新都变**：每次调用都重新 `generateMockKLines` 导致价格随机跳。已改测试模式也用 `watchlistKlineCache`（key 加 `mock_` 前缀），每 `(symbol, period)` 只生成一次。
+- **切换测试 / 真实模式后自选股仍显示旧 mock 数据（数据混合）**：模式切换 watcher 只重载当前股票，未清空自选股缓存。已先 `clear` `watchlistKlineCache` 与 `watchlistPriceMap` 再重载，确保所有自选股用新数据源重算。
+
+### 优化
+- **后端启动方式升级**：用 `lifespan`（`@asynccontextmanager`）替代已废弃的 `@app.on_event("startup")`，初始化与预热更规范。
+- **新增 `GET /api/health` 轻量健康检查**：前端据此自动判定演示 / 实时模式，不依赖任何外部数据源。
+- **股票池扩展至多市场**：本地常用池由纯美股扩至沪A（5）/ 深A（5）/ 港股（5），预热 `PREWARM_SYMBOLS` 同步覆盖多市场，首次打开即命中缓存。
+
+### 文档
+- 新增 `多市场实时行情_改动说明.md`；同步更新项目结构梳理 / 数据模型与接口契约 / 模块调用关系 / 降级策略 / 技术债 / 进展清单等多份项目文档。
 
 ---
 
@@ -101,7 +122,8 @@
 
 ---
 
-[Unreleased]: https://github.com/luiguouy/stock-vision/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/luiguouy/stock-vision/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/luiguouy/stock-vision/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/luiguouy/stock-vision/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/luiguouy/stock-vision/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/luiguouy/stock-vision/releases/tag/v0.1.0

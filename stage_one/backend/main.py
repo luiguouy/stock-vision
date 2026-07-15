@@ -18,11 +18,16 @@
 """
 
 # pyrefly: ignore [missing-import]
+from contextlib import asynccontextmanager
 import os
+import re
+import uuid
 import json
+import asyncio
 import pandas as pd
 from datetime import datetime, timedelta
 # pyrefly: ignore [missing-import]
+import httpx
 from fastapi import FastAPI, HTTPException, Query
 # pyrefly: ignore [missing-import]
 from fastapi.middleware.cors import CORSMiddleware
@@ -33,13 +38,106 @@ from typing import List, Dict, Optional
 from analysis import calculate_sr_levels, calculate_range_stats
 from data_provider import provider_manager, SUPPORTED_PERIODS
 from db_cache import init_db, get_cached_klines, save_klines
+# 多市场实时行情模块（腾讯免费公开接口 qt.gtimg.cn/q=）
+from quote_provider import quote_provider
+from quote_config import (
+    MARKET, TICK_MS, ABSOLUTE_MIN_INTERVAL, RATE_LIMIT_COOLDOWN,
+    IP_MAX_REQUESTS_PER_WINDOW, IP_WINDOW_SECONDS, ADAPTIVE_COLD_THRESHOLD,
+    ADAPTIVE_COLD_FACTOR, ADAPTIVE_MAX_FACTOR,
+)
 
-app = FastAPI(title="智能股票技术分析平台")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 确保数据库表存在
+    init_db()
+    # 后台预热 (不阻塞启动; 无外网时静默失败)
+    asyncio.create_task(prewarm_cache())
+    yield
+
+app = FastAPI(title="智能股票技术分析平台", lifespan=lifespan)
 from fastapi.responses import RedirectResponse
 
 @app.get("/")
 def read_root():
     return RedirectResponse(url="/docs")
+
+
+@app.get("/api/health")
+def health_check():
+    """轻量级健康检查：前端用于探测后端是否在线，从而自动决定
+    演示模式(模拟数据) / 实时模式(真实数据)。不依赖任何外部数据源。"""
+    return {"status": "ok", "mode": "real"}
+
+
+# ============================================================
+# 实时行情（多市场：美股 / A股 / 港股）—— 腾讯免费公开接口
+# ============================================================
+
+@app.get("/api/quote")
+async def get_quote(
+    symbols: str = Query(..., description="逗号分隔的带前缀代码, 如 usAAPL,sh600519,hk00700"),
+):
+    """
+    批量获取多市场实时行情（腾讯 qt.gtimg.cn/q=）。
+
+    返回结构:
+      {
+        "quotes": [ {symbol,name,price,prev_close,open,change,change_pct,
+                     update_time,market,delay_label,status} , ... ],
+        "engine": { cooling, reason, cooldown_remaining, slowdown, window_requests }
+      }
+    - 前端「分层刷新」：本地定时器按各市场最低间隔触发请求，本接口内置限流护盾，
+      被限流的标的会带 status='cooling'/'rate_limited' 等，前端据此展示冷却状态。
+    - 单批上限 50 个标的，避免一次性过大请求。
+    """
+    # 仅把市场前缀规范为小写（腾讯 q= 接口对大小写敏感：usAAPL 可识别，USAAPL 不行），
+    # 其余字符保持原样，避免破坏代码本身。
+    import re
+    def _norm_code(s: str) -> str:
+        s = s.strip()
+        return re.sub(r'^(US|SH|SZ|HK)', lambda m: m.group(1).lower(), s)
+    syms = [_norm_code(s) for s in symbols.split(",") if s.strip()]
+    if not syms:
+        raise HTTPException(status_code=400, detail="symbols 不能为空")
+    if len(syms) > 50:
+        raise HTTPException(status_code=400, detail="单次最多请求 50 个标的")
+
+    quotes = await quote_provider.get_quotes(syms)
+    engine = quote_provider.limiter.status()
+    return {"quotes": quotes, "engine": engine}
+
+
+@app.get("/api/quote_config")
+async def quote_config():
+    """
+    下发前端实时行情引擎所需的全部配置（刷新间隔 / 延迟标注 / 限流阈值 / 美股盘前盘后）。
+    所有数值集中在后端 quote_config.py，前端只读取、不自行硬编码，保证前后端一致。
+    """
+    return {
+        "tickMs": TICK_MS,
+        "absoluteMinInterval": ABSOLUTE_MIN_INTERVAL,
+        "rateLimitCooldown": RATE_LIMIT_COOLDOWN,
+        "ipMaxRequests": IP_MAX_REQUESTS_PER_WINDOW,
+        "ipWindow": IP_WINDOW_SECONDS,
+        "adaptive": {
+            "coldThreshold": ADAPTIVE_COLD_THRESHOLD,
+            "coldFactor": ADAPTIVE_COLD_FACTOR,
+            "maxFactor": ADAPTIVE_MAX_FACTOR,
+        },
+        "markets": {
+            k: {
+                "name": v["name"],
+                "minInterval": v["min_interval"],
+                "batchInterval": v["batch_interval"],
+                "serverUpdate": v["server_update"],
+                "delayLabel": v["delay_label"],
+                "delayFull": v["delay_full"],
+                "sessions": v.get("sessions", {}),
+            }
+            for k, v in MARKET.items()
+        },
+    }
+
 
 # 启用 CORS 跨域支持，允许前端本地调试
 app.add_middleware(
@@ -50,18 +148,102 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 本地美股股票池，用于模糊匹配
+# ============================================================
+# 市场工具函数 (前后端约定: 带市场前缀的统一代码格式)
+#   美股: usAAPL   沪A: sh600000   深A: sz000001   港股: hk00700
+# ============================================================
+MARKET_LABEL = {"us": "美股", "ash": "沪A", "asz": "深A", "hk": "港股"}
+
+
+def norm_market_prefix(sym: str) -> str:
+    """腾讯 k线 / 行情接口对市场前缀大小写敏感, 统一规范为小写 (HK00700 -> hk00700)。
+
+    这是修复「港股 / A股 K线 404」的根因: 前端与 /api/watchlist 统一返回大写前缀
+    (如 HK00700 / SH600519), 但腾讯要求小写 (hk00700 / sh600519), 否则返回
+    "param error"。美股分支本身已自动小写 us 前缀, 此处对所有市场统一兜底。
+    """
+    if not sym:
+        return sym
+    return re.sub(r'^(US|SH|SZ|HK)', lambda m: m.group(1).lower(), sym, flags=re.IGNORECASE)
+
+
+def normalize_symbol(raw: str, market: Optional[str] = None) -> Optional[str]:
+    """把用户输入归一化为带市场前缀的统一代码。"""
+    s = (raw or "").strip().upper()
+    if not s:
+        return None
+    if s.startswith(("US", "SH", "SZ", "HK")):
+        return s
+    if market == "us":
+        return "US" + s
+    if market == "ash":
+        return "SH" + s
+    if market == "asz":
+        return "SZ" + s
+    if market == "hk":
+        digits = "".join(ch for ch in s if ch.isdigit())
+        return "HK" + digits.zfill(5)
+    # 自动识别
+    if s.isdigit():
+        if len(s) == 6:
+            return ("SH" if s[0] == "6" else "SZ") + s
+        if len(s) <= 5:
+            return "HK" + s.zfill(5)
+    return "US" + s
+
+
+def market_of(symbol: str) -> Optional[str]:
+    s = symbol.upper()
+    if s.startswith("US"):
+        return "us"
+    if s.startswith("SH"):
+        return "ash"
+    if s.startswith("SZ"):
+        return "asz"
+    if s.startswith("HK"):
+        return "hk"
+    return None
+
+
+def strip_prefix(symbol: str) -> str:
+    s = symbol.upper()
+    for p in ("US", "SH", "SZ", "HK"):
+        if s.startswith(p):
+            return s[len(p):]
+    return s
+
+
+# 本地常用股票池 (覆盖美股 / A股 / 港股)，用于模糊匹配
 STOCKS_POOL = [
-    {"symbol": "usAAPL", "name": "苹果 Apple", "pinyin": "pg"},
-    {"symbol": "usNVDA", "name": "英伟达 NVIDIA", "pinyin": "ywd"},
-    {"symbol": "usTSLA", "name": "特斯拉 Tesla", "pinyin": "tsl"},
-    {"symbol": "usAMD", "name": "超微半导体 AMD", "pinyin": "cw"},
-    {"symbol": "usMSFT", "name": "微软 Microsoft", "pinyin": "wr"},
-    {"symbol": "usMETA", "name": "Meta", "pinyin": "meta"},
-    {"symbol": "usGOOGL", "name": "谷歌 Alphabet", "pinyin": "gg"},
-    {"symbol": "usAMZN", "name": "亚马逊 Amazon", "pinyin": "ymx"},
-    {"symbol": "usMU", "name": "美光科技 Micron", "pinyin": "mg"},
-    {"symbol": "usSNDK", "name": "闪迪 SanDisk", "pinyin": "sd"}
+    # 美股
+    {"symbol": "usAAPL", "name": "苹果 Apple", "pinyin": "pg", "pinyin_full": "pingguo", "market": "us"},
+    {"symbol": "usNVDA", "name": "英伟达 NVIDIA", "pinyin": "ywd", "pinyin_full": "yingweida", "market": "us"},
+    {"symbol": "usTSLA", "name": "特斯拉 Tesla", "pinyin": "tsl", "pinyin_full": "tesila", "market": "us"},
+    {"symbol": "usAMD", "name": "超微半导体 AMD", "pinyin": "cw", "pinyin_full": "chaowei", "market": "us"},
+    {"symbol": "usMSFT", "name": "微软 Microsoft", "pinyin": "wr", "pinyin_full": "weiruan", "market": "us"},
+    {"symbol": "usMETA", "name": "Meta", "pinyin": "meta", "pinyin_full": "meta", "market": "us"},
+    {"symbol": "usGOOGL", "name": "谷歌 Alphabet", "pinyin": "gg", "pinyin_full": "guge", "market": "us"},
+    {"symbol": "usAMZN", "name": "亚马逊 Amazon", "pinyin": "ymx", "pinyin_full": "yamaxun", "market": "us"},
+    {"symbol": "usMU", "name": "美光科技 Micron", "pinyin": "mg", "pinyin_full": "meiguang", "market": "us"},
+    {"symbol": "usSNDK", "name": "闪迪 SanDisk", "pinyin": "sd", "pinyin_full": "shandi", "market": "us"},
+    # A股 (沪市)
+    {"symbol": "sh600519", "name": "贵州茅台", "pinyin": "mt", "pinyin_full": "maotai", "market": "ash"},
+    {"symbol": "sh601318", "name": "中国平安", "pinyin": "zgap", "pinyin_full": "zhongguopingan", "market": "ash"},
+    {"symbol": "sh600036", "name": "招商银行", "pinyin": "zsyh", "pinyin_full": "zhaoshangyinhang", "market": "ash"},
+    {"symbol": "sh600276", "name": "恒瑞医药", "pinyin": "hryy", "pinyin_full": "hengruiyiyao", "market": "ash"},
+    {"symbol": "sh600900", "name": "长江电力", "pinyin": "cjdl", "pinyin_full": "changjiangdianli", "market": "ash"},
+    # A股 (深市)
+    {"symbol": "sz000001", "name": "平安银行", "pinyin": "payh", "pinyin_full": "pinganyinhang", "market": "asz"},
+    {"symbol": "sz000858", "name": "五粮液", "pinyin": "wly", "pinyin_full": "wuliangye", "market": "asz"},
+    {"symbol": "sz300750", "name": "宁德时代", "pinyin": "ndsd", "pinyin_full": "ningdeshidai", "market": "asz"},
+    {"symbol": "sz002594", "name": "比亚迪", "pinyin": "byd", "pinyin_full": "biyadi", "market": "asz"},
+    {"symbol": "sz000333", "name": "美的集团", "pinyin": "mdjt", "pinyin_full": "meidejituan", "market": "asz"},
+    # 港股
+    {"symbol": "hk00700", "name": "腾讯控股", "pinyin": "tx", "pinyin_full": "tengxunkonggu", "market": "hk"},
+    {"symbol": "hk09988", "name": "阿里巴巴", "pinyin": "albb", "pinyin_full": "alibaba", "market": "hk"},
+    {"symbol": "hk03690", "name": "美团", "pinyin": "mt", "pinyin_full": "meituan", "market": "hk"},
+    {"symbol": "hk01810", "name": "小米集团", "pinyin": "xm", "pinyin_full": "xiaomi", "market": "hk"},
+    {"symbol": "hk00939", "name": "建设银行", "pinyin": "jsyh", "pinyin_full": "jiansheyinhang", "market": "hk"},
 ]
 
 
@@ -73,6 +255,7 @@ STOCKS_POOL = [
 PREWARM_SYMBOLS = [
     "usAAPL", "usNVDA", "usTSLA", "usAMD", "usMSFT",
     "usMETA", "usGOOGL", "usAMZN", "usMU",
+    "sh600519", "sh601318", "sz000858", "hk00700", "hk09988",
 ]
 PREWARM_PERIODS = ["1d", "1w", "1M", "3M", "6M", "1Y"]
 CACHE_TTL_HOURS = 24
@@ -87,6 +270,9 @@ async def get_klines_df(symbol: str, period: str, full: bool = True):
       - 未命中 / 过期:      从数据源拉取并写回缓存, source=实际数据源名
     全量模式 (full=True) 才走缓存; 非全量场景极少, 直接拉取。
     """
+    # 规范市场前缀为小写 (腾讯接口大小写敏感: HK00700/SH600519 会 param error)。
+    # 统一在此处归一化, 保证缓存键与下游数据源调用一致, 杜绝港股/A股 404。
+    symbol = norm_market_prefix(symbol)
     if full:
         cached = get_cached_klines(symbol, period, max_age_hours=CACHE_TTL_HOURS)
         if cached is not None:
@@ -128,13 +314,7 @@ async def prewarm_cache():
                 print(f"[Prewarm] 跳过 {sym} {period}: {e}")
 
 
-@app.on_event("startup")
-async def startup_event():
-    # 确保数据库表存在
-    init_db()
-    # 后台预热 (不阻塞启动; 无外网时静默失败)
-    import asyncio
-    asyncio.create_task(prewarm_cache())
+
 
 
 # ============================================================
@@ -157,8 +337,14 @@ class AnalysisRequest(BaseModel):
     period: str = "1d"   # K线周期: '4h'/'1d'/'1w'/'1M'
 
 
-class WatchlistRequest(BaseModel):
-    symbols: List[str] = []   # 自选股代码列表 (纯大写，如 AAPL)
+class WatchGroupModel(BaseModel):
+    id: str
+    name: str
+    stocks: List[str] = []   # 该分组下的自选股 (带市场前缀, 如 usAAPL)
+
+
+class WatchlistGroupsRequest(BaseModel):
+    groups: List[WatchGroupModel] = []
 
 
 class SRLevel(BaseModel):
@@ -187,35 +373,147 @@ class AnalysisResponse(BaseModel):
 # ============================================================
 
 @app.get("/api/search")
-async def search_stocks(keyword: Optional[str] = Query(None, description="搜索股票名称、代码或拼音缩写")):
+async def search_stocks(
+    keyword: Optional[str] = Query(None, description="搜索股票名称、英文名称、代码或拼音缩写（全市场范围内）"),
+):
     """
-    提供本地常用美股股票的模糊匹配。若无匹配，纯字母可以作为美股代码直接加载。
+    全局证券搜索（系统入口级检索）：
+      - 本地常用股票池(美股/A股/港股)优先模糊匹配，覆盖 中文名/英文名/代码/拼音缩写 四维度；
+      - 本地池未命中时，异步调用腾讯全量证券搜索兜底，实现「任意证券」定位；
+      - 仍无匹配：把输入当作代码，按自动识别归一化为带前缀代码（兼容直接输代码进分析）。
     """
     if not keyword:
+        # 空关键词：返回全部在池股票（浏览用）
         return STOCKS_POOL
 
     kw = keyword.strip().lower()
+    # 过滤关键字中的拼音字样以处理诸如 “小米拼音” 的搜索
+    kw_clean = kw.replace("拼音", "").strip()
     matched = []
 
-    # 1. 尝试匹配本地常用股票池
+    # 1. 尝试匹配本地常用股票池 (全市场，五维度)
     for stock in STOCKS_POOL:
-        if (kw in stock["symbol"].lower() or
-            kw in stock["name"].lower() or
-            kw in stock["pinyin"].lower()):
+        if (kw_clean in stock["symbol"].lower() or
+            kw_clean in stock["name"].lower() or
+            kw_clean in stock.get("pinyin", "").lower() or
+            kw_clean in stock.get("pinyin_full", "").lower() or
+            kw_clean in stock.get("name_en", "").lower()):
             matched.append(stock)
 
     if matched:
         return matched
 
-    # 2. 如果无匹配，判定是否为美股代码格式
-    if len(kw) > 2 and kw.startswith("us"):
-        return [{"symbol": kw, "name": f"美股 {kw[2:].upper()}"}]
+    # 2. 本地池未命中：腾讯全量证券搜索兜底（任意证券）
+    try:
+        tencent = await _tencent_security_search(kw_clean)
+        if tencent:
+            return tencent
+    except Exception as e:
+        print(f"[search] 腾讯全量搜索失败，降级到代码归一化: {e}")
 
-    if kw.isalpha():
-        symbol_formatted = f"us{kw.upper()}"
-        return [{"symbol": symbol_formatted, "name": f"美股 {kw.upper()}"}]
+    # 3. 仍无匹配：仅当输入「像代码」(全 ASCII，如纯字母/数字/带前缀) 时按自动识别归一化；
+    #    含中文等自然语言输入若本地池与腾讯都无果，直接返回空，避免生成 "US台积电" 这类假代码。
+    if kw_clean.isascii():
+        norm = normalize_symbol(kw_clean)
+        if norm:
+            m = market_of(norm)
+            label = MARKET_LABEL.get(m, "")
+            return [{"symbol": norm, "name": f"{label} {strip_prefix(norm)}"}]
 
     return []
+
+
+async def _tencent_security_search(kw: str) -> list:
+    """
+    腾讯全量证券搜索兜底：覆盖本地池之外的「任意证券」。
+    优先用结构化 proxy 接口，失败回退到 smartbox JSONP 接口。
+    返回 STOCKS_POOL 同构列表（symbol/market/name/name_en/pinyin?）。
+    任何异常/超时均返回 []，由调用方降级。
+    """
+    # 规范化腾讯返回的各类代码为统一「带市场前缀」形态（去交易所后缀，避免污染缓存键）
+    def _norm_code(code: str) -> Optional[str]:
+        if not code:
+            return None
+        c = code.strip().lower()
+        # 已带市场前缀：sh/sz/hk/us
+        if c.startswith(("sh", "sz", "hk", "us")):
+            # 美股可能带 .o/.oq/.n/.nq/.am 等后缀，仅保留前缀+主体
+            if c.startswith("us") and "." in c:
+                c = c.split(".", 1)[0]
+            return c.upper()
+        # 纯英文（无前缀）→ 美股
+        if re.fullmatch(r"[a-z]+", c):
+            return "US" + c.upper()
+        # 纯数字 → 自动识别沪深/港股
+        if c.isdigit():
+            return normalize_symbol(c)
+        return None
+
+    def _pool_item(code: str, name: str, pinyin: str = "", type_: str = "") -> Optional[dict]:
+        sym = _norm_code(code)
+        if not sym:
+            return None
+        m = market_of(sym)
+        label = MARKET_LABEL.get(m, "")
+        # 名称中可能含中英文混写，尝试拆出英文名
+        name_en = ""
+        parts = re.split(r"[\s\-]+", name.strip())
+        if len(parts) > 1:
+            en = [p for p in parts if re.search(r"[a-zA-Z]", p)]
+            if en:
+                name_en = " ".join(en)
+        return {
+            "symbol": sym,
+            "name": name.strip(),
+            "name_en": name_en,
+            "market": m or "",
+            "pinyin": pinyin,
+            "label": label,
+            "type": type_,
+        }
+
+    candidates: list = []
+    headers = {"User-Agent": "Mozilla/5.0 (compatible; SecuritySearch/1.0)"}
+    try:
+        # 唯一可靠兜底源：smartbox.gtimg.cn（返回 v_hint="market~code~name~pinyin~type^..." 赋值形式，非 JSONP）。
+        # 注：proxy.finance.qq.com 在本环境经常性超时/返回 code:11（Can't load controller），
+        # 且其慢响应会吃掉超时预算、导致兜底源被饿死，故弃用，仅保留 smartbox。
+        async with httpx.AsyncClient(timeout=5.0, headers=headers, follow_redirects=True) as client:
+            url = f"https://smartbox.gtimg.cn/s3/?t=all&q={kw}"
+            try:
+                resp = await client.get(url)
+                txt = resp.text
+                # 提取所有 "..." 内容（腾讯以 v_xxx="..." 赋值返回）
+                for q in re.findall(r'"([^"]*)"', txt):
+                    try:
+                        q = json.loads('"' + q + '"')  # 解码 \uXXXX 转义
+                    except Exception:
+                        pass
+                    if not q or q == "N":
+                        continue  # "N" 为腾讯「无结果」标记
+                    # 多个证券以 ^ 分隔，每个内部以 ~ 分隔（市场~代码~名称~拼音~类型）
+                    for seg in q.split("^"):
+                        rows = seg.split("~")
+                        if len(rows) >= 3 and rows[0] in ("us", "sh", "sz", "hk"):
+                            full_code = rows[0] + rows[1]
+                            name = rows[2]
+                            pinyin = rows[3] if len(rows) > 3 else ""
+                            type_ = rows[4] if len(rows) > 4 else ""
+                            item = _pool_item(full_code, name, pinyin, type_)
+                            if item and item["symbol"] not in [c["symbol"] for c in candidates]:
+                                candidates.append(item)
+                                if len(candidates) >= 20:
+                                    break
+                    if len(candidates) >= 20:
+                        break
+            except Exception:
+                pass
+    except Exception:
+        return []
+
+    # 优先展示普通股(GP)，指数/权证/基金/窝轮等靠后，结果更贴近「搜股票」预期
+    candidates.sort(key=lambda c: (0 if c.get("type") == "GP" else 1))
+    return candidates[:20]
 
 
 @app.get("/api/klines", response_model=List[KLinePoint])
@@ -319,43 +617,74 @@ async def get_supported_periods():
 
 # ============================================================
 # 自选股持久化 (后端 JSON 文件存储，跨浏览器/origin 生效)
+# 数据模型: 用户自创「分组」，前缀/市场不再由系统硬分，而由用户把标的放进哪
+#           个分组来表达 (如「港股观察」「美股核心」)。分组结构:
+#             { "groups": [ { "id": str, "name": str, "stocks": [str] }, ... ] }
 # ============================================================
 WATCHLIST_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "watchlist.json")
-DEFAULT_WATCHLIST = ["AAPL", "NVDA", "TSLA"]
+# 默认分组（首次启动即体现多市场能力，但仅作为示例分组，用户可自由改名/删除/另建）
+DEFAULT_GROUP_NAME = "我的自选"
+DEFAULT_WATCHLIST = ["usAAPL", "usNVDA", "sh600519", "hk00700"]
 
 
-@app.get("/api/watchlist")
-async def get_watchlist():
-    """获取用户自选股列表 (后端持久化，跨会话/预览生效)"""
+def _default_groups() -> List[dict]:
+    return [{"id": "default", "name": DEFAULT_GROUP_NAME, "stocks": list(DEFAULT_WATCHLIST)}]
+
+
+def _load_groups() -> List[dict]:
+    """读取分组。兼容旧版扁平 list 文件（归入默认分组）。"""
     try:
         if os.path.exists(WATCHLIST_FILE):
             with open(WATCHLIST_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                if isinstance(data, list):
-                    return {"symbols": [str(s).upper() for s in data]}
+            # 新格式: {"groups": [...]}
+            if isinstance(data, dict) and isinstance(data.get("groups"), list):
+                return data["groups"]
+            # 旧格式兼容: 扁平 list -> 归入默认分组
+            if isinstance(data, list):
+                stocks = [str(s).upper() for s in data if s]
+                if stocks:
+                    return [{"id": "default", "name": DEFAULT_GROUP_NAME, "stocks": stocks}]
         # 无文件则写入默认并返回
+        groups = _default_groups()
         with open(WATCHLIST_FILE, "w", encoding="utf-8") as f:
-            json.dump(DEFAULT_WATCHLIST, f)
-        return {"symbols": DEFAULT_WATCHLIST}
+            json.dump({"groups": groups}, f)
+        return groups
     except Exception:
-        return {"symbols": DEFAULT_WATCHLIST}
+        return _default_groups()
+
+
+def _save_groups(groups: List[dict]) -> List[dict]:
+    """规范化分组后落盘: 大写、去首尾空格、去重、保序；缺 id 自动生成。"""
+    norm: List[dict] = []
+    for g in groups:
+        stocks: List[str] = []
+        for s in g.get("stocks", []):
+            s = str(s).upper().strip()
+            if s and s not in stocks:
+                stocks.append(s)
+        gid = g.get("id") or str(uuid.uuid4())
+        gname = (g.get("name") or "").strip() or DEFAULT_GROUP_NAME
+        norm.append({"id": gid, "name": gname, "stocks": stocks})
+    try:
+        with open(WATCHLIST_FILE, "w", encoding="utf-8") as f:
+            json.dump({"groups": norm}, f)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"保存自选失败: {e}")
+    return norm
+
+
+@app.get("/api/watchlist")
+async def get_watchlist():
+    """获取用户自选分组 (后端持久化，跨会话/预览生效)。"""
+    return {"groups": _load_groups()}
 
 
 @app.post("/api/watchlist")
-async def save_watchlist(req: WatchlistRequest):
-    """保存用户自选股列表到后端"""
-    # 规范化: 大写、去 US 前缀、去重、保序
-    norm: List[str] = []
-    for s in req.symbols:
-        s = str(s).upper().replace("US", "").strip()
-        if s and s not in norm:
-            norm.append(s)
-    try:
-        with open(WATCHLIST_FILE, "w", encoding="utf-8") as f:
-            json.dump(norm, f)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"保存自选失败: {e}")
-    return {"symbols": norm}
+async def save_watchlist(req: WatchlistGroupsRequest):
+    """保存用户自选分组到后端。"""
+    norm = _save_groups([g.dict() for g in req.groups])
+    return {"groups": norm}
 
 
 if __name__ == "__main__":

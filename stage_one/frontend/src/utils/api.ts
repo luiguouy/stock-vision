@@ -3,7 +3,71 @@
 import { calculateSRLevels, calculateRangeStats } from './mockEngine';
 
 // 使用相对路径，配合 Vite 代理或生产环境反向代理
-const BASE_URL = '/api';
+export const BASE_URL = '/api';
+
+// ============================================================
+// 多市场支持: 统一带前缀代码格式
+//   美股: usAAPL   沪A: sh600000   深A: sz000001   港股: hk00700
+// 前后端与数据源(腾讯)共用同一套前缀规则。
+// ============================================================
+export type Market = 'us' | 'ash' | 'asz' | 'hk';
+
+export const MARKETS: { key: Market; label: string; hint: string }[] = [
+  { key: 'us',  label: '美股', hint: '如 AAPL' },
+  { key: 'ash', label: '沪A',  hint: '如 600519' },
+  { key: 'asz', label: '深A',  hint: '如 000001' },
+  { key: 'hk',  label: '港股', hint: '如 00700' },
+];
+
+export const MARKET_LABEL: Record<Market, string> = {
+  us: '美股', ash: '沪A', asz: '深A', hk: '港股',
+};
+
+const PREFIXES = ['US', 'SH', 'SZ', 'HK'] as const;
+
+/** 识别代码所属市场 */
+export function marketOf(sym: string): Market | null {
+  const s = sym.toUpperCase();
+  if (s.startsWith('US')) return 'us';
+  if (s.startsWith('SH')) return 'ash';
+  if (s.startsWith('SZ')) return 'asz';
+  if (s.startsWith('HK')) return 'hk';
+  return null;
+}
+
+/** 去掉市场前缀，返回纯净代码 (usAAPL -> AAPL, sh600519 -> 600519) */
+export function stripPrefix(sym: string): string {
+  const s = sym.toUpperCase();
+  for (const p of PREFIXES) {
+    if (s.startsWith(p)) return s.slice(p.length);
+  }
+  return s;
+}
+
+/** 展示用：直接返回去前缀后的代码 */
+export function formatSymbol(sym: string): string {
+  return stripPrefix(sym);
+}
+
+/** 把用户输入归一化为带市场前缀的统一代码 */
+export function normalizeSymbol(raw: string, market?: Market): string {
+  const s = (raw || '').trim().toUpperCase();
+  if (!s) return s;
+  if (PREFIXES.some((p) => s.startsWith(p))) return s; // 已带前缀，原样返回
+  if (market === 'us') return 'US' + s;
+  if (market === 'ash') return 'SH' + s;
+  if (market === 'asz') return 'SZ' + s;
+  if (market === 'hk') {
+    const digits = s.replace(/\D/g, '').padStart(5, '0');
+    return 'HK' + digits;
+  }
+  // 自动识别
+  if (/^\d+$/.test(s)) {
+    if (s.length === 6) return (s[0] === '6' ? 'SH' : 'SZ') + s;
+    if (s.length <= 5) return 'HK' + s.padStart(5, '0');
+  }
+  return 'US' + s;
+}
 
 // 支持的K线周期（日K/周K/月K/季K/半年K/年K）
 export const SUPPORTED_PERIODS = ['1d', '1w', '1M', '3M', '6M', '1Y'] as const;
@@ -22,6 +86,13 @@ export interface StockInfo {
   symbol: string;
   name: string;
   pinyin?: string;
+}
+
+/** 自选分组：用户自创，用来对标的做自由归类（如「港股观察」「美股核心」） */
+export interface WatchGroup {
+  id: string;
+  name: string;
+  stocks: string[];
 }
 
 export interface KLinePoint {
@@ -58,11 +129,14 @@ export interface AnalysisResponse {
 }
 
 /**
- * 模糊检索股票列表
+ * 模糊检索股票列表（全市场范围，单次搜索覆盖美股/A股/港股）
+ * @param keyword 搜索关键词 (代码/名称/拼音)
  */
 export async function searchStocks(keyword: string): Promise<StockInfo[]> {
   try {
-    const url = keyword ? `${BASE_URL}/search?keyword=${encodeURIComponent(keyword)}` : `${BASE_URL}/search`;
+    const url = keyword
+      ? `${BASE_URL}/search?keyword=${encodeURIComponent(keyword)}`
+      : `${BASE_URL}/search`;
     const response = await fetch(url);
     if (!response.ok) throw new Error('网络请求异常，搜不到股票');
     return await response.json();
@@ -200,26 +274,27 @@ export function generateMockKLines(symbol: string, days: number = 320, basePrice
 }
 
 /**
- * 自选股持久化接口 (后端 JSON 文件存储，跨浏览器/origin 生效)
+ * 自选分组持久化接口 (后端 JSON 文件存储，跨浏览器/origin 生效)
+ * 返回用户自创的分组列表；空数组表示后端不可用或尚无分组。
  */
-export async function getWatchlist(): Promise<string[]> {
+export async function getWatchlist(): Promise<WatchGroup[]> {
   try {
     const response = await fetch(`${BASE_URL}/watchlist`, { method: 'GET' });
     if (!response.ok) throw new Error('load failed');
     const json = await response.json();
-    if (Array.isArray(json.symbols)) return json.symbols;
+    if (Array.isArray(json.groups)) return json.groups as WatchGroup[];
     return [];
   } catch {
     return [];
   }
 }
 
-export async function saveWatchlist(symbols: string[]): Promise<void> {
+export async function saveWatchlist(groups: WatchGroup[]): Promise<void> {
   try {
     await fetch(`${BASE_URL}/watchlist`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ symbols }),
+      body: JSON.stringify({ groups }),
     });
   } catch {
     /* 后端不可用时静默失败，前端已同步写入 localStorage 兜底 */

@@ -386,13 +386,31 @@ class TencentProvider(DataProvider):
         return pd.DataFrame()
 
     def _get_symbol_candidates(self, symbol: str) -> List[str]:
-        """根据输入代码生成候选腾讯代码列表"""
+        """根据输入代码生成候选腾讯代码列表。
+
+        支持市场:
+          - 美股:  usAAPL      -> usAAPL.OQ / .N / .AM (腾讯交易所后缀)
+          - 沪A:    sh600000    -> sh600000 (腾讯要求小写前缀)
+          - 深A:    sz000001    -> sz000001
+          - 港股:   hk00700     -> hk00700
+
+        注意: 腾讯 k线接口对市场前缀大小写敏感 (HK00700 / SH600519 直接返回
+        "param error" 而非空数据), 必须统一规范为小写前缀。此前 K线路径未做
+        归一化, 导致前端(大写前缀) / 自选(大写返回) 请求的港股 / A股全部 404。
+        """
         if "." in symbol:
+            # 含交易所后缀的美股 (如 usAAPL.OQ): 仅小写市场前缀, 后缀保持原样
+            if symbol[:2].upper() in ("US", "SH", "SZ", "HK"):
+                return [symbol[:2].lower() + symbol[2:]]
             return [symbol]
-        if symbol.lower().startswith("us"):
+        s = symbol.lower()
+        if s.startswith("us"):
             ticker = symbol[2:].upper()
-            return [f"us{ticker}{s}" for s in US_SUFFIXES]
-        return [symbol]
+            return [f"us{ticker}{suf}" for suf in US_SUFFIXES]
+        if s.startswith(("sh", "sz", "hk")):
+            # A股/港股: 腾讯要求小写市场前缀, 统一转小写返回
+            return [s]
+        return [symbol.lower()]
 
     @staticmethod
     def _resample_to_4h(df_1h: pd.DataFrame) -> pd.DataFrame:
@@ -682,14 +700,26 @@ class YahooProvider(DataProvider):
 
     @staticmethod
     def _to_yahoo_ticker(symbol: str) -> str:
-        """将平台代码转换为 Yahoo Finance ticker"""
+        """将平台代码转换为 Yahoo Finance ticker。
+
+        美股走 Yahoo; A股/港股理论上不入 Yahoo (DataProviderManager 已路由到腾讯),
+        此处仍补齐映射, 作为兜底时也能拿到正确 ticker。
+        """
+        s = symbol.lower()
+        if s.startswith("sh"):
+            return symbol[2:].upper() + ".SS"
+        if s.startswith("sz"):
+            return symbol[2:].upper() + ".SZ"
+        if s.startswith("hk"):
+            # hk00700 -> 00700.HK (腾讯代码补零, Yahoo 同样需要 5 位)
+            return symbol[2:].upper().zfill(5) + ".HK"
         if "." in symbol:
             # usAAPL.OQ -> AAPL
             base = symbol.split(".")[0]
             if base.lower().startswith("us"):
                 return base[2:].upper()
             return base.upper()
-        if symbol.lower().startswith("us"):
+        if s.startswith("us"):
             return symbol[2:].upper()
         return symbol.upper()
 
@@ -768,22 +798,24 @@ class DataProviderManager:
             )
 
         # 确定主备源顺序
-        if full:
-            # 全量历史模式：优先 Yahoo (period='max' 可返回上市以来全部数据)。
-            # 腾讯接口对单次返回的 K 线根数有上限，难以拿到完整历史，故作为备源。
-            primary, backup = self.yahoo, self.tencent
-        elif period == '4h':
-            # 4h: Yahoo 1h 数据更丰富，优先使用
-            primary, backup = self.yahoo, self.tencent
+        # 美股: Yahoo(全量优先) / 腾讯(兜底)；非美股(A股/港股) 仅走腾讯
+        # (Yahoo 对 A股/港股覆盖差且不稳定，而腾讯原生即支持这两个市场)。
+        is_us = symbol.lower().startswith("us")
+        if is_us:
+            if full:
+                # 全量历史模式：优先 Yahoo (period='max' 可返回上市以来全部数据)。
+                # 腾讯接口对单次返回的 K 线根数有上限，难以拿到完整历史，故作为备源。
+                primary, backup = self.yahoo, self.tencent
+            elif period == '4h':
+                # 4h: Yahoo 1h 数据更丰富，优先使用
+                primary, backup = self.yahoo, self.tencent
+            else:
+                # 日/周/月: 腾讯为主源
+                primary, backup = self.tencent, self.yahoo
+            candidates = [primary, backup]
         else:
-            # 日/周/月: 腾讯为主源
-            primary, backup = self.tencent, self.yahoo
-
-        # 两个数据源都拉取并做「粒度校验」，再择优返回：
-        #   - 拒绝粒度错位的数据 (如 Yahoo 代理把日线退化成每 3 个月一根的季度桩)
-        #   - 在都有效的前提下，优先选择「根数更多」的结果 (更接近全量历史)
-        # 这样既能在本机走 Yahoo 拿完整历史，也能在受限网络下退回腾讯的真实日/周/月线。
-        candidates = [primary, backup]
+            # A股 / 港股: 仅腾讯证券 (原生支持 sh/sz/hk 代码)
+            candidates = [self.tencent]
         best_df = None
         best_source = None
         for src in candidates:
