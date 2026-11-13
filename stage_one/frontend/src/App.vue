@@ -1,30 +1,21 @@
 <template>
   <div
-    class="flex flex-col flex-1 h-screen overflow-hidden bg-[#f8fafc] dark:bg-slate-900 text-slate-800 dark:text-slate-200 subpixel-antialiased font-sans select-none">
+    class="flex flex-col flex-1 h-screen overflow-hidden bg-slate-50 dark:bg-[#090d16] text-slate-800 dark:text-slate-200 antialiased font-sans select-none">
 
-    <!-- 全局常驻风险提示：免费公开行情源存在刷新延迟，不构成任何投资交易依据 -->
-    <div
-      class="shrink-0 bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 text-[11px] font-medium px-4 py-1.5 flex items-center justify-center gap-2 text-center border-b border-amber-200/60 dark:border-amber-700/40">
-      <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-      </svg>
-      <span>本软件使用免费公开行情源，数据存在刷新延迟，不构成任何投资交易依据，请勿用于实盘交易。</span>
-    </div>
-
-    <!-- 浏览器风格导航栏 -->
-    <header class="h-12 bg-white dark:bg-slate-800 border-b border-slate-200/60 dark:border-slate-700/60 px-3 flex items-center gap-2 shrink-0 z-[60]">
+    <!-- 顶栏导航 (48px Header) -->
+    <header class="h-12 bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 px-3.5 flex items-center gap-3 shrink-0 z-[60]">
       <!-- 左：导航按钮 -->
-      <div class="flex items-center gap-0.5 shrink-0">
+      <div class="flex items-center gap-1 shrink-0">
         <button @click="navBack()" :disabled="navBackHistory.length === 0"
-          class="p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-25 disabled:cursor-not-allowed transition-colors cursor-pointer" title="后退">
+          class="btn-tactile p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-25 disabled:cursor-not-allowed transition-colors cursor-pointer" title="后退">
           <svg class="w-4 h-4 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
         </button>
         <button @click="navForward()" :disabled="navForwardHistory.length === 0"
-          class="p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-25 disabled:cursor-not-allowed transition-colors cursor-pointer" title="前进">
+          class="btn-tactile p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-25 disabled:cursor-not-allowed transition-colors cursor-pointer" title="前进">
           <svg class="w-4 h-4 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
         </button>
         <button @click="refreshCurrent()"
-          class="p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer" title="刷新行情">
+          class="btn-tactile p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer" title="刷新行情">
           <svg class="w-4 h-4 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
         </button>
       </div>
@@ -32,6 +23,7 @@
       <!-- 中：全局证券搜索（系统入口） -->
       <div class="flex-1 min-w-0 max-w-md">
         <GlobalSecuritySearch
+          ref="searchComponentRef"
           :watchlist="watchlist"
           :placeholder="searchPlaceholder"
           @select="selectSuggestion"
@@ -40,26 +32,26 @@
       </div>
 
       <!-- 右：当前标的摘要 + 控制 -->
-      <div class="flex items-center gap-2 shrink-0">
+      <div class="flex items-center gap-2.5 shrink-0">
         <template v-if="currentSymbol">
           <div class="flex items-center gap-1.5">
-            <span class="text-sm font-bold text-slate-800 dark:text-slate-200">{{ formatSymbol(currentSymbol) }}</span>
-            <span class="text-[9px] px-1 py-px rounded bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400">{{ MARKET_LABEL[marketOf(currentSymbol) || 'us'] }}</span>
+            <span class="text-sm font-bold text-slate-900 dark:text-slate-100 font-sans tracking-tight">{{ formatSymbol(currentSymbol) }}</span>
+            <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-mono">{{ MARKET_LABEL[marketOf(currentSymbol) || 'us'] }}</span>
           </div>
-          <div v-if="displayPrice != null" class="flex items-center gap-1.5 pl-1.5 border-l border-slate-200/60 dark:border-slate-600/60">
-            <span class="text-sm font-bold font-mono tabular-nums"
-              :class="displayChange >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'">
+          <div v-if="displayPrice != null" class="flex items-center gap-2 pl-2 border-l border-slate-200 dark:border-slate-800">
+            <span class="text-sm font-bold font-mono tabular-nums tracking-tight"
+              :class="displayChange >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'">
               {{ currencyOf(currentSymbol) }}{{ displayPrice.toFixed(2) }}
             </span>
-            <span class="text-[10px] font-semibold px-1 py-px rounded"
-              :class="displayChange >= 0 ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'">
+            <span class="text-[10px] font-bold font-mono tabular-nums px-1.5 py-0.5 rounded shadow-2xs leading-none"
+              :class="displayChange >= 0 ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'">
               {{ displayChange >= 0 ? '+' : '' }}{{ displayChange.toFixed(2) }}%
             </span>
           </div>
           <button @click="toggleWatchlist(currentSymbol)"
-            class="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+            class="btn-tactile p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
             :title="isWatchlisted(currentSymbol) ? '取消自选' : '加入自选'">
-            <svg class="w-4 h-4" :class="isWatchlisted(currentSymbol) ? 'text-amber-400 fill-amber-400' : 'text-slate-300 fill-none'"
+            <svg class="w-4 h-4" :class="isWatchlisted(currentSymbol) ? 'text-amber-400 fill-amber-400' : 'text-slate-300 dark:text-slate-600 fill-none'"
               xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round"
                 d="M11.48 3.499c.174-.383.72-.383.894 0l2.64 5.352 5.9 1.15c.422.082.59.59.282.895l-4.244 4.14 1.002 5.86c.071.423-.372.746-.75.545l-5.267-2.77-5.268 2.77c-.378.201-.821-.122-.75-.545l1.002-5.86-4.244-4.14c-.308-.305-.14-.813.282-.895l5.9-1.15 2.64-5.352z" />
@@ -67,18 +59,20 @@
           </button>
         </template>
         <!-- 数据模式 -->
-        <span class="flex items-center gap-1 text-[10px] font-medium cursor-help"
-          :class="useMockData ? 'text-amber-500' : 'text-emerald-500'"
-          :title="useMockData ? '纯前端随机数据生成' : delayFullOf(currentSymbol)">
-          <span class="w-1.5 h-1.5 rounded-full" :class="useMockData ? 'bg-amber-400' : 'bg-emerald-400'"></span>
-          {{ useMockData ? '演示' : '实时' }}
-          <span v-if="!useMockData" class="text-[9px] text-slate-400 dark:text-slate-500">({{ delayLabelOf(currentSymbol) }})</span>
+        <span class="flex items-center gap-1.5 text-[10px] font-semibold cursor-help px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800"
+          :class="useMockData ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'"
+          :title="useMockData ? '演示数据' : delayFullOf(currentSymbol)">
+          <span class="relative flex h-2 w-2">
+            <span v-if="!useMockData" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2 w-2" :class="useMockData ? 'bg-amber-400' : 'bg-emerald-500'"></span>
+          </span>
+          <span>{{ useMockData ? 'MOCK' : 'LIVE' }}</span>
         </span>
         <!-- 深色模式 -->
         <button @click="toggleDarkMode()"
-          class="p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+          class="btn-tactile p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
           :title="isDarkMode ? '切换到浅色模式' : '切换到深色模式'">
-          <svg class="w-4 h-4" :class="isDarkMode ? 'text-amber-400' : 'text-slate-400'"
+          <svg class="w-4 h-4 transition-transform duration-300" :class="isDarkMode ? 'text-amber-400 rotate-180' : 'text-slate-500 rotate-0'"
             fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
             <path v-if="!isDarkMode" stroke-linecap="round" stroke-linejoin="round"
               d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
@@ -90,7 +84,7 @@
     </header>
 
     <!-- 主交互区域 -->
-    <main class="flex-1 flex overflow-hidden relative min-h-0 bg-white dark:bg-slate-900">
+    <main class="flex-1 flex overflow-hidden relative min-h-0 bg-white dark:bg-[#090d16]">
 
       <!-- 降级/错误提示横幅 -->
       <transition name="fade">
@@ -107,41 +101,41 @@
         </div>
       </transition>
 
-      <!-- 左侧边栏：自选股列表 -->
+      <!-- 左侧边栏：自选股列表 (Swiss Modular 8pt Grid) -->
       <aside
         :style="{ width: leftSidebarWidth + 'px' }"
-        class="bg-white dark:bg-slate-800 border-r border-slate-200/60 dark:border-slate-700/60 flex flex-col shrink-0 overflow-y-auto scrollbar-thin">
+        class="bg-white dark:bg-[#0f172a] border-r border-slate-200/80 dark:border-slate-800 flex flex-col shrink-0 overflow-y-auto scrollbar-thin">
 
         <!-- 自选分组 -->
         <div class="flex-1 overflow-y-auto">
           <!-- 顶部固定：标题 + 分组切换 Tab 栏 + 市场 Tab 栏 -->
-          <div class="sticky top-0 z-20 bg-white dark:bg-slate-800 border-b border-slate-100/80 dark:border-slate-700/60">
+          <div class="sticky top-0 z-20 bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur-sm border-b border-slate-200/60 dark:border-slate-800">
             <!-- 标题栏 -->
-            <div class="px-4 pt-2.5 pb-1 flex items-center justify-between">
-              <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-                <span>自选</span>
-                <span class="text-[10px] font-normal text-slate-400 normal-case">{{ filteredWatchlist.length }} / {{ watchlist.length }}</span>
+            <div class="px-3.5 pt-2.5 pb-1 flex items-center justify-between">
+              <h3 class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                <span>自选标的</span>
+                <span class="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-semibold">{{ filteredWatchlist.length }}/{{ watchlist.length }}</span>
               </h3>
             </div>
 
             <!-- 分组切换 Tab 栏 (平铺核心 + 下拉分组) -->
-            <div class="px-4 py-1.5 flex items-center gap-2 border-b border-slate-100/60 dark:border-slate-700/40">
+            <div class="px-3 py-1.5 flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-800/60">
               <!-- 全部 Tab -->
               <button @click="activeGroupId = 'all'"
-                class="px-2.5 py-1 text-xs rounded-md transition-all cursor-pointer font-medium"
+                class="btn-tactile px-2.5 py-1 text-xs rounded-lg transition-all cursor-pointer font-semibold"
                 :class="activeGroupId === 'all'
-                  ? 'bg-slate-100 dark:bg-slate-700 text-teal-600 dark:text-teal-400 border border-slate-200/50 dark:border-slate-600/50'
-                  : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'">
+                  ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800/60 shadow-2xs'
+                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300 border border-transparent'">
                 全部
               </button>
               
               <!-- 特别关注 Tab (第一个分组) -->
               <button v-if="watchGroups.length > 0"
                 @click="activeGroupId = watchGroups[0].id"
-                class="px-2.5 py-1 text-xs rounded-md transition-all cursor-pointer font-medium truncate max-w-20"
+                class="btn-tactile px-2.5 py-1 text-xs rounded-lg transition-all cursor-pointer font-semibold truncate max-w-20"
                 :class="activeGroupId === watchGroups[0].id
-                  ? 'bg-slate-100 dark:bg-slate-700 text-teal-600 dark:text-teal-400 border border-slate-200/50 dark:border-slate-600/50'
-                  : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'"
+                  ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800/60 shadow-2xs'
+                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300 border border-transparent'"
                 :title="watchGroups[0].name">
                 {{ watchGroups[0].name }}
               </button>
@@ -149,7 +143,7 @@
               <!-- 其他分组下拉框 -->
               <div class="relative group-dropdown-container flex-1">
                 <button @click="toggleGroupDropdown"
-                  class="w-full flex items-center justify-between gap-1 px-2 py-1 border border-slate-200 dark:border-slate-700 rounded-md text-xs font-medium bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600 cursor-pointer">
+                  class="btn-tactile w-full flex items-center justify-between gap-1 px-2 py-1 border border-slate-200 dark:border-slate-700/80 rounded-lg text-xs font-semibold bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600 cursor-pointer">
                   <span class="truncate">{{ activeGroupName }}</span>
                   <svg class="w-3 h-3 shrink-0 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
@@ -157,28 +151,28 @@
                 </button>
                 <transition name="dropdown">
                   <div v-if="showGroupDropdown"
-                    class="absolute left-0 top-full mt-1 w-52 max-h-80 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-50 animate-fade-in-down py-1">
+                    class="absolute left-0 top-full mt-1 w-52 max-h-80 overflow-y-auto bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-50 animate-fade-in-down py-1">
                     <!-- 列出已有的分组名 -->
-                    <div class="max-h-56 overflow-y-auto">
+                    <div class="max-h-56 overflow-y-auto divide-y divide-slate-100/40 dark:divide-slate-800/40">
                       <button v-for="g in watchGroups" :key="g.id"
                         @click="selectGroup(g.id)"
-                        class="w-full text-left px-3 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/60 transition-colors flex items-center justify-between">
-                        <span class="truncate pr-2">{{ g.name }}</span>
-                        <span class="text-[9px] text-slate-400 shrink-0">({{ g.stocks.length }})</span>
+                        class="w-full text-left px-3.5 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center justify-between cursor-pointer">
+                        <span class="truncate pr-2 font-medium">{{ g.name }}</span>
+                        <span class="text-[9px] font-mono text-slate-400 shrink-0">({{ g.stocks.length }})</span>
                       </button>
                     </div>
                     
                     <!-- 底部分割线和操作入口 -->
-                    <div class="border-t border-slate-100 dark:border-slate-700/80 mt-1 pt-1">
+                    <div class="border-t border-slate-100 dark:border-slate-800 mt-1 pt-1">
                       <button @click="triggerCreateGroup"
-                        class="w-full text-left px-3 py-1.5 text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/60 transition-colors flex items-center gap-1.5 font-medium cursor-pointer">
+                        class="w-full text-left px-3.5 py-1.5 text-xs text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/30 transition-colors flex items-center gap-1.5 font-semibold cursor-pointer">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
                         </svg>
                         创建分组
                       </button>
                       <button @click="triggerManageGroups"
-                        class="w-full text-left px-3 py-1.5 text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/60 transition-colors flex items-center gap-1.5 font-medium cursor-pointer">
+                        class="w-full text-left px-3.5 py-1.5 text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-1.5 font-medium cursor-pointer">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
                         </svg>
@@ -190,12 +184,12 @@
               </div>
             </div>
             <!-- 市场 Tab 栏 -->
-            <div class="flex items-center gap-1 px-3 pb-2.5">
+            <div class="flex items-center gap-1 px-3 pb-2 pt-0.5">
               <button v-for="t in MARKET_TABS" :key="t.key" @click="activeMarketTab = t.key"
-                class="flex-1 text-xs font-semibold py-1 rounded-md border transition-all cursor-pointer"
+                class="btn-tactile flex-1 text-xs font-semibold py-1 rounded-lg border transition-all cursor-pointer"
                 :class="activeMarketTab === t.key
-                  ? 'border-teal-500 text-teal-600 bg-teal-50 dark:bg-teal-900/30 dark:text-teal-300'
-                  : 'border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-500'">
+                  ? 'border-indigo-500 text-indigo-600 bg-indigo-50/70 dark:bg-indigo-950/40 dark:text-indigo-300 font-bold'
+                  : 'border-slate-200 dark:border-slate-700/80 text-slate-500 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600'">
                 {{ t.label }}
               </button>
             </div>
@@ -203,79 +197,79 @@
 
           <!-- 排序表头：点击 名称代码 / 最新价 / 涨跌幅 切换升降序 -->
           <div
-            class="flex items-center px-4 py-1.5 bg-white dark:bg-slate-800 border-b border-slate-100/80 dark:border-slate-700/60 text-[10px] font-semibold text-slate-400 select-none">
+            class="flex items-center px-3.5 py-1.5 bg-slate-50/80 dark:bg-slate-900/60 border-b border-slate-100 dark:border-slate-800 text-[10px] font-bold text-slate-400 dark:text-slate-500 select-none uppercase tracking-wider">
             <button @click="setSort('name')"
               class="flex-1 text-left flex items-center gap-0.5 transition-colors cursor-pointer"
-              :class="sortBy === 'name' ? 'text-teal-600 dark:text-teal-400' : 'hover:text-slate-600 dark:hover:text-slate-200'">
+              :class="sortBy === 'name' ? 'text-indigo-600 dark:text-indigo-400 font-bold' : 'hover:text-slate-600 dark:hover:text-slate-300'">
               名称代码
-              <span v-if="sortBy === 'name'" class="text-[9px]">{{ sortDir === 'asc' ? '↑' : '↓' }}</span>
+              <span v-if="sortBy === 'name'" class="text-[9px] font-mono">{{ sortDir === 'asc' ? '↑' : '↓' }}</span>
             </button>
-            <div class="flex items-center gap-2 shrink-0">
+            <div class="flex items-center gap-3 shrink-0">
               <button @click="setSort('price')"
                 class="text-right transition-colors cursor-pointer"
-                :class="sortBy === 'price' ? 'text-teal-600 dark:text-teal-400' : 'hover:text-slate-600 dark:hover:text-slate-200'">
+                :class="sortBy === 'price' ? 'text-indigo-600 dark:text-indigo-400 font-bold' : 'hover:text-slate-600 dark:hover:text-slate-300'">
                 最新价
-                <span v-if="sortBy === 'price'" class="text-[9px]">{{ sortDir === 'asc' ? '↑' : '↓' }}</span>
+                <span v-if="sortBy === 'price'" class="text-[9px] font-mono">{{ sortDir === 'asc' ? '↑' : '↓' }}</span>
               </button>
               <button @click="setSort('change')"
-                class="text-right min-w-[42px] transition-colors cursor-pointer"
-                :class="sortBy === 'change' ? 'text-teal-600 dark:text-teal-400' : 'hover:text-slate-600 dark:hover:text-slate-200'">
+                class="text-right min-w-[46px] transition-colors cursor-pointer"
+                :class="sortBy === 'change' ? 'text-indigo-600 dark:text-indigo-400 font-bold' : 'hover:text-slate-600 dark:hover:text-slate-300'">
                 涨跌幅
-                <span v-if="sortBy === 'change'" class="text-[9px]">{{ sortDir === 'asc' ? '↑' : '↓' }}</span>
+                <span v-if="sortBy === 'change'" class="text-[9px] font-mono">{{ sortDir === 'asc' ? '↑' : '↓' }}</span>
               </button>
             </div>
           </div>
 
           <!-- 测试模式警告条 -->
           <div v-if="useMockData && watchlist.length"
-            class="px-4 py-1.5 bg-amber-50/80 dark:bg-amber-900/20 border-b border-amber-200/60 dark:border-amber-700/40">
-            <p class="text-[10px] text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1">
+            class="px-3.5 py-1.5 bg-amber-500/10 border-b border-amber-500/20">
+            <p class="text-[10px] text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1.5">
               <svg class="w-3 h-3 shrink-0" fill="currentColor" viewBox="0 0 20 20">
                 <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
               </svg>
-              模拟数据，非真实行情
+              模拟数据环境，非真实交易所撮合行情
             </p>
           </div>
 
           <!-- 空状态 -->
           <div v-if="!sortedFilteredWatchlist.length"
             class="p-8 text-center text-xs text-slate-400">
-            <!-- 1. 当前激活分组为空分组的情况 (图3样式) -->
+            <!-- 1. 当前激活分组为空分组的情况 -->
             <div v-if="isCurrentGroupEmpty" class="py-12 flex flex-col items-center">
               <svg class="w-12 h-12 text-slate-300 dark:text-slate-600 mb-2" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-19.5 0A2.25 2.25 0 004.5 15h15a2.25 2.25 0 002.25-2.25m-19.5 0v.25A2.25 2.25 0 004.5 17.5h15a2.25 2.25 0 002.25-2.25V12.75" />
               </svg>
-              <div class="text-xs text-slate-400 dark:text-slate-500 mb-1">暂无数据</div>
+              <div class="text-xs text-slate-400 dark:text-slate-500 mb-2">当前分组暂无标的</div>
               <button @click="showSearchModal = true; nextTick(() => { modalSearchInputRef?.focus(); })" 
-                class="text-xs text-blue-500 hover:text-blue-600 hover:underline cursor-pointer font-medium bg-transparent border-0 p-0">添加自选</button>
+                class="btn-tactile text-xs text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer font-semibold bg-transparent border-0 p-0">添加标的</button>
             </div>
             <!-- 2. 普通无任何自选股情况 -->
             <div v-else-if="!watchlist.length" class="py-12">
-              <svg class="w-10 h-10 mx-auto mb-2 text-slate-300" xmlns="http://www.w3.org/2000/svg" fill="none"
+              <svg class="w-10 h-10 mx-auto mb-2 text-slate-300 dark:text-slate-600" xmlns="http://www.w3.org/2000/svg" fill="none"
                 viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
                 <path stroke-linecap="round" stroke-linejoin="round"
                   d="M11.48 3.499c.174-.383.72-.383.894 0l2.64 5.352 5.9 1.15c.422.082.59.59.282.895l-4.244 4.14 1.002 5.86c.071.423-.372.746-.75.545l-5.267-2.77-5.268 2.77c-.378.201-.821-.122-.75-.545l1.002-5.86-4.244-4.14c-.308-.305-.14-.813.282-.895l5.9-1.15 2.64-5.352z" />
               </svg>
-              <p>暂无自选股</p>
-              <p class="mt-1 text-[10px] text-slate-400">在图表区点击星标添加</p>
+              <p class="font-medium">暂无自选股</p>
+              <p class="mt-1 text-[10px] text-slate-400">在图表区或搜索栏点击星标添加</p>
             </div>
             <!-- 3. 条件过滤后的空结果 -->
             <div v-else class="py-12">
-              <p>当前筛选条件下没有标的</p>
+              <p>当前筛选条件下未匹配到标的</p>
             </div>
           </div>
 
           <!-- 过滤后的自选列表（扁平 + 市场Tab/分组交集筛选 + 表头排序） -->
-          <transition-group v-if="sortedFilteredWatchlist.length" name="list" tag="div" class="divide-y divide-slate-100/80 dark:divide-slate-700/60">
+          <transition-group v-if="sortedFilteredWatchlist.length" name="list" tag="div" class="divide-y divide-slate-100 dark:divide-slate-800/70">
             <div v-for="item in sortedFilteredWatchlist" :key="item" @click="selectWatchlist(item)"
-              class="group px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition-all"
-              :class="currentSymbol === item ? 'bg-teal-50/60 dark:bg-teal-900/20 border-l-2 border-teal-500' : 'border-l-2 border-transparent'">
-              <div class="flex items-center justify-between gap-3">
+              class="group px-3.5 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer transition-all"
+              :class="currentSymbol === item ? 'bg-indigo-50/70 dark:bg-indigo-950/30 border-l-2 border-indigo-600 dark:border-indigo-400' : 'border-l-2 border-transparent'">
+              <div class="flex items-center justify-between gap-2.5">
                 <!-- 左侧：名称 + 星标 + 代码 + 市场标签 -->
                 <div class="flex-1 min-w-0 overflow-hidden">
                   <div class="flex items-center gap-1.5 mb-0.5 min-w-0">
-                    <span class="font-bold text-sm text-slate-900 dark:text-slate-100 truncate min-w-0">{{ getStockName(item) }}</span>
-                    <button @click.stop="toggleWatchlist(item)" class="shrink-0 cursor-pointer"
+                    <span class="font-bold text-xs text-slate-900 dark:text-slate-100 truncate min-w-0">{{ getStockName(item) }}</span>
+                    <button @click.stop="toggleWatchlist(item)" class="shrink-0 cursor-pointer p-0.5"
                       :title="isWatchlisted(item) ? '取消自选' : '加入自选'">
                       <svg class="w-3.5 h-3.5" :class="isWatchlisted(item) ? 'text-amber-400 fill-amber-400' : 'text-slate-300 dark:text-slate-600'"
                         fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -284,42 +278,42 @@
                     </button>
                   </div>
                   <div class="flex items-center gap-1.5 min-w-0">
-                    <span class="text-[11px] text-slate-500 dark:text-slate-400 font-mono">{{ formatSymbol(item) }}</span>
-                    <span class="text-[9px] px-1 rounded bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400">{{ MARKET_LABEL[marketOf(item) || 'us'] }}</span>
+                    <span class="text-[11px] text-slate-400 dark:text-slate-500 font-mono">{{ formatSymbol(item) }}</span>
+                    <span class="text-[9px] font-bold px-1 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-mono">{{ MARKET_LABEL[marketOf(item) || 'us'] }}</span>
                   </div>
                 </div>
                 <!-- 右侧：最新价（涨绿跌红）+ 辅助行情信息（盘后/昨收）+ 涨跌百分比色块 -->
                 <div class="flex items-center gap-2 shrink-0">
                   <div class="text-right">
-                    <div v-if="watchPriceInfo(item).loading" class="h-4 w-14 bg-slate-200 dark:bg-slate-600 rounded animate-pulse"></div>
+                    <div v-if="watchPriceInfo(item).loading" class="h-4 w-14 skeleton"></div>
                     <template v-else-if="watchPriceInfo(item).price != null">
                       <!-- 第一行：当前价格（主信息） -->
-                      <div class="text-sm font-bold font-mono tabular-nums leading-tight"
-                        :class="watchPriceInfo(item).change! >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'">
+                      <div class="text-xs font-bold font-mono tabular-nums leading-tight tracking-tight"
+                        :class="watchPriceInfo(item).change! >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'">
                         {{ currencyOf(item) }}{{ watchPriceInfo(item).price!.toFixed(2) }}
                       </div>
                       <!-- 第二行：辅助行情信息（扩展交易时段 / 昨收） -->
                       <div v-if="secondaryLineInfo(item)"
-                        class="flex items-center justify-end gap-1 text-[10px] font-mono tabular-nums leading-tight text-slate-500 dark:text-slate-400">
+                        class="flex items-center justify-end gap-1 text-[10px] font-mono tabular-nums leading-tight text-slate-400 dark:text-slate-500">
                         <span :class="secondaryLineInfo(item)!.changePct != null
-                          ? (secondaryLineInfo(item)!.changePct! >= 0 ? 'text-emerald-500/70 dark:text-emerald-400/70' : 'text-red-500/70 dark:text-red-400/70')
+                          ? (secondaryLineInfo(item)!.changePct! >= 0 ? 'text-emerald-500/80 dark:text-emerald-400/80' : 'text-rose-500/80 dark:text-rose-400/80')
                           : ''">
                           {{ secondaryLineInfo(item)!.price!.toFixed(2) }}
                           <template v-if="secondaryLineInfo(item)!.changePct != null">
                             {{ secondaryLineInfo(item)!.changePct! >= 0 ? '+' : '' }}{{ secondaryLineInfo(item)!.changePct!.toFixed(2) }}%
                           </template>
                         </span>
-                        <span class="text-[9px] px-1 rounded bg-slate-100 dark:bg-slate-700/60 text-slate-400 dark:text-slate-500 leading-tight">
+                        <span class="text-[9px] px-1 rounded bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 leading-tight">
                           {{ secondaryLineInfo(item)!.label }}
                         </span>
                       </div>
                     </template>
-                    <span v-else class="text-sm text-slate-400">--</span>
+                    <span v-else class="text-xs text-slate-400 font-mono">--</span>
                   </div>
                   <!-- 右侧涨跌百分比色块（涨绿跌红，白底白字） -->
                   <div v-if="watchPriceInfo(item).change != null && !watchPriceInfo(item).loading"
-                    class="text-[11px] font-bold px-1.5 py-1 rounded leading-none text-white min-w-[42px] text-center"
-                    :class="watchPriceInfo(item).change! >= 0 ? 'bg-emerald-500' : 'bg-red-500'">
+                    class="text-[11px] font-bold font-mono tabular-nums px-1.5 py-0.5 rounded leading-tight text-white min-w-[46px] text-center shadow-2xs"
+                    :class="watchPriceInfo(item).change! >= 0 ? 'bg-emerald-500' : 'bg-rose-500'">
                     {{ watchPriceInfo(item).change! >= 0 ? '+' : '' }}{{ watchPriceInfo(item).change!.toFixed(2) }}%
                   </div>
                 </div>
@@ -329,33 +323,33 @@
         </div>
       </aside>
 
-      <!-- 比例调节拖拽条 -->
+      <!-- 比例调节拖拽条 (Left Resizer) -->
       <div @mousedown="startResizeLeft"
-        class="w-1 bg-slate-100 dark:bg-slate-700 hover:bg-teal-500 active:bg-teal-600 cursor-col-resize transition-colors shrink-0 z-50 group relative">
+        class="w-1 bg-slate-200/60 dark:bg-slate-800 hover:bg-indigo-500 active:bg-indigo-600 cursor-col-resize transition-colors shrink-0 z-50 group relative">
         <div class="absolute inset-y-0 -left-4 -right-4"></div>
         <!-- 拖拽指示器 -->
         <div class="absolute inset-y-0 -left-1 -right-1 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
-          <div class="w-1 h-8 rounded-full bg-teal-500/40"></div>
+          <div class="w-1 h-8 rounded-full bg-indigo-500/50"></div>
         </div>
       </div>
 
-      <!-- 中间：图表容器 -->
-      <div class="flex-1 flex flex-col min-h-0 min-w-0 bg-white dark:bg-slate-900">
-        <!-- 图表工具栏：K线周期 + 时间范围（一行式，参考同花顺/东方财富风格） -->
-        <div class="h-9 flex items-center justify-between px-3 border-b border-slate-100/80 dark:border-slate-700/60 bg-slate-50/30 dark:bg-slate-800/30 shrink-0">
+      <!-- 中间：图表容器 (Swiss High-Density Trading Terminal) -->
+      <div class="flex-1 flex flex-col min-h-0 min-w-0 bg-white dark:bg-[#090d16]">
+        <!-- 图表工具栏：K线周期 + 时间范围（一行式，参考同花顺/TradingView 专业级排版） -->
+        <div class="h-10 flex items-center justify-between px-3 border-b border-slate-200/80 dark:border-slate-800 bg-slate-50/70 dark:bg-[#0f172a]/70 backdrop-blur-sm shrink-0">
           <!-- 左侧：股票代码 + 周期选择（辅助信息，不抢焦点） -->
-          <div class="flex items-center gap-2 shrink-0">
-            <span v-if="currentSymbol" class="text-xs font-bold text-slate-700 dark:text-slate-300">{{ currentSymbol }}</span>
-            <!-- 周期按钮组：仅在未选时间范围时高亮当前周期；选中时间范围后降为灰色辅助显示 -->
-            <div class="flex items-center gap-0.5">
+          <div class="flex items-center gap-2.5 shrink-0">
+            <span v-if="currentSymbol" class="text-xs font-bold font-mono text-slate-900 dark:text-slate-100">{{ currentSymbol }}</span>
+            <!-- 周期按钮组：分段式控件设计 -->
+            <div class="flex items-center gap-0.5 bg-slate-200/50 dark:bg-slate-800/80 p-0.5 rounded-lg border border-slate-200/60 dark:border-slate-700/60">
               <button
                 v-for="p in periodOptions"
                 :key="p"
                 @click="changePeriod(p)"
-                class="px-2 py-0.5 text-[11px] font-medium rounded transition-colors cursor-pointer"
+                class="btn-tactile px-2 py-0.5 text-[11px] font-semibold rounded-md transition-all cursor-pointer"
                 :class="activeTimeRange === 'ALL' && currentPeriod === p
-                  ? 'text-indigo-600 dark:text-indigo-400 font-bold bg-indigo-50 dark:bg-indigo-900/20'
-                  : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'">
+                  ? 'text-indigo-600 dark:text-indigo-400 font-bold bg-white dark:bg-slate-700 shadow-2xs border border-slate-200/50 dark:border-slate-600/50'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-white/50 dark:hover:bg-slate-700/50'">
                 {{ periodLabels[p] }}
               </button>
             </div>
@@ -364,24 +358,24 @@
           <div v-if="klineData.length > 0" class="relative shrink-0">
             <button
               @click="showTimeRangeMenu = !showTimeRangeMenu"
-              class="flex items-center gap-1 px-2.5 py-0.5 text-[11px] font-medium rounded transition-colors cursor-pointer"
+              class="btn-tactile flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold rounded-lg transition-all cursor-pointer"
               :class="activeTimeRange === 'ALL'
-                ? 'border border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-700'
-                : 'bg-teal-500 text-white shadow-sm hover:bg-teal-600'">
+                ? 'border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800'
+                : 'bg-indigo-600 text-white shadow-sm hover:bg-indigo-700'">
               {{ timeRangeLabel(activeTimeRange) }}
               <svg class="w-3 h-3" :class="activeTimeRange === 'ALL' ? '' : 'opacity-80'" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
             </button>
             <!-- 下拉菜单 -->
             <Transition name="fade-scale">
-              <div v-if="showTimeRangeMenu" class="absolute right-0 top-full mt-1 z-50 min-w-[90px] bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200/60 dark:border-slate-600/60 py-1">
+              <div v-if="showTimeRangeMenu" class="absolute right-0 top-full mt-1.5 z-50 min-w-[96px] bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 py-1 animate-fade-in-down">
                 <button
                   v-for="range in timeRanges"
                   :key="range.value"
                   @click="selectTimeRange(range.value)"
-                  class="w-full text-left px-3 py-1.5 text-[11px] transition-colors cursor-pointer"
+                  class="w-full text-left px-3 py-1.5 text-[11px] font-medium transition-colors cursor-pointer"
                   :class="activeTimeRange === range.value
-                    ? 'text-indigo-600 dark:text-indigo-400 font-bold bg-indigo-50 dark:bg-indigo-900/20'
-                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'">
+                    ? 'text-indigo-600 dark:text-indigo-400 font-bold bg-indigo-50 dark:bg-indigo-950/40'
+                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'">
                   {{ range.label }}
                 </button>
               </div>
@@ -389,71 +383,71 @@
           </div>
         </div>
         
-        <!-- 数据完整性提示 (真实模式返回根数过少时显示) -->
+        <!-- 数据完整性提示 -->
         <div v-if="dataWarning"
-          class="px-4 py-2 bg-amber-50/80 dark:bg-amber-900/20 border-b border-amber-200/60 dark:border-amber-800/60 text-amber-700 dark:text-amber-300 text-xs font-medium flex items-center gap-2">
+          class="px-4 py-2 bg-amber-500/10 border-b border-amber-500/20 text-amber-700 dark:text-amber-400 text-xs font-medium flex items-center gap-2">
           <span>⚠️</span><span>{{ dataWarning }}</span>
         </div>
 
         <!-- 实际图表绑定节点 -->
-        <div ref="chartArea" class="flex-1 relative min-w-0 bg-white dark:bg-slate-900">
+        <div ref="chartArea" class="flex-1 relative min-w-0 bg-white dark:bg-[#090d16]">
           <div ref="chartContainer" class="absolute inset-0 w-full h-full transition-opacity duration-300"
             :class="{ 'opacity-50': isLoading }"></div>
 
-          <!-- 自定义K线悬停提示框 -->
+          <!-- 自定义K线悬停提示框 (Swiss Glassmorphic Tooltip) -->
           <div v-show="tooltipVisible" ref="tooltipEl"
-            class="absolute z-40 pointer-events-none bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm border border-slate-200/60 dark:border-slate-700/60 rounded-xl shadow-xl py-3 px-4 text-xs font-mono animate-tooltip-in"
+            class="absolute z-40 pointer-events-none bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur-md border border-slate-200/80 dark:border-slate-700/80 rounded-xl shadow-2xl py-3 px-4 text-xs font-mono animate-tooltip-in"
             :style="tooltipStyle">
             <!-- 日期 -->
-            <div class="text-slate-400 dark:text-slate-500 mb-2 pb-2 border-b border-slate-100/80 dark:border-slate-700/60 font-sans text-[11px] font-semibold">
+            <div class="text-slate-400 dark:text-slate-500 mb-2 pb-2 border-b border-slate-100 dark:border-slate-800 font-sans text-[11px] font-bold">
               {{ tooltipData.date }}
             </div>
             <!-- OHLC 数据 -->
             <div class="space-y-1">
-              <div class="flex justify-between gap-4">
+              <div class="flex justify-between gap-5">
                 <span class="text-slate-400 dark:text-slate-500">开盘</span>
-                <span class="text-slate-800 dark:text-slate-200 font-semibold">{{ tooltipData.open }}</span>
+                <span class="text-slate-900 dark:text-slate-100 font-semibold tabular-nums">{{ tooltipData.open }}</span>
               </div>
-              <div class="flex justify-between gap-4">
+              <div class="flex justify-between gap-5">
                 <span class="text-slate-400 dark:text-slate-500">最高</span>
-                <span class="text-rose-600 font-semibold">{{ tooltipData.high }}</span>
+                <span class="text-rose-600 dark:text-rose-400 font-semibold tabular-nums">{{ tooltipData.high }}</span>
               </div>
-              <div class="flex justify-between gap-4">
+              <div class="flex justify-between gap-5">
                 <span class="text-slate-400 dark:text-slate-500">最低</span>
-                <span class="text-teal-600 font-semibold">{{ tooltipData.low }}</span>
+                <span class="text-emerald-600 dark:text-emerald-400 font-semibold tabular-nums">{{ tooltipData.low }}</span>
               </div>
-              <div class="flex justify-between gap-4">
+              <div class="flex justify-between gap-5">
                 <span class="text-slate-400 dark:text-slate-500">收盘</span>
-                <span class="font-semibold" :class="tooltipData.change >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'">
+                <span class="font-bold tabular-nums" :class="tooltipData.change >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'">
                   {{ tooltipData.close }}
                 </span>
               </div>
             </div>
             <!-- 分隔 -->
-            <div class="my-2 border-t border-slate-100/80 dark:border-slate-700/60"></div>
+            <div class="my-2 border-t border-slate-100 dark:border-slate-800"></div>
             <!-- 涨跌 & 振幅 -->
             <div class="space-y-1">
-              <div class="flex justify-between gap-4 items-center">
+              <div class="flex justify-between gap-5 items-center">
                 <span class="text-slate-400 dark:text-slate-500">涨跌幅</span>
-                <span class="font-semibold text-xs px-1.5 py-0.5 rounded"
-                  :class="tooltipData.change >= 0 ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400'">
+                <span class="font-bold text-xs px-1.5 py-0.5 rounded tabular-nums"
+                  :class="tooltipData.change >= 0 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20'">
                   {{ tooltipData.changeStr }}
                 </span>
               </div>
-              <div class="flex justify-between gap-4 items-center">
+              <div class="flex justify-between gap-5 items-center">
                 <span class="text-slate-400 dark:text-slate-500">振幅</span>
-                <span class="font-semibold text-slate-700 dark:text-slate-300">{{ tooltipData.amplitude }}%</span>
+                <span class="font-semibold text-slate-700 dark:text-slate-300 tabular-nums">{{ tooltipData.amplitude }}%</span>
               </div>
-              <div class="flex justify-between gap-4 items-center">
+              <div class="flex justify-between gap-5 items-center">
                 <span class="text-slate-400 dark:text-slate-500">成交量</span>
-                <span class="font-semibold text-slate-700 dark:text-slate-300">{{ tooltipData.volumeStr }}</span>
+                <span class="font-semibold text-slate-700 dark:text-slate-300 tabular-nums">{{ tooltipData.volumeStr }}</span>
               </div>
             </div>
           </div>
 
-          <!-- 骨架屏加载状态 (加载中显示，shimmer 动画优化感知速度；每次加载都会出现，含切换股票) -->
+          <!-- 骨架屏加载状态 -->
           <div v-if="isLoading"
-            class="absolute inset-0 flex bg-slate-50/70 dark:bg-slate-900/70 backdrop-blur-sm z-10">
+            class="absolute inset-0 flex bg-slate-50/60 dark:bg-slate-950/60 backdrop-blur-sm z-10 animate-fade-in">
             <!-- 主图区：仿 K线柱 + 量能条 -->
             <div class="flex-1 flex flex-col justify-end p-4 gap-3">
               <div class="flex-1 flex items-end gap-[3px]">
@@ -472,179 +466,105 @@
           </div>
 
           <div v-if="!klineData.length && !isLoading"
-            class="absolute inset-0 flex items-center justify-center bg-slate-50/50 dark:bg-slate-900/50">
+            class="absolute inset-0 flex items-center justify-center bg-slate-50/50 dark:bg-[#090d16]/50">
             <div class="text-center animate-fade-in">
-              <svg class="w-12 h-12 text-slate-300 mx-auto mb-3" xmlns="http://www.w3.org/2000/svg" fill="none"
+              <svg class="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" xmlns="http://www.w3.org/2000/svg" fill="none"
                 viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
               </svg>
-              <span class="text-slate-400 text-xs font-semibold">请在上方搜索美股代码载入行情</span>
+              <span class="text-slate-400 dark:text-slate-500 text-xs font-semibold">请在上方搜索美股代码载入行情</span>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- 比例调节拖拽条（右侧） -->
+      <!-- 比例调节拖拽条（右侧 Resizer） -->
       <div @mousedown="startResizeRight"
-        class="w-1 bg-slate-100 dark:bg-slate-700 hover:bg-teal-500 active:bg-teal-600 cursor-col-resize transition-colors shrink-0 z-50 group relative">
+        class="w-1 bg-slate-200/60 dark:bg-slate-800 hover:bg-indigo-500 active:bg-indigo-600 cursor-col-resize transition-colors shrink-0 z-50 group relative">
         <div class="absolute inset-y-0 -left-4 -right-4"></div>
         <!-- 拖拽指示器 -->
         <div class="absolute inset-y-0 -left-1 -right-1 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
-          <div class="w-1 h-8 rounded-full bg-teal-500/40"></div>
+          <div class="w-1 h-8 rounded-full bg-indigo-500/50"></div>
         </div>
       </div>
 
-      <!-- 右侧：技术分析面板 -->
+      <!-- 右侧：技术分析面板 (Swiss Modular Analysis Drawer) -->
       <div
         :style="{ width: rightPanelWidth + 'px' }"
-        class="bg-white dark:bg-slate-800 border-l border-slate-200/60 dark:border-slate-700/60 flex flex-col shrink-0 overflow-hidden">
+        class="bg-white dark:bg-[#0f172a] border-l border-slate-200/80 dark:border-slate-800 flex flex-col shrink-0 overflow-hidden">
 
-        <!-- Tab 导航 -->
-        <div class="flex border-b border-slate-200/60 dark:border-slate-700/60 bg-slate-50/50 dark:bg-slate-800/50 shrink-0">
+        <!-- Tab 导航 (Swiss Linear Tabs with Spring Sliding Indicator) -->
+        <div class="flex border-b border-slate-200/80 dark:border-slate-800 bg-slate-50/70 dark:bg-[#0f172a] shrink-0 relative">
           <button 
-            @click="rightPanelTab = 'analysis'"
-            class="flex-1 px-4 py-3 text-xs font-semibold uppercase tracking-wider transition-all relative"
-            :class="rightPanelTab === 'analysis' 
-              ? 'text-teal-600 bg-white dark:bg-slate-800' 
-              : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100/50 dark:hover:bg-slate-700/50'">
-            <span class="flex items-center justify-center gap-1.5">
-              <svg class="w-3.5 h-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 002 2h2a2 2 0 002-2z" />
-              </svg>
-              技术分析
-            </span>
-            <!-- 激活指示器 -->
-            <div v-if="rightPanelTab === 'analysis'" class="absolute bottom-0 left-0 right-0 h-0.5 bg-teal-500"></div>
+            @click="rightPanelTab = 'strategy'"
+            class="flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors relative cursor-pointer flex items-center justify-center gap-1.5"
+            :class="rightPanelTab === 'strategy' 
+              ? 'text-indigo-600 dark:text-indigo-400 font-bold' 
+              : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="22" y1="12" x2="18" y2="12"/>
+              <line x1="6" y1="12" x2="2" y2="12"/>
+              <line x1="12" y1="6" x2="12" y2="2"/>
+              <line x1="12" y1="22" x2="12" y2="18"/>
+            </svg>
+            <span>PA策略</span>
           </button>
           <button 
             @click="rightPanelTab = 'range'"
-            class="flex-1 px-4 py-3 text-xs font-semibold uppercase tracking-wider transition-all relative"
+            class="flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors relative cursor-pointer flex items-center justify-center gap-1.5"
             :class="rightPanelTab === 'range' 
-              ? 'text-teal-600 bg-white dark:bg-slate-800' 
-              : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100/50 dark:hover:bg-slate-700/50'">
-            <span class="flex items-center justify-center gap-1.5">
-              <svg class="w-3.5 h-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-              </svg>
-              区间统计
-            </span>
-            <!-- 激活指示器 -->
-            <div v-if="rightPanelTab === 'range'" class="absolute bottom-0 left-0 right-0 h-0.5 bg-teal-500"></div>
+              ? 'text-indigo-600 dark:text-indigo-400 font-bold' 
+              : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'">
+            <svg class="w-3.5 h-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+            </svg>
+            <span>区间统计</span>
           </button>
+          <!-- 动态滑动底条 (Motion Spring transition) -->
+          <div class="absolute bottom-0 h-0.5 bg-indigo-600 dark:bg-indigo-400 transition-all duration-200 ease-out"
+            :style="{
+              width: '50%',
+              left: rightPanelTab === 'strategy' ? '0%' : '50%'
+            }"></div>
         </div>
 
         <!-- Tab 内容容器 -->
         <div class="flex-1 overflow-y-auto scrollbar-thin">
-          <!-- Tab 1: 技术分析 -->
-          <div v-show="rightPanelTab === 'analysis'" class="h-full">
-            <!-- 1. 智能分析触发区域 -->
-            <div class="p-5 border-b border-slate-100/80 dark:border-slate-700/60">
-              <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100 uppercase tracking-wider mb-3 flex items-center gap-2">
-                <svg class="w-4 h-4 text-teal-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                </svg>
-                形态特征提取
-              </h3>
-              <button @click="createRipple($event); runAnalysis()" :disabled="!klineData.length"
-                class="ripple-container w-full bg-slate-900 dark:bg-slate-700 hover:bg-slate-800 dark:hover:bg-slate-600 text-white font-semibold py-3 px-4 rounded-xl text-sm transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 active:scale-[0.98] disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-2 cursor-pointer relative overflow-hidden">
-                <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 002 2h2a2 2 0 002-2z" />
-                </svg>
-                执行智能技术分析
-              </button>
-            </div>
-
-            <!-- 2. 支撑/阻力位列表 -->
-            <div class="p-5">
-              <div class="panel-card-header">
-                <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                  自动识别支撑/阻力线 (SR Levels)
-                </h4>
-              </div>
-
-              <div v-if="!srLevels.length"
-                class="text-xs text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-700/50 border border-dashed border-slate-200 dark:border-slate-600 rounded-xl p-4 text-center italic transition-all hover:border-slate-300 dark:hover:border-slate-500">
-                请在上方点击 "执行分析" 进行局部极点检测与聚类
-              </div>
-
-              <div v-else class="space-y-2.5">
-                <transition-group name="list">
-                  <div v-for="(level, idx) in srLevels" :key="idx"
-                    class="relative overflow-hidden rounded-xl border transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer group"
-                    :class="[
-                      level.type === 'support' 
-                        ? 'border-teal-200 dark:border-teal-700 bg-gradient-to-r from-teal-50 to-teal-50/30 dark:from-teal-900/40 dark:to-teal-900/10' 
-                        : 'border-rose-200 dark:border-rose-700 bg-gradient-to-r from-rose-50 to-rose-50/30 dark:from-rose-900/40 dark:to-rose-900/10',
-                      highlightedSR === idx ? 'ring-2 ring-offset-1 dark:ring-offset-slate-800 ' + (level.type === 'support' ? 'ring-teal-400' : 'ring-rose-400') : ''
-                    ]"
-                    :style="{ animationDelay: idx * 100 + 'ms' }"
-                    @mouseenter="highlightSRLevel(idx, true)"
-                    @mouseleave="highlightSRLevel(idx, false)"
-                    @click="scrollToSRLevel(level)">
-                    <!-- 左侧装饰条 -->
-                    <div class="absolute left-0 top-0 bottom-0 w-1"
-                      :class="level.type === 'support' ? 'bg-teal-500' : 'bg-rose-500'"></div>
-                    
-                    <div class="flex items-center justify-between p-3.5 pl-4">
-                      <div class="flex items-center gap-2.5">
-                        <!-- 类型图标 -->
-                        <div class="w-7 h-7 rounded-lg flex items-center justify-center"
-                          :class="level.type === 'support' ? 'bg-teal-500' : 'bg-rose-500'">
-                          <svg class="w-4 h-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                            <path v-if="level.type === 'support'" stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7" />
-                            <path v-else stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
-                          </svg>
-                        </div>
-                        <div>
-                          <span class="text-xs font-semibold text-slate-700 dark:text-slate-200 block">
-                            {{ level.type === 'support' ? '支撑位' : '阻力位' }}
-                          </span>
-                          <!-- 星级评分 -->
-                          <div class="flex items-center gap-0.5 mt-0.5">
-                            <svg v-for="s in level.stars" :key="s" class="w-3 h-3 text-amber-400" fill="currentColor" viewBox="0 0 20 20">
-                              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
-                            </svg>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div class="text-right">
-                        <span class="text-sm font-bold text-slate-900 dark:text-slate-100 number-animate block">${{ level.price.toFixed(2) }}</span>
-                        <!-- 强度进度条 -->
-                        <div class="flex items-center gap-1.5 mt-1">
-                          <div class="w-12 h-1.5 bg-slate-200 dark:bg-slate-600 rounded-full overflow-hidden">
-                            <div class="h-full rounded-full transition-all duration-500"
-                              :class="level.type === 'support' ? 'bg-teal-500' : 'bg-rose-500'"
-                              :style="{ width: (level.count / 5 * 100) + '%' }"></div>
-                          </div>
-                          <span class="text-[9px] text-slate-500 dark:text-slate-400 font-medium">{{ level.count }}次</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </transition-group>
-              </div>
-            </div>
+          <!-- Tab 0: Investment_Assistant 价格行为策略矩阵 (含关键支撑阻力位) -->
+          <div v-show="rightPanelTab === 'strategy'" class="h-full p-4 overflow-y-auto">
+            <StrategyPanel
+              :symbol="currentSymbol"
+              :period="currentPeriod"
+              :summary="strategySummary"
+              :loading="strategyLoading"
+              :sr-levels="srLevels"
+              :highlighted-s-r="highlightedSR"
+              @run="(mode) => handleRunStrategy(mode, true)"
+              @clear="handleClearStrategy"
+              @highlight-sr="highlightSRLevel"
+              @scroll-to-sr="scrollToSRLevel"
+            />
           </div>
 
           <!-- Tab 2: 区间统计 -->
-          <div v-show="rightPanelTab === 'range'" class="h-full p-5">
-            <div class="panel-card-header mb-4">
+          <div v-show="rightPanelTab === 'range'" class="h-full p-4 space-y-4">
+            <div class="panel-card-header mb-1">
               <div class="flex items-center justify-between">
-                <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                <h4 class="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
                   区间涨跌统计 (Range Stats)
                 </h4>
                 <!-- 信息小气泡 -->
                 <div class="group relative cursor-help shrink-0">
                   <span class="text-slate-400 hover:text-slate-600 transition-colors">
-                    <svg class="w-4 h-4 transition-transform group-hover:scale-110" xmlns="http://www.w3.org/2000/svg"
+                    <svg class="w-3.5 h-3.5 transition-transform group-hover:scale-110" xmlns="http://www.w3.org/2000/svg"
                       fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                       <path stroke-linecap="round" stroke-linejoin="round"
                         d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   </span>
                   <div
-                    class="absolute right-0 bottom-6 hidden group-hover:block bg-slate-800 text-white text-[11px] leading-relaxed p-3 rounded-lg shadow-xl border border-slate-700 w-52 z-30 font-medium animate-fade-in-up">
+                    class="absolute right-0 bottom-6 hidden group-hover:block bg-slate-900 text-white text-[10px] leading-relaxed p-3 rounded-lg shadow-xl border border-slate-700 w-52 z-30 font-medium animate-fade-in-up">
                     设定任意时间跨度，自动捕获该范围内的最大连贯上涨波段以及最大连贯下跌波段。
                   </div>
                 </div>
@@ -652,25 +572,25 @@
             </div>
 
             <!-- 快捷区间 -->
-            <div class="flex flex-wrap gap-1.5 mb-3">
+            <div class="flex flex-wrap gap-1.5">
               <button
                 v-for="p in rangePresets"
                 :key="p.value"
                 type="button"
                 @click="applyRangePreset(p.value)"
                 :class="[
-                  'px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all active:scale-[0.97] cursor-pointer',
+                  'btn-tactile px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all cursor-pointer',
                   isPresetActive(p.value)
-                    ? 'border-teal-500 bg-teal-50 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300'
-                    : 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-500',
+                    ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-bold'
+                    : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600',
                 ]"
               >
                 {{ p.label }}
               </button>
             </div>
 
-            <!-- 时间选择表单（自定义丝滑日期选择器） -->
-            <div class="mb-4">
+            <!-- 时间选择表单 -->
+            <div>
               <DateRangePicker
                 v-model:modelStart="inputStartDate"
                 v-model:modelEnd="inputEndDate"
@@ -681,33 +601,30 @@
 
             <!-- 重新计算按钮 -->
             <button @click="createRipple($event); handleReCalculate()" :disabled="!klineData.length"
-              class="ripple-container w-full border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold py-2 px-4 rounded-xl text-xs transition-all active:scale-[0.98] disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-1.5 cursor-pointer mb-5 hover:border-slate-300 dark:hover:border-slate-500 hover:shadow-sm relative overflow-hidden">
-              <svg class="w-3.5 h-3.5 text-slate-500 transition-transform hover:rotate-180 duration-500"
-                xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round"
-                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 7.89M9 11l3-3 3 3m-3-3v12" />
+              class="btn-tactile w-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200/80 dark:border-slate-700 text-slate-800 dark:text-slate-200 font-semibold py-2 px-4 rounded-xl text-xs transition-all disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs">
+              <svg class="w-3.5 h-3.5 text-slate-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 7.89M9 11l3-3 3 3m-3-3v12" />
               </svg>
               重新计算 (Re-calculate)
             </button>
 
             <!-- 统计数据输出面板 -->
             <div v-if="!rangeStats"
-              class="text-xs text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-700/50 border border-dashed border-slate-200 dark:border-slate-600 rounded-xl p-4 text-center italic transition-all hover:border-slate-300 dark:hover:border-slate-500">
+              class="text-xs text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-900/60 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl p-5 text-center italic">
               请在上方指定日期后执行智能分析
             </div>
 
-            <div v-else class="space-y-3">
+            <div v-else class="space-y-2.5">
               <!-- 上涨 -->
               <div
-                class="bg-emerald-50/50 dark:bg-emerald-900/30 border border-emerald-100 dark:border-emerald-700 rounded-xl p-3.5 transition-all hover:shadow-md hover:-translate-y-0.5 hover:border-emerald-200 dark:hover:border-emerald-600 group">
+                class="bg-emerald-50/40 dark:bg-emerald-950/20 border border-emerald-500/20 rounded-xl p-3.5 transition-all hover:shadow-sm">
                 <div class="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-bold text-xs mb-1">
-                  <svg class="w-4 h-4 transition-transform group-hover:-translate-y-1" xmlns="http://www.w3.org/2000/svg"
-                    fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
                   </svg>
                   <span>最大连贯上涨</span>
                 </div>
-                <div class="text-lg font-extrabold text-emerald-600 dark:text-emerald-400 font-mono number-animate">
+                <div class="text-xl font-extrabold text-emerald-600 dark:text-emerald-400 font-mono tabular-nums number-animate">
                   +{{ animatedRisePct.toFixed(2) }}%
                 </div>
                 <div class="text-[10px] text-slate-400 dark:text-slate-500 mt-1 font-medium font-mono">
@@ -717,15 +634,14 @@
 
               <!-- 下跌 -->
               <div
-                class="bg-red-50/50 dark:bg-red-900/30 border border-red-100 dark:border-red-700 rounded-xl p-3.5 transition-all hover:shadow-md hover:-translate-y-0.5 hover:border-red-200 dark:hover:border-red-600 group">
-                <div class="flex items-center gap-1.5 text-red-700 dark:text-red-400 font-bold text-xs mb-1">
-                  <svg class="w-4 h-4 transition-transform group-hover:translate-y-1" xmlns="http://www.w3.org/2000/svg"
-                    fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                class="bg-rose-50/40 dark:bg-rose-950/20 border border-rose-500/20 rounded-xl p-3.5 transition-all hover:shadow-sm">
+                <div class="flex items-center gap-1.5 text-rose-700 dark:text-rose-400 font-bold text-xs mb-1">
+                  <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M13 17h8m0 0v-8m0 8l-8-8-4 4-6-6" />
                   </svg>
                   <span>最大连贯下跌</span>
                 </div>
-                <div class="text-lg font-extrabold text-red-600 dark:text-red-400 font-mono number-animate">
+                <div class="text-xl font-extrabold text-rose-600 dark:text-rose-400 font-mono tabular-nums number-animate">
                   {{ animatedFallPct.toFixed(2) }}%
                 </div>
                 <div class="text-[10px] text-slate-400 dark:text-slate-500 mt-1 font-medium font-mono">
@@ -738,56 +654,54 @@
       </div>
     </main>
 
-    <!-- 底部状态栏 -->
-    <footer class="h-7 bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 text-[10px] flex items-center justify-between px-4 shrink-0 border-t border-slate-200/60 dark:border-slate-700/40">
-      <div class="flex items-center gap-4">
-        <span class="flex items-center gap-1">
-          <span class="w-1.5 h-1.5 rounded-full" :class="useMockData ? 'bg-amber-400' : 'bg-green-400'"></span>
-          {{ useMockData ? '演示模式 (模拟数据)' : '实时数据 (后端)' }}
+    <!-- 底部状态栏 (Swiss Minimalist Status Bar) -->
+    <footer class="h-7 bg-white dark:bg-[#0f172a] text-slate-500 dark:text-slate-400 text-[10px] flex items-center justify-between px-3 shrink-0 border-t border-slate-200/80 dark:border-slate-800 font-mono select-none">
+      <div class="flex items-center gap-3">
+        <span class="flex items-center gap-1.5 font-bold">
+          <span class="w-1.5 h-1.5 rounded-full" :class="useMockData ? 'bg-amber-400' : 'bg-emerald-500'"></span>
+          <span>{{ useMockData ? 'MOCK' : 'ONLINE' }}</span>
         </span>
         <button v-if="useMockData" @click="retryConnection()"
-          class="text-slate-400 hover:text-teal-400 transition-colors underline-offset-2 hover:underline">
-          后端已启动？重试连接
+          class="text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer">
+          RETRY
         </button>
-        <!-- 实时刷新状态：当前标的刷新周期 / 上次请求时间 / 接口状态 -->
-        <span v-if="!useMockData && currentSymbol" class="flex items-center gap-1.5 font-mono">
+        <span v-if="!useMockData && currentSymbol" class="flex items-center gap-1.5 text-slate-400 dark:text-slate-500">
           <span class="w-1.5 h-1.5 rounded-full"
-            :class="quoteEngineStatus.cooling ? 'bg-orange-400 animate-pulse' : 'bg-teal-400'"></span>
-          <span :class="quoteEngineStatus.cooling ? 'text-orange-400' : 'text-teal-400'">
-            {{ quoteEngineStatus.cooling ? '接口限流冷却中' : '接口正常' }}
-          </span>
-          <span class="text-slate-500">· 刷新 {{ currentRefreshCycle }}s</span>
-          <span class="text-slate-500">· 上次请求 {{ lastRequestText }}</span>
+            :class="quoteEngineStatus.cooling ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'"></span>
+          <span>{{ currentRefreshCycle }}s</span>
+          <span>·</span>
+          <span>{{ formatSymbol(currentSymbol) }}</span>
+          <span>({{ klineData.length }} bars)</span>
         </span>
-        <span v-if="currentSymbol">{{ formatSymbol(currentSymbol) }} · {{ klineData.length }} 根K线</span>
       </div>
-      <div class="flex items-center gap-4">
-        <span>自选股: {{ watchlist.length }} 只</span>
-        <span>Ctrl+K 搜索 | R 重算</span>
+      <div class="flex items-center gap-3 text-slate-400 dark:text-slate-500">
+        <span>WATCHLIST: {{ watchlist.length }}</span>
+        <span>·</span>
+        <span>Ctrl+K</span>
       </div>
     </footer>
 
-    <!-- 模态框组 (Modals) -->
+    <!-- 模态框组 (Swiss Impeccable Modals) -->
     
-    <!-- 1. 添加自选分组 Modal (图二样式) -->
+    <!-- 1. 添加自选分组 Modal -->
     <transition name="fade">
       <div v-if="showCreateGroupModal" 
-        class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm"
+        class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 backdrop-blur-sm"
         @click.self="showCreateGroupModal = false">
-        <div class="bg-white dark:bg-slate-800 rounded-xl p-5 w-80 shadow-2xl border border-slate-200 dark:border-slate-700 animate-scale-up animate-fade-in-down">
-          <div class="flex justify-between items-center mb-4">
-            <h3 class="text-sm font-bold text-slate-800 dark:text-slate-200">添加自选分组</h3>
-            <button @click="showCreateGroupModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 font-bold cursor-pointer text-lg">&times;</button>
+        <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 w-84 shadow-2xl border border-slate-200 dark:border-slate-700 animate-scale-in">
+          <div class="flex justify-between items-center mb-4 pb-2.5 border-b border-slate-100 dark:border-slate-700/60">
+            <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100 tracking-tight">添加自选分组</h3>
+            <button @click="showCreateGroupModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 font-bold cursor-pointer text-base">&times;</button>
           </div>
           <div class="mb-5">
-            <label class="block text-xs text-slate-400 dark:text-slate-500 mb-1">名称</label>
-            <input v-model="newGroupNameInput" ref="createGroupInputRef" type="text" placeholder="请输入分组名称"
-              class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:border-teal-500"
+            <label class="block text-xs font-semibold text-slate-400 dark:text-slate-500 mb-1.5 uppercase tracking-wider">分组名称</label>
+            <input v-model="newGroupNameInput" ref="createGroupInputRef" type="text" placeholder="例如：半导体 / 核心持仓"
+              class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-700/60 border border-slate-200 dark:border-slate-600 rounded-lg text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 font-medium transition-all"
               @keydown.enter="handleCreateGroupSubmit" />
           </div>
           <div class="flex justify-end gap-2">
-            <button @click="showCreateGroupModal = false" class="px-4 py-1.5 rounded-lg text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600 transition-colors cursor-pointer">取消</button>
-            <button @click="handleCreateGroupSubmit" class="px-4 py-1.5 rounded-lg text-xs bg-slate-900 hover:bg-slate-800 text-white dark:bg-teal-600 dark:hover:bg-teal-500 dark:text-white transition-colors cursor-pointer">确定</button>
+            <button @click="showCreateGroupModal = false" class="btn-tactile px-3.5 py-1.5 rounded-lg text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600 transition-colors font-semibold cursor-pointer">取消</button>
+            <button @click="handleCreateGroupSubmit" class="btn-tactile px-3.5 py-1.5 rounded-lg text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-semibold transition-colors cursor-pointer shadow-sm">确定</button>
           </div>
         </div>
       </div>
@@ -796,37 +710,37 @@
     <!-- 2. 分组管理 Modal -->
     <transition name="fade">
       <div v-if="showManageGroupsModal"
-        class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm"
+        class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 backdrop-blur-sm"
         @click.self="showManageGroupsModal = false">
-        <div class="bg-white dark:bg-slate-800 rounded-xl p-5 w-96 shadow-2xl border border-slate-200 dark:border-slate-700 animate-scale-up animate-fade-in-down">
-          <div class="flex justify-between items-center mb-4">
-            <h3 class="text-sm font-bold text-slate-800 dark:text-slate-200">分组管理</h3>
-            <button @click="showManageGroupsModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 font-bold cursor-pointer text-lg">&times;</button>
+        <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 w-96 shadow-2xl border border-slate-200 dark:border-slate-700 animate-scale-in">
+          <div class="flex justify-between items-center mb-4 pb-2.5 border-b border-slate-100 dark:border-slate-700/60">
+            <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100 tracking-tight">分组管理</h3>
+            <button @click="showManageGroupsModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 font-bold cursor-pointer text-base">&times;</button>
           </div>
           
           <div class="max-h-60 overflow-y-auto mb-4 divide-y divide-slate-100 dark:divide-slate-700/50">
             <div v-if="!watchGroups.length" class="py-8 text-center text-xs text-slate-400">暂无自定义分组</div>
             <div v-for="g in watchGroups" :key="g.id" class="py-2.5 flex items-center justify-between gap-3">
               <!-- 非编辑状态 -->
-              <div v-if="editingGroupId !== g.id" class="flex-1 truncate text-sm text-slate-700 dark:text-slate-200 font-medium">
-                {{ g.name }} <span class="text-xs font-normal text-slate-400 dark:text-slate-500">({{ g.stocks.length }} 只股票)</span>
+              <div v-if="editingGroupId !== g.id" class="flex-1 truncate text-xs text-slate-800 dark:text-slate-200 font-semibold">
+                {{ g.name }} <span class="text-[10px] font-normal text-slate-400 font-mono">({{ g.stocks.length }} 只股票)</span>
               </div>
               <!-- 编辑状态 -->
               <input v-else v-model="editingGroupName" ref="manageRenameInputRef" type="text"
-                class="flex-1 px-2 py-1 bg-slate-50 dark:bg-slate-700 border border-teal-500 rounded text-sm text-slate-800 dark:text-slate-100 focus:outline-none"
+                class="flex-1 px-2 py-1 bg-slate-50 dark:bg-slate-700 border border-indigo-500 rounded text-xs text-slate-800 dark:text-slate-100 focus:outline-none"
                 @keydown.enter="confirmRename(g.id)" @blur="confirmRename(g.id)" />
                 
-              <div class="flex items-center gap-1.5 shrink-0">
-                <button v-if="editingGroupId !== g.id" @click="editingGroupId = g.id; editingGroupName = g.name" class="text-xs text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 cursor-pointer">重命名</button>
-                <button v-else @click="confirmRename(g.id)" class="text-xs text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 cursor-pointer">保存</button>
+              <div class="flex items-center gap-2 shrink-0">
+                <button v-if="editingGroupId !== g.id" @click="editingGroupId = g.id; editingGroupName = g.name" class="text-xs text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 font-medium cursor-pointer">重命名</button>
+                <button v-else @click="confirmRename(g.id)" class="text-xs text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 font-medium cursor-pointer">保存</button>
                 
-                <button @click="deleteGroup(g.id)" class="text-xs text-rose-500 hover:text-rose-600 cursor-pointer">删除</button>
+                <button @click="deleteGroup(g.id)" class="text-xs text-rose-500 hover:text-rose-600 font-medium cursor-pointer">删除</button>
               </div>
             </div>
           </div>
           
-          <div class="flex justify-end">
-            <button @click="showManageGroupsModal = false" class="px-4 py-1.5 rounded-lg text-xs bg-slate-900 text-white dark:bg-teal-600 hover:opacity-90 transition-all cursor-pointer font-medium">完成</button>
+          <div class="flex justify-end pt-2 border-t border-slate-100 dark:border-slate-700/60">
+            <button @click="showManageGroupsModal = false" class="btn-tactile px-4 py-1.5 rounded-lg text-xs bg-indigo-600 text-white hover:bg-indigo-700 transition-all cursor-pointer font-semibold shadow-sm">完成</button>
           </div>
         </div>
       </div>
@@ -835,31 +749,31 @@
     <!-- 3. 添加自选搜索 Modal -->
     <transition name="fade">
       <div v-if="showSearchModal"
-        class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm"
+        class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 backdrop-blur-sm"
         @click.self="showSearchModal = false">
-        <div class="bg-white dark:bg-slate-800 rounded-xl w-full max-w-md shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden animate-scale-up animate-fade-in-down">
-          <div class="p-3 border-b border-slate-100 dark:border-slate-700/80 flex items-center gap-2">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-md shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden animate-scale-in">
+          <div class="p-3.5 border-b border-slate-100 dark:border-slate-700/80 flex items-center gap-2.5">
             <svg class="w-4 h-4 text-slate-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
             <input v-model="modalSearchQuery" ref="modalSearchInputRef" type="text" placeholder="输入代码 / 名称 / 拼音添加标的"
-              class="flex-1 bg-transparent text-sm text-slate-800 dark:text-slate-100 focus:outline-none placeholder-slate-400"
+              class="flex-1 bg-transparent text-xs text-slate-800 dark:text-slate-100 focus:outline-none placeholder-slate-400 font-medium"
               @input="handleModalSearchInput" autocomplete="off" />
-            <button @click="showSearchModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 font-bold cursor-pointer text-lg">&times;</button>
+            <button @click="showSearchModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 font-bold cursor-pointer text-base">&times;</button>
           </div>
           <!-- 搜索结果列表 -->
           <div class="max-h-64 overflow-y-auto">
             <div v-if="modalSearchLoading" class="px-4 py-8 text-center text-xs text-slate-400">搜索中…</div>
             <div v-else-if="modalSearchQuery.trim() && !modalSearchResults.length" class="px-4 py-8 text-center text-xs text-slate-400">未找到匹配标的</div>
             <div v-else-if="!modalSearchQuery.trim()" class="px-4 py-6 text-center text-xs text-slate-400">输入关键词开始搜索</div>
-            <div v-else>
+            <div v-else class="divide-y divide-slate-100 dark:divide-slate-700/40">
               <button v-for="r in modalSearchResults" :key="r.symbol" @click="handleModalSearchSelect(r.symbol)"
-                class="w-full text-left px-4 py-2.5 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700/50 border-b border-slate-100 dark:border-slate-700/40 last:border-0 cursor-pointer">
-                <div class="flex items-center gap-2">
-                  <span class="text-[9px] px-1 rounded bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-mono w-14 text-center">{{ formatSymbol(r.symbol) }}</span>
-                  <span class="text-sm font-medium text-slate-800 dark:text-slate-100">{{ r.name }}</span>
+                class="w-full text-left px-4 py-2.5 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer transition-colors">
+                <div class="flex items-center gap-2.5">
+                  <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-mono w-14 text-center">{{ formatSymbol(r.symbol) }}</span>
+                  <span class="text-xs font-semibold text-slate-800 dark:text-slate-100">{{ r.name }}</span>
                 </div>
-                <span class="text-xs text-teal-600 dark:text-teal-400 hover:underline">点击添加</span>
+                <span class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-semibold">点击添加</span>
               </button>
             </div>
           </div>
@@ -874,13 +788,19 @@ import { ref, onMounted, onUnmounted, nextTick, watch, computed } from 'vue';
 import { createChart, CandlestickSeries, HistogramSeries, createSeriesMarkers } from 'lightweight-charts';
 import type { IChartApi } from 'lightweight-charts';
 import GlobalSecuritySearch from './components/GlobalSecuritySearch.vue';
-import { getKLines, getStockAnalysis, searchStocks, generateMockKLines, getWatchlist, saveWatchlist, SUPPORTED_PERIODS, PERIOD_LABELS, BASE_URL, normalizeSymbol, stripPrefix, marketOf, formatSymbol, MARKET_LABEL } from './utils/api';
+import { getKLines, getStockAnalysis, searchStocks, generateMockKLines, getWatchlist, saveWatchlist, SUPPORTED_PERIODS, PERIOD_LABELS, BASE_URL, normalizeSymbol, stripPrefix, marketOf, formatSymbol, MARKET_LABEL, runPAStrategy } from './utils/api';
 import type { KLinePoint, SRLevel, AnalysisResponse, Period, WatchGroup } from './utils/api';
 import { getChartOptions } from './utils/chartUtils';
 import { calculateSRLevels, calculateRangeStats, resampleMockKLines } from './utils/mockEngine';
 import DateRangePicker from './components/DateRangePicker.vue';
+import StrategyPanel from './components/StrategyPanel.vue';
+import { useChartAnnotations, toChartTime as toChartTimeHelper } from './composables/useChartAnnotations';
+import { useSmartThrottling } from './composables/useSmartThrottling';
+import { useWebSocketControl } from './composables/useWebSocketControl';
 // 实时行情引擎（多市场：美股/A股/港股），负责分层刷新与限流防护
 import { quoteEngine, type Quote, type SymbolMeta, type QuoteConfig } from './utils/quote';
+
+const searchComponentRef = ref<InstanceType<typeof GlobalSecuritySearch> | null>(null);
 
 const symbolInput = ref('AAPL');
 const currentSymbol = ref('');
@@ -964,17 +884,12 @@ async function loadStockNameMap() {
   }
 }
 
-/** 各市场延迟标注兜底（配置未加载/演示模式下也能固定展示） */
+/** 各市场延迟标注兜底 */
 const DELAY_LABEL_FALLBACK: Record<string, { label: string; full: string }> = {
-  ash: { label: '无延迟 LV1', full: 'A股【无延迟 LV1】' },
-  asz: { label: '无延迟 LV1', full: 'A股【无延迟 LV1】' },
-  hk: { label: '秒级轻微延迟', full: '港股【秒级轻微延迟】' },
-  us: { label: '延迟 15 分钟，仅供参考，不可实盘交易', full: '美股【延迟 15 分钟，仅供参考，不可实盘交易】' },
-};
-/** 读取某标的延迟标注（精简） */
-const delayLabelOf = (sym: string): string => {
-  const m = marketOf(sym) || 'us';
-  return quoteConfig.value?.markets[m]?.delayLabel ?? DELAY_LABEL_FALLBACK[m].label;
+  ash: { label: '实时', full: 'A股 LV1 实时' },
+  asz: { label: '实时', full: 'A股 LV1 实时' },
+  hk: { label: '实时', full: '港股 实时' },
+  us: { label: '15m 延迟', full: '美股 公开数据源 (15分钟延迟)' },
 };
 /** 读取某标的延迟完整提示语（悬浮标题） */
 const delayFullOf = (sym: string): string => {
@@ -1055,16 +970,6 @@ const currentRefreshCycle = computed<number>(() => {
   return Math.max(1, Math.round(min * (meta?.intervalMul ?? 1)));
 });
 
-// 上次请求时间（mm:ss 形式，相对当前）
-const lastRequestText = computed<string>(() => {
-  const meta = currentSymbol.value ? liveMetaMap.value[currentSymbol.value] : null;
-  if (!meta || !meta.lastRequest) return '—';
-  const sec = Math.floor((Date.now() - meta.lastRequest) / 1000);
-  if (sec < 60) return `${sec}s前`;
-  const m = Math.floor(sec / 60);
-  return `${m}m${sec % 60}s前`;
-});
-
 // 引擎状态（供头部/底部状态展示）
 const quoteEngineStatus = computed<{ cooling: boolean; reason: string }>(() => ({
   cooling: engineCooling.value,
@@ -1079,7 +984,7 @@ function refreshEngineSymbols() {
 
 // 搜索框占位符（全市场统一，不再前置拆分市场）
 // @ts-ignore
-const searchPlaceholder = computed(() => '搜索股票代码 / 名称 / 拼音（美股 · A股 · 港股 全市场）');
+const searchPlaceholder = computed(() => '搜索代码或名称 (Ctrl+K)');
 const klineData = ref<KLinePoint[]>([]);
 // 按 "symbol_period" 缓存K线和分析结果，避免切换周期时重复网络请求
 const klineCache = new Map<string, KLinePoint[]>();
@@ -1139,35 +1044,37 @@ async function retryConnection() {
 // 深色模式开关
 const isDarkMode = ref(false);
 
+// 应用图表双模式主题（背景、网格、K线蜡烛、成交量柱）
+const applyChartTheme = (isDark: boolean) => {
+  if (!chartInstance) return;
+  chartInstance.applyOptions(getChartOptions(isDark));
+  if (candlestickSeries) {
+    const upColor = isDark ? '#34d399' : '#10b981';
+    const downColor = isDark ? '#fb7185' : '#f43f5e';
+    candlestickSeries.applyOptions({
+      upColor,
+      downColor,
+      wickUpColor: upColor,
+      wickDownColor: downColor,
+    });
+  }
+  if (volumeSeries && klineData.value.length > 0) {
+    const upVol = isDark ? 'rgba(52, 211, 153, 0.35)' : 'rgba(16, 185, 129, 0.25)';
+    const downVol = isDark ? 'rgba(251, 113, 133, 0.35)' : 'rgba(244, 63, 94, 0.25)';
+    volumeSeries.setData(klineData.value.map(d => ({
+      time: toChartTime(d.time),
+      value: d.volume,
+      color: d.close >= d.open ? upVol : downVol,
+    })));
+  }
+};
+
 // 切换深色模式
 const toggleDarkMode = () => {
   isDarkMode.value = !isDarkMode.value;
   document.documentElement.classList.toggle('dark', isDarkMode.value);
   localStorage.setItem('darkMode', isDarkMode.value ? 'true' : 'false');
-  // 更新图表配色
-  if (chartInstance) {
-    chartInstance.applyOptions({
-      layout: {
-        background: { color: isDarkMode.value ? '#0f172a' : '#ffffff' },
-        textColor: isDarkMode.value ? '#94a3b8' : '#475569',
-      },
-      grid: {
-        vertLines: { color: isDarkMode.value ? '#1e293b' : '#f1f5f9' },
-        horzLines: { color: isDarkMode.value ? '#1e293b' : '#f1f5f9' },
-      },
-      crosshair: {
-        vertLine: { color: isDarkMode.value ? '#475569' : '#94a3b8', labelBackgroundColor: isDarkMode.value ? '#334155' : '#475569' },
-        horzLine: { color: isDarkMode.value ? '#475569' : '#94a3b8', labelBackgroundColor: isDarkMode.value ? '#334155' : '#475569' },
-      },
-      timeScale: {
-        borderColor: isDarkMode.value ? '#334155' : '#e2e8f0',
-        timeVisible: true,
-      },
-      rightPriceScale: {
-        borderColor: isDarkMode.value ? '#334155' : '#e2e8f0',
-      },
-    });
-  }
+  applyChartTheme(isDarkMode.value);
 };
 
 // 初始化深色模式
@@ -1459,8 +1366,8 @@ const dataWarning = ref('');
 // SR 联动高亮状态
 const highlightedSR = ref<number | null>(null);
 
-// 右侧面板 Tab 状态
-const rightPanelTab = ref<'analysis' | 'range'>('analysis');
+// 右侧面板 Tab 状态 (默认显示 Investment_Assistant 价格行为策略)
+const rightPanelTab = ref<'strategy' | 'range'>('strategy');
 
 // 时间范围配置（仅负责缩放视图，与上方K线周期按钮相互独立）
 const timeRanges = [
@@ -1502,6 +1409,142 @@ let candlestickSeries: any = null;
 let volumeSeries: any = null;
 let priceLines: any[] = [];
 let markersPlugin: any = null;
+
+// ================== Investment_Assistant 价格行为与 Antigravity 双向管道 ==================
+const chartAnnotations = useChartAnnotations();
+const { isWindowActive } = useSmartThrottling();
+const strategySummary = ref<any>(null);
+const strategyLoading = ref(false);
+let activeStrategyRequestId = 0;
+
+watch(isWindowActive, (active) => {
+  if (active) {
+    quoteEngine.start();
+  } else {
+    quoteEngine.stop();
+  }
+});
+
+// 监听侧边栏 Tab 切换: 当切到 PA 策略矩阵面板且当前无分析结果时，自动发起高精度分析
+watch(rightPanelTab, (tab) => {
+  if (tab === 'strategy' && !strategySummary.value && currentSymbol.value && !strategyLoading.value) {
+    handleRunStrategy('swing');
+  }
+});
+
+const handleRunStrategy = async (mode: string = 'swing', isManual: boolean = false) => {
+  if (!currentSymbol.value) return;
+  const targetSymbol = currentSymbol.value;
+  const targetPeriod = currentPeriod.value;
+  const reqId = ++activeStrategyRequestId;
+
+  try {
+    strategyLoading.value = true;
+    if (!srLevels.value.length) {
+      await runAnalysis();
+    }
+    // 竞态排查: 若在准备过程中标的或周期已变更，终止
+    if (reqId !== activeStrategyRequestId || currentSymbol.value !== targetSymbol || currentPeriod.value !== targetPeriod) {
+      return;
+    }
+
+    const res = await runPAStrategy(targetSymbol, targetPeriod, mode, klineData.value);
+    // 竞态守卫: 若在请求过程中用户已切换标的或周期，丢弃过时结果，杜绝错位标注覆盖
+    if (reqId !== activeStrategyRequestId || currentSymbol.value !== targetSymbol || currentPeriod.value !== targetPeriod) {
+      console.log(`[PA策略] 丢弃过时结果: 当前已切换至 ${currentSymbol.value} (${currentPeriod.value})，忽略 ${targetSymbol} (${targetPeriod})`);
+      return;
+    }
+    strategySummary.value = res.summary;
+    if (res.annotations) {
+      chartAnnotations.setAllAnnotations(res.annotations);
+    }
+  } catch (e: any) {
+    if (reqId === activeStrategyRequestId && currentSymbol.value === targetSymbol && currentPeriod.value === targetPeriod) {
+      console.error('Run PA strategy error:', e);
+      if (isManual) {
+        errorMsg.value = e.message || '策略执行失败，请检查K线数据';
+      }
+    }
+  } finally {
+    if (reqId === activeStrategyRequestId && currentSymbol.value === targetSymbol && currentPeriod.value === targetPeriod) {
+      strategyLoading.value = false;
+    }
+  }
+};
+
+const handleClearStrategy = () => {
+  activeStrategyRequestId++;
+  chartAnnotations.clearAnnotations();
+  strategySummary.value = null;
+};
+
+const wsControl = useWebSocketControl({
+  onRefreshWatchlist() {
+    loadWatchlist();
+  },
+  onOpenChart(symbol, period) {
+    currentSymbol.value = symbol;
+    symbolInput.value = stripPrefix(symbol);
+    if (period && (periodOptions as readonly string[]).includes(period)) {
+      currentPeriod.value = period as any;
+    }
+    handleSearch();
+  },
+  onAddMarkers(markers, sym) {
+    if (!sym || normalizeSymbol(sym) !== normalizeSymbol(currentSymbol.value)) return;
+    chartAnnotations.setMarkers(markers);
+  },
+  onDrawLines(lines, sym) {
+    if (!sym || normalizeSymbol(sym) !== normalizeSymbol(currentSymbol.value)) return;
+    chartAnnotations.setPriceLines(lines);
+  },
+  onDrawBoxes(boxes, sym) {
+    if (!sym || normalizeSymbol(sym) !== normalizeSymbol(currentSymbol.value)) return;
+    chartAnnotations.setBoxes(boxes);
+  },
+  onDrawChannelLines(channelLines, sym) {
+    if (!sym || normalizeSymbol(sym) !== normalizeSymbol(currentSymbol.value)) return;
+    chartAnnotations.setChannelLines(channelLines);
+  },
+  onDrawWaveLines(waveLines, sym) {
+    if (!sym || normalizeSymbol(sym) !== normalizeSymbol(currentSymbol.value)) return;
+    chartAnnotations.setWaveLines(waveLines);
+  },
+  onClearAnnotations(kind, sym) {
+    if (sym && normalizeSymbol(sym) !== normalizeSymbol(currentSymbol.value)) return;
+    if (kind === 'marker') chartAnnotations.setMarkers([]);
+    else if (kind === 'line') chartAnnotations.setPriceLines([]);
+    else if (kind === 'box') chartAnnotations.setBoxes([]);
+    else if (kind === 'channel') chartAnnotations.setChannelLines([]);
+    else if (kind === 'wave') chartAnnotations.setWaveLines(null);
+    else chartAnnotations.clearAnnotations();
+  },
+  async onRunStrategy(mode) {
+    await handleRunStrategy(mode, true);
+  },
+  onCaptureChart(_reqId) {
+    if (chartInstance && typeof (chartInstance as any).takeScreenshot === 'function') {
+      try {
+        const canvas = (chartInstance as any).takeScreenshot();
+        if (canvas) return canvas.toDataURL('image/png');
+      } catch (e) {
+        console.warn('takeScreenshot error, falling back:', e);
+      }
+    }
+    if (!chartContainer.value) return null;
+    const canvas = chartContainer.value.querySelector('canvas');
+    return canvas ? canvas.toDataURL('image/png') : null;
+  },
+});
+
+watch([currentSymbol, currentPeriod, klineData], () => {
+  const lastBar = klineData.value.length ? klineData.value[klineData.value.length - 1] : null;
+  wsControl.sendState({
+    symbol: currentSymbol.value,
+    period: currentPeriod.value,
+    current_price: lastBar ? lastBar.close : 0,
+  });
+});
 
 // ================== 缩放记忆 (鼠标滚轮缩放后跨切换保持) ==================
 // 以"可见逻辑范围占全长的比例"存储缩放，跨股票 / 周期 / 日期范围均可按比例还原。
@@ -1980,16 +2023,21 @@ const onVisibleLogicalRangeChanged = (range: any) => {
 const initChart = () => {
   if (!chartContainer.value) return;
 
-  chartInstance = createChart(chartContainer.value, getChartOptions());
+  chartInstance = createChart(chartContainer.value, getChartOptions(isDarkMode.value));
+
+  const upColor = isDarkMode.value ? '#34d399' : '#10b981';
+  const downColor = isDarkMode.value ? '#fb7185' : '#f43f5e';
 
   candlestickSeries = chartInstance.addSeries(CandlestickSeries, {
-    upColor: '#0d9488',
-    downColor: '#e11d48',
+    upColor,
+    downColor,
     borderVisible: false,
-    wickUpColor: '#0d9488',
-    wickDownColor: '#e11d48',
+    wickUpColor: upColor,
+    wickDownColor: downColor,
   });
   markersPlugin = createSeriesMarkers(candlestickSeries);
+  chartAnnotations.init(chartInstance, candlestickSeries, markersPlugin);
+  chartAnnotations.clearAnnotations();
 
   volumeSeries = chartInstance.addSeries(HistogramSeries, {
     priceFormat: { type: 'volume' },
@@ -2028,25 +2076,8 @@ const initChart = () => {
 
   chartInstance.timeScale().subscribeVisibleLogicalRangeChange(onVisibleLogicalRangeChanged);
 
-  // 如果初始为深色模式，应用图表暗色配色
-  if (isDarkMode.value) {
-    chartInstance.applyOptions({
-      layout: {
-        background: { color: '#0f172a' },
-        textColor: '#94a3b8',
-      },
-      grid: {
-        vertLines: { color: '#1e293b' },
-        horzLines: { color: '#1e293b' },
-      },
-      crosshair: {
-        vertLine: { color: '#475569', labelBackgroundColor: '#334155' },
-        horzLine: { color: '#475569', labelBackgroundColor: '#334155' },
-      },
-      timeScale: { borderColor: '#334155' },
-      rightPriceScale: { borderColor: '#334155' },
-    });
-  }
+  // 初始化图表主题调色板
+  applyChartTheme(isDarkMode.value);
 
   // ---- 十字准线悬停 → 自定义提示框 ----
   chartInstance.subscribeCrosshairMove((param) => {
@@ -2167,16 +2198,23 @@ const setTimeRange = (range: string) => {
 // ================== 切换K线周期 ==================
 const changePeriod = (period: Period) => {
   if (period === currentPeriod.value) return;
+  activeStrategyRequestId++;
   currentPeriod.value = period;
-  // 切换周期后重新拉取K线并重算支撑阻力
+  // 切换周期时立即清空旧周期的策略标注与摘要，防止上一周期的通道与波浪畸变残留
+  priceLines.forEach(line => candlestickSeries?.removePriceLine(line));
+  priceLines = [];
+  markersPlugin?.setMarkers([]);
+  chartAnnotations.clearAnnotations();
+  strategySummary.value = null;
+  // 切换周期后重新拉取K线并重算支撑阻力与最新策略
   if (currentSymbol.value) {
     handleSearch();
   }
 };
 
 // ================== 时间格式转换 ==================
-// 日/周/月线统一使用 'YYYY-MM-DD' 字符串格式，lightweight-charts 原生支持
-const toChartTime = (timeStr: string): string => timeStr;
+// 兼容日/周/月线及分钟/小时级 UTC 时间戳格式
+const toChartTime = (timeStr: any): any => toChartTimeHelper(timeStr);
 
 // 本地日期格式化：避免 toISOString() 在东八区（本地 0~8 点）把日期回退一天
 const toLocalDateStr = (d: Date): string => {
@@ -2280,6 +2318,15 @@ const handleSearch = async () => {
   rangeStats.value = null;
   activeTimeRange.value = 'ALL'; // 重置时间范围
 
+  activeStrategyRequestId++;
+
+  // 搜索或切换标的时，立即同步清空图表上的所有策略标注与摘要，根除旧标的残存通道/波浪数据
+  priceLines.forEach(line => candlestickSeries?.removePriceLine(line));
+  priceLines = [];
+  markersPlugin?.setMarkers([]);
+  chartAnnotations.clearAnnotations();
+  strategySummary.value = null;
+
   // 记录开始时间，用于保证骨架屏最短展示时长
   const startedAt = performance.now();
 
@@ -2352,6 +2399,7 @@ const handleSearch = async () => {
     priceLines.forEach(line => candlestickSeries?.removePriceLine(line));
     priceLines = [];
     markersPlugin?.setMarkers([]);
+    chartAnnotations.clearAnnotations();
 
     if (klines.length > 0) {
       const minD = klines[0].time;
@@ -2379,10 +2427,18 @@ const handleSearch = async () => {
     updateWatchlistPrices();
     // 真实模式：把当前股票加入引擎轮询集合（切换标的后立即开始拉取实时行情）
     if (!useMockData.value) refreshEngineSymbols();
+
+    // 自动发起最新标的与当前周期的策略高精度分析，确保通道、波浪与当前K线100%贴合
+    handleRunStrategy('swing');
   } catch (err: any) {
     errorMsg.value = err.message || '网络连接失败，无法加载行情图';
     klineData.value = [];
     currentSymbol.value = '';
+    priceLines.forEach(line => candlestickSeries?.removePriceLine(line));
+    priceLines = [];
+    markersPlugin?.setMarkers([]);
+    chartAnnotations.clearAnnotations();
+    strategySummary.value = null;
     // 加载失败：清除自选股 loading 态，避免骨架屏永转（显示 "--"）
     for (const s of watchlist.value) {
       if (watchlistPriceMap.value[s]) watchlistPriceMap.value[s].loading = false;
@@ -2556,9 +2612,12 @@ const runAnalysis = async () => {
 
     res.sr_levels.forEach(lvl => {
       const isSupport = lvl.type === 'support';
+      const lineColor = isSupport
+        ? (isDarkMode.value ? '#34d399' : '#10b981')
+        : (isDarkMode.value ? '#fb7185' : '#f43f5e');
       const line = candlestickSeries.createPriceLine({
         price: lvl.price,
-        color: isSupport ? '#0d9488' : '#e11d48',
+        color: lineColor,
         lineWidth: 1.5,
         lineStyle: 2, // 虚线
         axisLabelVisible: true,
@@ -2575,14 +2634,14 @@ const runAnalysis = async () => {
         markers.push({
           time: rise.start,
           position: 'belowBar',
-          color: '#0d9488',
+          color: '#10b981',
           shape: 'arrowUp',
           text: `▲上涨起点 (+${rise.pct.toFixed(1)}%)`,
         });
         markers.push({
           time: rise.end,
           position: 'aboveBar',
-          color: '#0d9488',
+          color: '#10b981',
           shape: 'arrowDown',
           text: '▼上涨终点',
         });
@@ -2593,14 +2652,14 @@ const runAnalysis = async () => {
         markers.push({
           time: fall.start,
           position: 'aboveBar',
-          color: '#e11d48',
+          color: '#f43f5e',
           shape: 'arrowDown',
           text: `▼下跌起点 (${fall.pct.toFixed(1)}%)`,
         });
         markers.push({
           time: fall.end,
           position: 'belowBar',
-          color: '#e11d48',
+          color: '#f43f5e',
           shape: 'arrowUp',
           text: '▲下跌终点',
         });
@@ -2637,10 +2696,12 @@ watch(klineData, (newData) => {
       low: d.low,
     })));
 
+    const upVol = isDarkMode.value ? 'rgba(52, 211, 153, 0.35)' : 'rgba(16, 185, 129, 0.25)';
+    const downVol = isDarkMode.value ? 'rgba(251, 113, 133, 0.35)' : 'rgba(244, 63, 94, 0.25)';
     volumeSeries.setData(clean.map(d => ({
       time: toChartTime(d.time),
       value: d.volume,
-      color: d.close >= d.open ? 'rgba(13, 148, 136, 0.2)' : 'rgba(225, 29, 72, 0.2)'
+      color: d.close >= d.open ? upVol : downVol
     })));
 
     // 恢复记忆的缩放比例：鼠标滚轮缩放 / 日期范围选择都会被记忆，
@@ -2780,10 +2841,9 @@ const handleGlobalKeydown = (e: KeyboardEvent) => {
   if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
 
   // Ctrl+K / Cmd+K: 聚焦搜索框
-  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
     e.preventDefault();
-    const searchInput = document.querySelector('input[placeholder="搜索股票代码/名称"]') as HTMLInputElement;
-    if (searchInput) searchInput.focus();
+    searchComponentRef.value?.focus();
   }
   
   // R: 触发分析重算

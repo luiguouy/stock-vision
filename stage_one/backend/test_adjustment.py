@@ -84,5 +84,6 @@ adj5 = apply_forward_adjustment(df5)
 check("最早价累计 ÷40 (800→20)", abs(adj5.iloc[0]['close'] - 20.0) < 1e-6)
 check("最新价不变 (120.0)", abs(adj5.iloc[-1]['close'] - 120.0) < 1e-6)
 
-print(f"\n结果: {PASS} 通过, {FAIL} 失败")
-sys.exit(1 if FAIL else 0)
+if __name__ == '__main__':
+    print(f"\n结果: {PASS} 通过, {FAIL} 失败")
+    sys.exit(1 if FAIL else 0)

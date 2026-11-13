@@ -27,6 +27,8 @@ from quote_config import (
     REQUEST_TIMEOUT, IP_WINDOW_SECONDS, IP_MAX_REQUESTS_PER_WINDOW,
     IP_OVERLOAD_SLOWDOWN_FACTOR, market_of, get_market_cfg,
 )
+# 复用 K 线层的新浪期货合约代码表，保证实时行情与历史 K 线用同一套合约映射
+from data_provider import SinaFuturesProvider
 
 # 复用主流 UA，降低被反爬概率
 _USER_AGENT = (
@@ -143,13 +145,29 @@ class TencentQuoteProvider:
 
     def __init__(self) -> None:
         self.limiter = QuoteRateLimiter()
+        # 期货主力合约走新浪实时行情源（腾讯 qt 接口不含期货）
+        self.futures_provider = SinaFuturesQuoteProvider()
 
     async def get_quotes(self, symbols: List[str]) -> List[dict]:
-        """批量获取实时行情，内置限流护盾。
+        """批量获取实时行情，内置限流护盾，并按市场路由数据源。
 
+        期货（NQmain/ESmain/YMmain/VXmain）→ 东方财富实时源；
+        其余（美股/A股/港股）→ 腾讯 qt 接口。
         返回每个标的的行情 dict；被限流 / 拉取失败的标的会带 status 字段说明原因，
         不会抛异常（前端据此展示「冷却中 / 限流」状态，而非崩溃）。
         """
+        futures_syms = [s for s in symbols if market_of(s) == "futures"]
+        regular_syms = [s for s in symbols if market_of(s) != "futures"]
+
+        results: List[dict] = []
+        if futures_syms:
+            results.extend(await self.futures_provider.get_quotes(futures_syms))
+        if regular_syms:
+            results.extend(await self._get_tencent_quotes(regular_syms))
+        return results
+
+    async def _get_tencent_quotes(self, symbols: List[str]) -> List[dict]:
+        """腾讯 qt 接口的批量行情（美股/A股/港股）。"""
         # 1) 限流过滤：仅保留此刻被允许的标的
         allowed: List[str] = []
         blocked: Dict[str, str] = {}
@@ -274,9 +292,16 @@ class TencentQuoteProvider:
         }
 
 
-def _to_float(s: str) -> Optional[float]:
-    """安全转 float，空字符串返回 None。"""
-    s = (s or "").strip()
+def _to_float(s) -> Optional[float]:
+    """安全转 float，兼容数值(东财 fltt=2 返回 float/int)与字符串(腾讯 GBK 解析)。
+
+    None / 空串 / 无法解析 → None；0 这类合法数值正常返回 0.0。
+    """
+    if s is None:
+        return None
+    if isinstance(s, (int, float)):
+        return float(s)
+    s = str(s).strip()
     if s == "":
         return None
     try:
@@ -300,6 +325,174 @@ def _format_update_time(raw: str) -> str:
         except Exception:
             return s
     return s
+
+
+def _error_item(symbol: str, status: str, msg: str) -> dict:
+    """构造一个带错误状态的行情条目（模块级，供多 provider 复用）。"""
+    m = market_of(symbol)
+    cfg = get_market_cfg(m)
+    return {
+        "symbol": symbol,
+        "name": symbol,
+        "price": None,
+        "prev_close": None,
+        "open": None,
+        "change": None,
+        "change_pct": None,
+        "update_time": "",
+        "market": m,
+        "delay_label": cfg["delay_label"],
+        "status": status,
+        "message": msg,
+        "extended_price": None,
+    }
+
+
+# ============================================================
+# 新浪财经 国际期货实时行情（国内直连可达，无需 VPN / cookie）
+# —— 与 K 线层 SinaFuturesProvider 共用同一套合约代码表
+# ============================================================
+_SINA_FUTURES_REALTIME_HOST = "https://hq.sinajs.cn/list="
+# 平台期货代码(xxxmain) -> 新浪 hf_ 实时行情代码(用于 hq.sinajs.cn/list=hf_xxx)
+_SINA_FUTURES_CODE = {
+    "nqmain": "hf_NQ",
+    "esmain": "hf_ES",
+    "ymmain": "hf_YM",
+    "vxmain": "hf_VX",
+}
+
+
+class SinaFuturesQuoteProvider:
+    """新浪财经国际期货（CME 连续合约）实时行情 provider。
+
+    - 数据源：hq.sinajs.cn/list=hf_NQ,...（GBK 编码，需带 Referer）。
+    - 大陆直连可达（无需 cookie / VPN），解决东方财富 push2 需反爬 cookie（连
+      接重置 → 404 / Server disconnected）、Yahoo 在沙箱/国内被墙的问题。
+    - 复用 K 线层 SinaFuturesProvider.SINA_FUTURES_CODE 的合约映射（本处单独维护
+      一份 hf_ 代码表，保持实时源与 K 线源解耦）。
+    """
+
+    def __init__(self) -> None:
+        self.limiter = QuoteRateLimiter()
+
+    async def get_quotes(self, symbols: List[str]) -> List[dict]:
+        """批量获取期货实时行情，内置限流护盾（与 Tencent 共用同一套限流模型）。"""
+        allowed: List[str] = []
+        blocked: Dict[str, str] = {}
+        for sym in symbols:
+            ok, reason = await self.limiter.allow("futures", sym)
+            if ok:
+                allowed.append(sym)
+            else:
+                blocked[sym] = reason
+
+        results: List[dict] = []
+        if allowed:
+            fetched = await self._fetch(allowed)
+            for sym in allowed:
+                self.limiter.record(sym)
+                item = fetched.get(sym)
+                if item is None:
+                    self.limiter.on_empty()
+                    results.append(_error_item(sym, "empty", "未返回期货行情（可能合约代码不匹配或暂无交易）"))
+                else:
+                    results.append(item)
+
+        for sym, reason in blocked.items():
+            msg = "请求过于频繁，已进入冷却" if reason == "cooling" else "请求频次超限，已自动降速"
+            results.append(_error_item(sym, reason, msg))
+        return results
+
+    async def _fetch(self, symbols: List[str]) -> Dict[str, Optional[dict]]:
+        """批量拉取新浪期货实时行情，按平台代码回填。"""
+        # 平台代码 -> 新浪 hf_ 代码
+        code_map: Dict[str, str] = {}
+        hf_codes: List[str] = []
+        for sym in symbols:
+            hf = _SINA_FUTURES_CODE.get(sym.lower())
+            if hf:
+                code_map[hf] = sym
+                hf_codes.append(hf)
+        out: Dict[str, Optional[dict]] = {s: None for s in symbols}
+        if not hf_codes:
+            return out
+        try:
+            client = await _get_client()
+            # 新浪要求 Referer: finance.sina.com.cn，覆盖共享客户端的默认 Referer
+            resp = await client.get(
+                _SINA_FUTURES_REALTIME_HOST + ",".join(hf_codes),
+                headers={"Referer": "https://finance.sina.com.cn/"},
+            )
+            resp.encoding = "gbk"  # 新浪行情接口为 GBK 编码
+            text = resp.text
+        except Exception as e:
+            print(f"[Quote-Futures] 新浪请求失败: {e}")
+            return out
+        for line in text.split(";"):
+            line = line.strip()
+            if "hq_str" not in line:
+                continue
+            # 从 "var hq_str_hf_NQ=..." 抽取 hf 代码
+            key = line.split("hq_str_", 1)[1].split("=")[0].strip()
+            sym = code_map.get(key)
+            if sym is None:
+                continue
+            item = self._parse_line(line)
+            if item is not None:
+                item["symbol"] = sym
+                out[sym] = item
+        return out
+
+    @staticmethod
+    def _parse_line(line: str) -> Optional[dict]:
+        """解析单行 var hq_str_hf_NQ="a,b,c,..." 为统一行情 dict。
+
+        字段下标（实测对齐 K 线棒，已交叉验证）：
+          [0]  最新价   [4]  最高   [5]  最低   [6]  时间(HH:MM:SS)
+          [7]  昨收     [8]  今开   [12] 日期(YYYY-MM-DD)  [13] 名称
+        涨跌额/涨跌幅由 最新价 - 昨收 推算。
+        """
+        if '="' not in line:
+            return None
+        val = line.split('="', 1)[1].rstrip('";')
+        parts = val.split(",")
+        if len(parts) < 14:
+            return None
+        try:
+            price = _to_float(parts[0])
+            prev_close = _to_float(parts[7])
+            open_ = _to_float(parts[8])
+            high = _to_float(parts[4])
+            low = _to_float(parts[5])
+            name = parts[13].strip()
+            date = parts[12].strip()
+            time_ = parts[6].strip()
+        except (ValueError, IndexError):
+            return None
+        if price is None:
+            return None
+        change = None
+        change_pct = None
+        if prev_close:
+            change = round(price - prev_close, 3)
+            change_pct = round((price - prev_close) / prev_close * 100, 3)
+        update_time = f"{date} {time_}".strip() if (date and time_) else ""
+        return {
+            "symbol": None,  # 由调用方回填具体合约代码
+            "name": name,
+            "price": price,
+            "prev_close": prev_close,
+            "open": open_,
+            "high": high,
+            "low": low,
+            "change": change,
+            "change_pct": change_pct,
+            "update_time": update_time,
+            "market": "futures",
+            "delay_label": get_market_cfg("futures")["delay_label"],
+            "status": "ok",
+            "extended_price": None,
+        }
 
 
 # 后端单例（全局共享限流状态）

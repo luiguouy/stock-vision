@@ -26,48 +26,50 @@ def fetch_page(end: str, count: int = 2000):
         return out
 
 
-all_bars = {}
-prev_earliest = None
-end = None  # 第一页不传 end
-pages = 0
-while pages < 20:
-    bars = fetch_page(end)
-    if not bars:
-        print(f"page {pages}: empty -> stop")
-        break
-    pages += 1
-    # 去重按日期
-    added = 0
-    for b in bars:
-        if b[0] not in all_bars:
-            all_bars[b[0]] = b
-            added += 1
-    dates = sorted(all_bars.keys())
-    print(f"page {pages}: got={len(bars)} new={added} first={bars[0][0]} last={bars[-1][0]} total_unique={len(all_bars)}")
-    # 下一页 end = 当前最早日期
-    earliest = dates[0]
-    if earliest == prev_earliest:
-        print("no earlier progress -> stop")
-        break
-    prev_earliest = earliest
-    end = earliest
-    if len(bars) < 2000:
-        print("last page < 2000 -> reached earliest available")
-        break
+if __name__ == "__main__":
+    all_bars = {}
+    prev_earliest = None
+    end = None  # 第一页不传 end
+    pages = 0
+    while pages < 20:
+        bars = fetch_page(end)
+        if not bars:
+            print(f"page {pages}: empty -> stop")
+            break
+        pages += 1
+        # 去重按日期
+        added = 0
+        for b in bars:
+            if b[0] not in all_bars:
+                all_bars[b[0]] = b
+                added += 1
+        dates = sorted(all_bars.keys())
+        print(f"page {pages}: got={len(bars)} new={added} first={bars[0][0]} last={bars[-1][0]} total_unique={len(all_bars)}")
+        # 下一页 end = 当前最早日期
+        earliest = dates[0]
+        if earliest == prev_earliest:
+            print("no earlier progress -> stop")
+            break
+        prev_earliest = earliest
+        end = earliest
+        if len(bars) < 2000:
+            print("last page < 2000 -> reached earliest available")
+            break
 
-dates = sorted(all_bars.keys())
-print("\n=== RESULT ===")
-print(f"total unique daily bars: {len(all_bars)}")
-print(f"earliest: {dates[0]}")
-print(f"latest:   {dates[-1]}")
-# 检测缺口: 相邻日期差 > 7 天视为可能有缺
-gaps = []
-for i in range(1, len(dates)):
-    a = datetime.strptime(dates[i-1], "%Y-%m-%d")
-    b = datetime.strptime(dates[i], "%Y-%m-%d")
-    diff = (b - a).days
-    if diff > 7:
-        gaps.append((dates[i-1], dates[i], diff))
-print(f"gaps>7days: {len(gaps)}")
-for g in gaps[:10]:
-    print("  gap", g)
+    dates = sorted(all_bars.keys())
+    print("\n=== RESULT ===")
+    print(f"total unique daily bars: {len(all_bars)}")
+    if dates:
+        print(f"earliest: {dates[0]}")
+        print(f"latest:   {dates[-1]}")
+        # 检测缺口: 相邻日期差 > 7 天视为可能有缺
+        gaps = []
+        for i in range(1, len(dates)):
+            a = datetime.strptime(dates[i-1], "%Y-%m-%d")
+            b = datetime.strptime(dates[i], "%Y-%m-%d")
+            diff = (b - a).days
+            if diff > 7:
+                gaps.append((dates[i-1], dates[i], diff))
+        print(f"gaps>7days: {len(gaps)}")
+        for g in gaps[:10]:
+            print("  gap", g)

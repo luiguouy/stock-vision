@@ -15,6 +15,8 @@
 
 import asyncio
 import httpx
+import json
+import re
 import pandas as pd
 import numpy as np
 from datetime import datetime, timezone
@@ -27,48 +29,31 @@ US_EAST = ZoneInfo('America/New_York')
 
 
 def _normalize_date(raw: str) -> str:
-    """将腾讯等源可能返回的日期统一规范为 'YYYY-MM-DD'（兼容 YYYYMMDD / 带时间格式）。"""
+    """将腾讯等源可能返回的日期统一规范（兼容 YYYYMMDD / 带时分格式）。"""
     s = str(raw).strip()
+    for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M', '%Y/%m/%d %H:%M:%S', '%Y/%m/%d %H:%M'):
+        try:
+            return datetime.strptime(s, fmt).strftime('%Y-%m-%d %H:%M')
+        except ValueError:
+            continue
     for fmt in ('%Y-%m-%d', '%Y%m%d', '%Y/%m/%d'):
         try:
             return datetime.strptime(s[:10], fmt).strftime('%Y-%m-%d')
         except ValueError:
             continue
-    return s[:10]
+    return s
 
 
 def validate_klines(df: "pd.DataFrame", period: str) -> bool:
     """
     校验返回数据的「粒度」是否与请求周期一致。
-
-    这是修复「每根 K 线跨 3 个月」问题的核心防线:
-
-    某些网络环境 (如被代理拦截的 Yahoo 接口) 会把日/周/月线退化成
-    「每季度一根」(相邻 90 天) 的稀疏数据, 直接渲染会让每根蜡烛在视觉上
-    跨 3 个月; 另外缓存一旦被这类错位数据污染, 会在 TTL 内持续返回错误数据。
-
-    通过对相邻日期间隔取中位数判断粒度是否匹配:
-      1d -> 中位数间隔应 <= 5 天  (真实日线 1 天, 周末 <= 3 天)
-      1w -> 中位数间隔应 <= 14 天 (真实周线 ~7 天, 假期略大)
-      1M -> 中位数间隔应 <= 45 天 (真实月线 ~30 天)
-      3M -> 中位数间隔应 <= 100 天 (真实季线 ~90 天)
-      6M -> 中位数间隔应 <= 200 天 (真实半年线 ~180 天)
-      1Y -> 中位数间隔应 <= 400 天 (真实年线 ~365 天)
-      4h -> 含时分, 单独放行
     """
-    # 聚合周期（季/半年/年）由日线重采样而来，天然 bar 数少:
-    #   一只上市 1.4 年的股票(如退市股 SNDK) 只有约 2-3 根半年线 / 1-2 根年线。
-    #   对这类周期放宽最小根数门槛，允许 ≥1 根通过粒度校验（粒度仍严格校验）。
-    #   注意: 放宽最小根数 ≠ 放宽粒度。聚合周期必须用「区间带」拒绝粒度错位:
-    #     6M 真实间隔≈182天, 若源误返回季度桩(90天)或年线(365天)必须拒绝;
-    #     1Y 真实间隔≈365天, 若源误返回半年(182天)或季度(90天)必须拒绝。
-    #     单纯用「上限」阈值(如 6M<=200)会让季度桩(90)混入 → 用「下界+上界」区间带。
-    _MIN_BARS = {'4h': 1, '1d': 5, '1w': 3, '1M': 2, '3M': 1, '6M': 1, '1Y': 1}
-    min_bars = _MIN_BARS.get(period, 5)
+    _MIN_BARS = {'5m': 1, '15m': 1, '1h': 1, '4h': 1, '1d': 5, '1w': 3, '1M': 2, '3M': 1, '6M': 1, '1Y': 1}
+    min_bars = _MIN_BARS.get(period, 1)
     if df is None or len(df) < min_bars:
         return False
     try:
-        if period == '4h':
+        if period in ('5m', '15m', '1h', '4h'):
             return True
         dates = pd.to_datetime(df['date'], errors='coerce').dropna().sort_values()
         if len(dates) < min_bars:
@@ -176,22 +161,45 @@ def apply_forward_adjustment(df: "pd.DataFrame") -> "pd.DataFrame":
 # ============================================================
 # 统一周期 -> 各数据源的实际拉取周期 + 是否需要重采样
 PERIOD_MAP = {
-    '4h': {'tencent': 'm60',  'yahoo': '1h',  'need_resample': True,  'resample': '4h'},
-    '1d': {'tencent': 'day',  'yahoo': '1d',  'need_resample': False, 'resample': None},
-    '1w': {'tencent': 'week', 'yahoo': '1wk', 'need_resample': False, 'resample': None},
-    '1M': {'tencent': 'month','yahoo': '1mo', 'need_resample': False, 'resample': None},
+    '5m':  {'tencent': 'm5',   'yahoo': '5m',  'need_resample': False, 'resample': None},
+    '15m': {'tencent': 'm15',  'yahoo': '15m', 'need_resample': False, 'resample': None},
+    '1h':  {'tencent': 'm60',  'yahoo': '1h',  'need_resample': False, 'resample': None},
+    '4h':  {'tencent': 'm60',  'yahoo': '1h',  'need_resample': True,  'resample': '4h'},
+    '1d':  {'tencent': 'day',  'yahoo': '1d',  'need_resample': False, 'resample': None},
+    '1w':  {'tencent': 'week', 'yahoo': '1wk', 'need_resample': False, 'resample': None},
+    '1M':  {'tencent': 'month','yahoo': '1mo', 'need_resample': False, 'resample': None},
     # 季K / 半年K / 年K: 拉取日线后按日历时间聚合 (每根蜡烛=一个季度/半年/年)
     # 使用「起始日锚定」频率码 (QS/2QS/YS), 使每根蜡烛的日期标签=该周期起始日,
     # 避免旧码 Q/Y 产生的「前导空桶」与「季末标签」错位问题。
-    '3M': {'tencent': 'day',  'yahoo': '1d',  'need_resample': True,  'resample': 'QS'},
-    '6M': {'tencent': 'day',  'yahoo': '1d',  'need_resample': True,  'resample': '2QS'},
-    '1Y': {'tencent': 'day',  'yahoo': '1d',  'need_resample': True,  'resample': 'YS'},
+    '3M':  {'tencent': 'day',  'yahoo': '1d',  'need_resample': True,  'resample': 'QS'},
+    '6M':  {'tencent': 'day',  'yahoo': '1d',  'need_resample': True,  'resample': '2QS'},
+    '1Y':  {'tencent': 'day',  'yahoo': '1d',  'need_resample': True,  'resample': 'YS'},
 }
 
 SUPPORTED_PERIODS: List[str] = list(PERIOD_MAP.keys())
 
+# 期货重采样规则: 新浪仅提供「日线」, 周/月/季/半年/年均由日线按日历聚合得到
+_FUTURES_RESAMPLE_RULE = {
+    '1w': 'W',    # 周线(起始日锚定)
+    '1M': 'MS',   # 月线(每月 1 号锚定)
+    '3M': 'QS',   # 季线
+    '6M': '2QS',  # 半年线
+    '1Y': 'YS',   # 年线
+}
+
 # 美股交易所后缀 (腾讯代码格式: usAAPL.OQ)
 US_SUFFIXES = ['.OQ', '.N', '.AM']
+
+# 期货平台代码(xxxmain) -> Yahoo 连续/主力合约 ticker
+# 腾讯免费接口不提供 CME 期货, 故期货统一经 Yahoo 连续合约接入。
+#   NQmain -> NQ=F  (纳斯达克100期货)  ESmain -> ES=F (标普500期货)
+#   YMmain -> YM=F  (道琼斯期货)        VXmain -> ^VIX (恐慌指数/波动率, 无干净连续期货)
+FUTURES_YAHOO_MAP = {
+    "nqmain": "NQ=F",
+    "esmain": "ES=F",
+    "ymmain": "YM=F",
+    "vxmain": "^VIX",
+}
 
 
 # ============================================================
@@ -536,12 +544,12 @@ class YahooProvider(DataProvider):
         if not ticker:
             return pd.DataFrame()
 
-        # 全量历史模式：优先用 Yahoo 直连 chart API (range=max)。
-        # 比 yfinance 更稳定（不受 cookie / 限流影响），能稳定返回上市以来全部数据。
-        if full:
-            df = await self._fetch_yahoo_direct(ticker, yahoo_interval, need_resample, resample_rule)
-            if not df.empty:
-                return df
+        # 优先用 Yahoo 直连 chart API (免 cookie / 免库依赖，毫秒级响应)
+        df = await self._fetch_yahoo_direct(ticker, yahoo_interval, need_resample, resample_rule)
+        if not df.empty:
+            if not full and len(df) > count:
+                df = df.iloc[-count:].reset_index(drop=True)
+            return df
 
         # 回退到 yfinance（同步库，在线程池中执行避免阻塞事件循环）
         try:
@@ -578,8 +586,9 @@ class YahooProvider(DataProvider):
         idx = idx.tz_convert(US_EAST)
 
         # 格式化时间列
-        if need_resample and resample_rule == '4h':
-            # 1h数据: 保留时分
+        is_intraday = interval in ('1m', '2m', '5m', '15m', '30m', '60m', '1h') or (need_resample and resample_rule == '4h')
+        if is_intraday:
+            # 分钟/小时数据: 保留时分
             time_col = idx.strftime('%Y-%m-%d %H:%M').tolist()
         else:
             # 日/周/月/季/半年/年: 只保留日期
@@ -633,7 +642,10 @@ class YahooProvider(DataProvider):
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
         data = None
         for host in hosts:
-            url = f"{host}/{ticker}?range=max&interval={interval}"
+            # 编码 Yahoo 特殊 ticker 中的 ^ (如 ^VIX); 保留 = 不被编码(Yahoo chart API 需裸 =F)
+            safe_ticker = ticker.replace('^', '%5E')
+            r_range = '60d' if interval in ('1m', '2m', '5m', '15m', '30m') else ('730d' if interval in ('60m', '1h') else 'max')
+            url = f"{host}/{safe_ticker}?range={r_range}&interval={interval}"
             try:
                 async with httpx.AsyncClient() as client:
                     resp = await client.get(url, headers=headers, timeout=20.0, follow_redirects=True)
@@ -662,12 +674,13 @@ class YahooProvider(DataProvider):
             closes = quote.get("close", [])
             vols = quote.get("volume", [])
 
+            is_intraday = interval in ('1m', '2m', '5m', '15m', '30m', '60m', '1h') or (need_resample and resample_rule == '4h')
             rows = []
             for i, t in enumerate(ts):
                 if i >= len(closes) or closes[i] is None:
                     continue
                 dt = datetime.fromtimestamp(t, tz=US_EAST)
-                date_str = dt.strftime('%Y-%m-%d %H:%M') if need_resample else dt.strftime('%Y-%m-%d')
+                date_str = dt.strftime('%Y-%m-%d %H:%M') if is_intraday else dt.strftime('%Y-%m-%d')
                 o = opens[i] if i < len(opens) and opens[i] is not None else closes[i]
                 h = highs[i] if i < len(highs) and highs[i] is not None else closes[i]
                 l = lows[i] if i < len(lows) and lows[i] is not None else closes[i]
@@ -704,8 +717,11 @@ class YahooProvider(DataProvider):
 
         美股走 Yahoo; A股/港股理论上不入 Yahoo (DataProviderManager 已路由到腾讯),
         此处仍补齐映射, 作为兜底时也能拿到正确 ticker。
+        期货(xxxmain)映射到 Yahoo 连续/主力合约(见 FUTURES_YAHOO_MAP)。
         """
         s = symbol.lower()
+        if s in FUTURES_YAHOO_MAP:
+            return FUTURES_YAHOO_MAP[s]
         if s.startswith("sh"):
             return symbol[2:].upper() + ".SS"
         if s.startswith("sz"):
@@ -727,7 +743,9 @@ class YahooProvider(DataProvider):
     def _calc_yahoo_period(interval: str, count: int) -> str:
         """根据 interval 和需要的数量，计算 yfinance period 参数"""
         # yfinance period 选项: 1d,5d,1mo,3mo,6mo,1y,2y,5y,10y,ytd,max
-        if interval == '1h':
+        if interval in ('1m', '2m', '5m', '15m', '30m'):
+            return '60d'
+        elif interval in ('60m', '1h'):
             # 1h 数据 Yahoo 最多保留 730 天，每天约 7 根
             # 取 2y 拿尽量多数据
             return '2y'
@@ -756,6 +774,120 @@ class YahooProvider(DataProvider):
 
 
 # ============================================================
+# 新浪财经 国际期货数据源 (CME 连续合约, 国内直连可达)
+# ============================================================
+class SinaFuturesProvider(DataProvider):
+    """新浪财经免费公开接口拉取国际期货(CME 连续合约)历史 K 线。
+
+    使用 stock2.finance.sina.com.cn 的 GlobalFuturesService.getGlobalFuturesDailyKLine
+    接口(无需 API key / cookie / VPN), 大陆直连可达, 解决:
+      - 东方财富 push2his 需反爬 cookie(否则连接重置)导致 404 / Server disconnected;
+      - Yahoo Finance 在大陆被墙 / 不稳定的问题。
+
+    注意: 新浪期货日 K 仅提供「日线」(DailyKLine), 周/月/季/半年/年均由日线重采样得到。
+    期货合约代码映射见 SINA_FUTURES_CODE。
+    """
+
+    # 平台期货代码(xxxmain) -> 新浪期货合约裸代码(用于 K 线 API)
+    SINA_FUTURES_CODE = {
+        "nqmain": "NQ",
+        "esmain": "ES",
+        "ymmain": "YM",
+        "vxmain": "VX",
+    }
+    _KLINE_URL = "https://stock2.finance.sina.com.cn/futures/api/jsonp.php"
+    _HEADERS = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                      "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Referer": "https://finance.sina.com.cn/",
+    }
+
+    def __init__(self):
+        super().__init__("sina")
+
+    def supports_period(self, period: str) -> bool:
+        return period in PERIOD_MAP
+
+    def _to_code(self, symbol: str) -> Optional[str]:
+        return self.SINA_FUTURES_CODE.get(symbol.lower())
+
+    async def fetch_klines(self, symbol: str, period: str, count: int = 320, full: bool = False) -> pd.DataFrame:
+        code = self._to_code(symbol)
+        if not code:
+            return pd.DataFrame()
+        # 新浪仅提供日线: 1d 直接返回; 其余周期拉日线后在客户端按日历聚合
+        df = await self._fetch_daily(code)
+        if df.empty:
+            return pd.DataFrame()
+        if period == '1d':
+            return df
+        rule = _FUTURES_RESAMPLE_RULE.get(period)
+        if not rule:
+            return pd.DataFrame()
+        # 期货连续合约已调整连续性, 跳过前复权, 直接按日线聚合
+        return TencentProvider._resample_to_period(df, rule)
+
+    async def _fetch_daily(self, code: str) -> pd.DataFrame:
+        now = datetime.now()
+        y, m, d = now.year, now.month, now.day
+        cb = f"_S{y}_{m}_{d}"
+        url = (f"{self._KLINE_URL}/var%20{cb}=/GlobalFuturesService.getGlobalFuturesDailyKLine"
+               f"?symbol={code}&_={y}_{m}_{d}&source=web")
+        try:
+            async with httpx.AsyncClient(timeout=20.0, follow_redirects=True, headers=self._HEADERS) as client:
+                resp = await client.get(url)
+                if resp.status_code != 200:
+                    return pd.DataFrame()
+                text = resp.text
+        except Exception as e:
+            print(f"[Sina] {code} kline request error: {e}")
+            return pd.DataFrame()
+        return self._parse_klines(text)
+
+    @staticmethod
+    def _parse_klines(text: str) -> "pd.DataFrame":
+        """解析新浪 JSONP 包裹的期货日 K 为统一 OHLCV DataFrame。
+
+        响应形如: var _S2026_7_26=([{"date":"...","open":"...","high":"...",
+        "low":"...","close":"...","volume":"0",...}, ...]);
+        """
+        if not text:
+            return pd.DataFrame()
+        # 提取 '= ([ ... ])' 数组。新浪 JSONP 用 var xxx=([...]); 包裹(数组外包一层括号),
+        # 前方可能还有 /*<script>...*/ 注释, 故用宽松正则匹配任意回调名。
+        m = re.search(r"=\s*\(?\s*(\[.*\])\s*\)?\s*;?\s*$", text, re.DOTALL)
+        if not m:
+            return pd.DataFrame()
+        try:
+            rows = json.loads(m.group(1))
+        except Exception:
+            return pd.DataFrame()
+        if not isinstance(rows, list) or not rows:
+            return pd.DataFrame()
+        out = []
+        for r in rows:
+            try:
+                out.append({
+                    "date": str(r.get("date", "")),
+                    "open": float(r.get("open", 0) or 0),
+                    "close": float(r.get("close", 0) or 0),
+                    "high": float(r.get("high", 0) or 0),
+                    "low": float(r.get("low", 0) or 0),
+                    "volume": float(r.get("volume", 0) or 0),
+                })
+            except (ValueError, TypeError):
+                continue
+        if not out:
+            return pd.DataFrame()
+        df = pd.DataFrame(out)
+        # 统一列顺序为项目约定 schema: date,open,high,low,close,volume
+        df = df[["date", "open", "high", "low", "close", "volume"]]
+        # 去重 + 按日期排序(防御 lightweight-charts 错位)
+        df = df.drop_duplicates(subset=["date"]).sort_values("date").reset_index(drop=True)
+        return df
+
+
+# ============================================================
 # 数据源管理器 — 主备故障转移
 # ============================================================
 class DataProviderManager:
@@ -770,8 +902,11 @@ class DataProviderManager:
     def __init__(self):
         self.tencent = TencentProvider()
         self.yahoo = YahooProvider()
+        self.sina = SinaFuturesProvider()
         # 记录最近成功的数据源 (供调试/日志)
         self._last_source: Optional[str] = None
+        # 内存 LRU 缓存: 键 (symbol, period, full) -> (timestamp, df, source)
+        self._mem_cache: dict = {}
 
     @property
     def last_source(self) -> Optional[str]:
@@ -785,7 +920,7 @@ class DataProviderManager:
 
         参数:
             symbol: 股票代码 (如 usAAPL)
-            period: K线周期 ('4h'/'1d'/'1w'/'1M')
+            period: K线周期 ('5m'/'15m'/'1h'/'4h'/'1d'/'1w'/'1M'/'3M'/'6M'/'1Y')
             count:  K线数量上限 (仅非全量模式生效)
             full:   为 True 时拉取上市以来全部历史数据
 
@@ -797,17 +932,28 @@ class DataProviderManager:
                 detail=f"不支持的K线周期: '{period}'，支持: {', '.join(SUPPORTED_PERIODS)}"
             )
 
+        # 内存缓存检查 (分时数据缓存 15 秒，日线及以上缓存 120 秒)
+        cache_key = (symbol.lower(), period, full)
+        ttl = 15 if period in ('5m', '15m', '1h', '4h') else 120
+        now_ts = datetime.now().timestamp()
+        if cache_key in self._mem_cache:
+            ts, cached_df, src = self._mem_cache[cache_key]
+            if now_ts - ts < ttl:
+                self._last_source = src
+                return cached_df.copy()
+
         # 确定主备源顺序
         # 美股: Yahoo(全量优先) / 腾讯(兜底)；非美股(A股/港股) 仅走腾讯
-        # (Yahoo 对 A股/港股覆盖差且不稳定，而腾讯原生即支持这两个市场)。
+        # 期货(xxxmain): 新浪连续合约优先(国内直连可达, 无需 cookie/VPN), Yahoo =F 备源。
         is_us = symbol.lower().startswith("us")
-        if is_us:
+        is_futures = symbol.lower().endswith("main")
+        if is_futures:
+            candidates = [self.sina]
+        elif is_us:
             if full:
-                # 全量历史模式：优先 Yahoo (period='max' 可返回上市以来全部数据)。
-                # 腾讯接口对单次返回的 K 线根数有上限，难以拿到完整历史，故作为备源。
                 primary, backup = self.yahoo, self.tencent
-            elif period == '4h':
-                # 4h: Yahoo 1h 数据更丰富，优先使用
+            elif period in ('5m', '15m', '1h', '4h'):
+                # 分钟与小时级别: Yahoo 数据更丰富且连续，优先使用
                 primary, backup = self.yahoo, self.tencent
             else:
                 # 日/周/月: 腾讯为主源
@@ -835,8 +981,15 @@ class DataProviderManager:
             # 前复权: 消除拆股造成的跳空, 使 K 线连续、技术指标可用。
             # 3M/6M/1Y 已在 provider 内对「日线」前复权后再重采样(避免拆股缺口混入聚合),
             # 此处跳过以免重复调整; 其余周期(含 4h)在此统一调整。
-            if period not in ('3M', '6M', '1Y'):
+            if period not in ('3M', '6M', '1Y') and not is_futures and period not in ('5m', '15m', '1h', '4h'):
                 best_df = apply_forward_adjustment(best_df)
+            
+            # 写入内存缓存并保持最大 60 个条目
+            if len(self._mem_cache) > 60:
+                oldest_key = min(self._mem_cache.keys(), key=lambda k: self._mem_cache[k][0])
+                self._mem_cache.pop(oldest_key, None)
+            self._mem_cache[cache_key] = (now_ts, best_df.copy(), best_source)
+
             return best_df
 
         # 全部失败 / 全部粒度错位

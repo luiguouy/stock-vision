@@ -1,58 +1,79 @@
 import type { ChartOptions, DeepPartial } from 'lightweight-charts';
 import { CrosshairMode, LineStyle } from 'lightweight-charts';
 
-export const getChartOptions = (): DeepPartial<ChartOptions> => {
+export const getChartOptions = (isDark: boolean = false): DeepPartial<ChartOptions> => {
   return {
     autoSize: true,
     layout: {
-      background: { color: '#ffffff' },
-      textColor: '#475569',
+      background: { color: isDark ? '#090d16' : '#ffffff' },
+      textColor: isDark ? '#94a3b8' : '#64748b',
       fontSize: 11,
-      fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
     },
     localization: {
       locale: 'zh-CN',
       timeFormatter: (time: any) => {
-        let dateStr = '';
-        if (typeof time === 'string') {
-          dateStr = time;
+        let date: Date | null = null;
+        let isIntraday = false;
+
+        if (typeof time === 'number') {
+          date = new Date(time * 1000);
+          isIntraday = true;
+        } else if (typeof time === 'string') {
+          if (time.includes(' ') || time.includes(':')) {
+            isIntraday = true;
+            date = new Date(time.replace(/-/g, '/'));
+          } else {
+            date = new Date(time);
+          }
         } else if (time && typeof time === 'object' && 'year' in time) {
           const mm = String(time.month).padStart(2, '0');
           const dd = String(time.day).padStart(2, '0');
-          dateStr = `${time.year}-${mm}-${dd}`;
-        } else {
-          return '';
+          date = new Date(`${time.year}-${mm}-${dd}`);
         }
 
-        try {
-          const date = new Date(dateStr);
-          if (isNaN(date.getTime())) return dateStr;
-          const year = date.getFullYear();
-          const month = String(date.getMonth() + 1).padStart(2, '0');
-          const day = String(date.getDate()).padStart(2, '0');
-          const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
-          const weekday = weekdays[date.getDay()];
-          return `${year}/${month}/${day} ${weekday}`;
-        } catch {
-          return dateStr;
+        if (!date || isNaN(date.getTime())) {
+          return String(time || '');
         }
+
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+
+        if (isIntraday) {
+          return `${year}/${month}/${day} ${hours}:${minutes}`;
+        }
+
+        const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+        const weekday = weekdays[date.getDay()];
+        return `${year}/${month}/${day} ${weekday}`;
       },
     },
     grid: {
-      vertLines: { color: '#f1f5f9' },
-      horzLines: { color: '#f1f5f9' },
+      vertLines: { color: isDark ? 'rgba(255, 255, 255, 0.04)' : '#f1f5f9' },
+      horzLines: { color: isDark ? 'rgba(255, 255, 255, 0.04)' : '#f1f5f9' },
     },
     crosshair: {
       mode: CrosshairMode.Normal,
-      vertLine: { color: '#cbd5e1', style: LineStyle.Dashed },
-      horzLine: { color: '#cbd5e1', style: LineStyle.Dashed },
+      vertLine: {
+        color: isDark ? '#475569' : '#cbd5e1',
+        style: LineStyle.Dashed,
+        labelBackgroundColor: isDark ? '#1e293b' : '#334155',
+      },
+      horzLine: {
+        color: isDark ? '#475569' : '#cbd5e1',
+        style: LineStyle.Dashed,
+        labelBackgroundColor: isDark ? '#1e293b' : '#334155',
+      },
     },
     rightPriceScale: {
-      borderColor: '#e2e8f0',
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#e2e8f0',
       autoScale: true,
     },
     timeScale: {
-      borderColor: '#e2e8f0',
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#e2e8f0',
       timeVisible: true,
     },
     // 显式开启鼠标滚轮缩放 / 触控板捏合缩放 / 拖拽平移

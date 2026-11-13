@@ -108,7 +108,6 @@ function selectDate(cell: { day: number; dateStr: string; disabled: boolean }) {
   if (activeField.value === 'start') {
     emit('update:modelStart', cell.dateStr);
     if (props.modelEnd && cell.dateStr > props.modelEnd) emit('update:modelEnd', cell.dateStr);
-    // 选完起始后自动切到结束字段，方便连续选择
     activeField.value = 'end';
   } else {
     emit('update:modelEnd', cell.dateStr);
@@ -125,33 +124,33 @@ function clearActive() {
 
 <template>
   <div class="relative">
-    <!-- 双字段触发按钮 -->
+    <!-- 双字段触发按钮 (8pt 网格对齐) -->
     <div class="grid grid-cols-2 gap-2">
       <button
         type="button"
         @click="openPicker('start')"
         :class="[
-          'w-full text-left bg-slate-50 dark:bg-slate-700 border rounded-lg px-2.5 py-2 text-xs font-semibold transition-all focus:outline-none',
+          'w-full text-left bg-slate-50 dark:bg-slate-800/80 border rounded-lg px-3 py-2 text-xs font-semibold transition-all focus:outline-none cursor-pointer',
           activeField === 'start' && open
-            ? 'border-teal-500 ring-2 ring-teal-500/20 text-teal-700 dark:text-teal-300'
-            : 'border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-500',
+            ? 'border-indigo-500 ring-2 ring-indigo-500/20 text-indigo-700 dark:text-indigo-300'
+            : 'border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-600',
         ]"
       >
-        <span class="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">{{ startLabel }}</span>
-        <span class="font-mono">{{ modelStart || '——' }}</span>
+        <span class="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-0.5">{{ startLabel }}</span>
+        <span class="font-mono text-xs tabular-nums">{{ modelStart || '——' }}</span>
       </button>
       <button
         type="button"
         @click="openPicker('end')"
         :class="[
-          'w-full text-left bg-slate-50 dark:bg-slate-700 border rounded-lg px-2.5 py-2 text-xs font-semibold transition-all focus:outline-none',
+          'w-full text-left bg-slate-50 dark:bg-slate-800/80 border rounded-lg px-3 py-2 text-xs font-semibold transition-all focus:outline-none cursor-pointer',
           activeField === 'end' && open
-            ? 'border-teal-500 ring-2 ring-teal-500/20 text-teal-700 dark:text-teal-300'
-            : 'border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-500',
+            ? 'border-indigo-500 ring-2 ring-indigo-500/20 text-indigo-700 dark:text-indigo-300'
+            : 'border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-600',
         ]"
       >
-        <span class="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">{{ endLabel }}</span>
-        <span class="font-mono">{{ modelEnd || '——' }}</span>
+        <span class="block text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-0.5">{{ endLabel }}</span>
+        <span class="font-mono text-xs tabular-nums">{{ modelEnd || '——' }}</span>
       </button>
     </div>
 
@@ -160,22 +159,22 @@ function clearActive() {
       <Transition name="fade-scale">
         <div
           v-if="open"
-          class="fixed inset-0 z-50 flex items-center justify-center"
+          class="fixed inset-0 z-[100] flex items-center justify-center"
           @click.self="close"
         >
-          <!-- 点击空白关闭的透明遮罩 -->
-          <div class="absolute inset-0 bg-slate-900/30 backdrop-blur-[1px]"></div>
+          <!-- 背景遮罩 -->
+          <div class="absolute inset-0 bg-slate-950/50 backdrop-blur-sm animate-fade-in"></div>
 
           <div
-            class="relative w-[300px] bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 p-4"
+            class="relative w-[320px] bg-white dark:bg-[#0f172a] rounded-2xl shadow-2xl border border-slate-200 dark:border-white/10 p-4 z-10 animate-scale-in"
             @click.stop
           >
             <!-- 头部：年月快速跳转 -->
-            <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center justify-between mb-3.5 pb-2.5 border-b border-slate-100 dark:border-slate-700/60">
               <button
                 type="button"
                 @click="prevMonth"
-                class="w-8 h-8 grid place-items-center rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                class="w-7 h-7 grid place-items-center rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer"
               >
                 <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
@@ -186,14 +185,14 @@ function clearActive() {
                 <select
                   :value="viewYear"
                   @change="onYearChange"
-                  class="bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-100 text-xs font-bold rounded-md px-1.5 py-1 focus:outline-none cursor-pointer"
+                  class="bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-100 text-xs font-bold rounded-lg px-2 py-1 focus:outline-none cursor-pointer"
                 >
                   <option v-for="y in years" :key="y" :value="y">{{ y }}年</option>
                 </select>
                 <select
                   :value="viewMonth"
                   @change="onMonthChange"
-                  class="bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-100 text-xs font-bold rounded-md px-1.5 py-1 focus:outline-none cursor-pointer"
+                  class="bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-100 text-xs font-bold rounded-lg px-2 py-1 focus:outline-none cursor-pointer"
                 >
                   <option v-for="(ml, i) in monthLabels" :key="i" :value="i">{{ ml }}</option>
                 </select>
@@ -202,7 +201,7 @@ function clearActive() {
               <button
                 type="button"
                 @click="nextMonth"
-                class="w-8 h-8 grid place-items-center rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                class="w-7 h-7 grid place-items-center rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer"
               >
                 <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
@@ -211,11 +210,11 @@ function clearActive() {
             </div>
 
             <!-- 星期表头 -->
-            <div class="grid grid-cols-7 gap-1 mb-1">
+            <div class="grid grid-cols-7 gap-1 mb-1.5">
               <div
                 v-for="w in weekdayLabels"
                 :key="w"
-                class="text-center text-[10px] font-bold text-slate-400 py-1"
+                class="text-center text-[10px] font-bold text-slate-400 dark:text-slate-500 py-0.5"
               >
                 {{ w }}
               </div>
@@ -231,14 +230,14 @@ function clearActive() {
                   :disabled="cell.disabled"
                   @click="selectDate(cell)"
                   :class="[
-                    'h-8 rounded-lg text-xs font-semibold transition-all duration-150',
+                    'h-8 rounded-lg text-xs font-semibold transition-all duration-150 tabular-nums font-mono',
                     cell.disabled
                       ? 'text-slate-300 dark:text-slate-600 cursor-not-allowed'
                       : cell.isEdge
-                      ? 'bg-teal-500 text-white shadow-sm hover:bg-teal-600'
+                      ? 'bg-indigo-600 text-white shadow-sm hover:bg-indigo-700 font-bold'
                       : cell.inRange
-                      ? 'bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300 hover:bg-teal-200 dark:hover:bg-teal-900/60'
-                      : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700',
+                      ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60'
+                      : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/80 cursor-pointer',
                   ]"
                 >
                   {{ cell.day }}
@@ -247,22 +246,22 @@ function clearActive() {
             </div>
 
             <!-- 底部操作 -->
-            <div class="flex items-center justify-between mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
+            <div class="flex items-center justify-between mt-3.5 pt-3 border-t border-slate-100 dark:border-slate-700/60">
               <span class="text-[10px] text-slate-400">
-                正在选择：<b :class="activeField === 'start' ? 'text-teal-600' : ''">{{ activeField === 'start' ? startLabel : endLabel }}</b>
+                正在设定：<b :class="activeField === 'start' ? 'text-indigo-600 dark:text-indigo-400 font-bold' : 'text-indigo-600 dark:text-indigo-400 font-bold'">{{ activeField === 'start' ? startLabel : endLabel }}</b>
               </span>
               <div class="flex items-center gap-2">
                 <button
                   type="button"
                   @click="clearActive"
-                  class="text-[11px] text-slate-400 hover:text-rose-500 transition-colors"
+                  class="text-[11px] text-slate-400 hover:text-rose-500 transition-colors cursor-pointer"
                 >
                   清空
                 </button>
                 <button
                   type="button"
                   @click="close"
-                  class="text-[11px] font-semibold text-white bg-teal-500 hover:bg-teal-600 rounded-lg px-3 py-1 transition-colors"
+                  class="btn-tactile text-[11px] font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-3 py-1 transition-colors cursor-pointer shadow-sm"
                 >
                   完成
                 </button>

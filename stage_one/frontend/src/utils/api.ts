@@ -10,7 +10,7 @@ export const BASE_URL = '/api';
 //   美股: usAAPL   沪A: sh600000   深A: sz000001   港股: hk00700
 // 前后端与数据源(腾讯)共用同一套前缀规则。
 // ============================================================
-export type Market = 'us' | 'ash' | 'asz' | 'hk';
+export type Market = 'us' | 'ash' | 'asz' | 'hk' | 'futures';
 
 export const MARKETS: { key: Market; label: string; hint: string }[] = [
   { key: 'us',  label: '美股', hint: '如 AAPL' },
@@ -20,7 +20,7 @@ export const MARKETS: { key: Market; label: string; hint: string }[] = [
 ];
 
 export const MARKET_LABEL: Record<Market, string> = {
-  us: '美股', ash: '沪A', asz: '深A', hk: '港股',
+  us: '美股', ash: '沪A', asz: '深A', hk: '港股', futures: '期货',
 };
 
 const PREFIXES = ['US', 'SH', 'SZ', 'HK'] as const;
@@ -28,6 +28,8 @@ const PREFIXES = ['US', 'SH', 'SZ', 'HK'] as const;
 /** 识别代码所属市场 */
 export function marketOf(sym: string): Market | null {
   const s = sym.toUpperCase();
+  // 期货主力合约：NQmain/ESmain/YMmain/VXmain → futures
+  if (s.endsWith('MAIN')) return 'futures';
   if (s.startsWith('US')) return 'us';
   if (s.startsWith('SH')) return 'ash';
   if (s.startsWith('SZ')) return 'asz';
@@ -54,6 +56,7 @@ export function normalizeSymbol(raw: string, market?: Market): string {
   const s = (raw || '').trim().toUpperCase();
   if (!s) return s;
   if (PREFIXES.some((p) => s.startsWith(p))) return s; // 已带前缀，原样返回
+  if (s.endsWith('MAIN')) return s.slice(0, -4) + 'main'; // 期货: 保留 main 后缀标识
   if (market === 'us') return 'US' + s;
   if (market === 'ash') return 'SH' + s;
   if (market === 'asz') return 'SZ' + s;
@@ -69,11 +72,15 @@ export function normalizeSymbol(raw: string, market?: Market): string {
   return 'US' + s;
 }
 
-// 支持的K线周期（日K/周K/月K/季K/半年K/年K）
-export const SUPPORTED_PERIODS = ['1d', '1w', '1M', '3M', '6M', '1Y'] as const;
+// 支持的K线周期（分钟级/小时级/日K/周K/月K/季K/半年K/年K）
+export const SUPPORTED_PERIODS = ['5m', '15m', '1h', '4h', '1d', '1w', '1M', '3M', '6M', '1Y'] as const;
 export type Period = typeof SUPPORTED_PERIODS[number];
 
 export const PERIOD_LABELS: Record<Period, string> = {
+  '5m': '5分',
+  '15m': '15分',
+  '1h': '1小时',
+  '4h': '4小时',
   '1d': '日K',
   '1w': '周K',
   '1M': '月K',
@@ -300,4 +307,30 @@ export async function saveWatchlist(groups: WatchGroup[]): Promise<void> {
     /* 后端不可用时静默失败，前端已同步写入 localStorage 兜底 */
   }
 }
+
+/**
+ * 执行 Investment_Assistant 价格行为交易策略
+ */
+export async function runPAStrategy(
+  symbol: string,
+  period: string = '1d',
+  mode: string = 'swing',
+  klines?: KLinePoint[]
+): Promise<any> {
+  const body: any = { symbol, period, mode, draw_on_chart: true };
+  if (klines && klines.length > 0) {
+    body.klines = klines;
+  }
+  const response = await fetch(`${BASE_URL}/control/strategy`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`策略执行失败: ${err}`);
+  }
+  return await response.json();
+}
+
 

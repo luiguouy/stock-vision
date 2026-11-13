@@ -2,385 +2,356 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* ==========================================================================
+   1. 基础排版与抗锯齿 (Swiss International Typography)
+   ========================================================================== */
 html, body, #app {
-  -webkit-font-smoothing: subpixel-antialiased;
-  -moz-osx-font-smoothing: auto;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  letter-spacing: -0.01em;
 }
 
-/* ==================== CSS 变量 - 主题色统一管理 ==================== */
+/* ==========================================================================
+   2. 瑞士网格系统变量与高精配色系统 (Grid & Taste Tokens)
+   ========================================================================== */
 :root {
-  /* 基础色 */
-  --color-bg-primary: #ffffff;
-  --color-bg-secondary: #f8fafc;
-  --color-bg-tertiary: #f1f5f9;
-  
-  /* 涨跌色 */
-  --color-rising: #22c55e;
-  --color-rising-light: #86efac;
-  --color-rising-dark: #16a34a;
-  --color-rising-bg: #f0fdf4;
-  
-  --color-falling: #ef4444;
-  --color-falling-light: #fca5a5;
-  --color-falling-dark: #dc2626;
-  --color-falling-bg: #fef2f2;
-  
-  /* 文字色 */
-  --color-text-primary: #1e293b;
-  --color-text-secondary: #64748b;
-  --color-text-muted: #94a3b8;
-  
-  /* 边框色 */
+  /* 8pt 栅格与排版模数 */
+  --baseline: 24px;
+  --grid-gutter: 16px;
+  --border-radius-xs: 4px;
+  --border-radius-sm: 6px;
+  --border-radius-md: 8px;
+  --border-radius-lg: 12px;
+  --border-radius-xl: 16px;
+
+  /* 物理动效曲线 (Motion-Prompt Physics Springs) */
+  --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring-snappy: cubic-bezier(0.2, 0.9, 0.3, 1.1);
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-micro: 120ms;
+  --duration-normal: 200ms;
+  --duration-entrance: 320ms;
+
+  /* 浅色主题：高级现代金融终端白 */
+  --color-canvas: #f8fafc;
+  --color-surface: #ffffff;
+  --color-surface-subtle: #f1f5f9;
+  --color-surface-hover: #f8fafc;
+  --color-surface-active: #e2e8f0;
+
   --color-border: #e2e8f0;
-  --color-border-light: #f1f5f9;
-  
-  /* 阴影 */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+  --color-border-subtle: rgba(226, 232, 240, 0.6);
+  --color-border-strong: #cbd5e1;
+
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #475569;
+  --color-text-tertiary: #64748b;
+  --color-text-muted: #94a3b8;
+
+  /* 金融涨跌配色 (精炼翡翠绿 vs 典雅深绯红) */
+  --color-rising: #10b981;
+  --color-rising-hover: #059669;
+  --color-rising-subtle: rgba(16, 185, 129, 0.1);
+  --color-rising-border: rgba(16, 185, 129, 0.25);
+  --color-rising-text: #047857;
+
+  --color-falling: #f43f5e;
+  --color-falling-hover: #e11d48;
+  --color-falling-subtle: rgba(244, 63, 94, 0.1);
+  --color-falling-border: rgba(244, 63, 94, 0.25);
+  --color-falling-text: #be123c;
+
+  /* 品牌与功能色 (克制靛青与科技蓝) */
+  --color-brand: #6366f1;
+  --color-brand-hover: #4f46e5;
+  --color-brand-subtle: rgba(99, 102, 241, 0.08);
+
+  --color-accent: #0ea5e9;
+  --color-accent-subtle: rgba(14, 165, 233, 0.08);
+
+  /* 精致分层阴影 */
+  --shadow-hairline: 0 0 0 1px var(--color-border);
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 12px -2px rgba(15, 23, 42, 0.08), 0 2px 4px -2px rgba(15, 23, 42, 0.04);
+  --shadow-lg: 0 12px 24px -4px rgba(15, 23, 42, 0.12), 0 4px 8px -2px rgba(15, 23, 42, 0.06);
+  --shadow-xl: 0 24px 48px -12px rgba(15, 23, 42, 0.18);
 }
 
-/* 深色模式变量 */
+/* ==========================================================================
+   3. 深色模式：Deep Obsidian (瑞士暗黑主义，杜绝粗糙低对比灰)
+   ========================================================================== */
 .dark {
-  --color-bg-primary: #0f172a;
-  --color-bg-secondary: #1e293b;
-  --color-bg-tertiary: #334155;
-  --color-text-primary: #f1f5f9;
-  --color-text-secondary: #94a3b8;
+  --color-canvas: #090d16;
+  --color-surface: #0f172a;
+  --color-surface-subtle: #141e33;
+  --color-surface-hover: #1e293b;
+  --color-surface-active: #25334c;
+
+  --color-border: #1e293b;
+  --color-border-subtle: rgba(255, 255, 255, 0.06);
+  --color-border-strong: #334155;
+
+  --color-text-primary: #f8fafc;
+  --color-text-secondary: #cbd5e1;
+  --color-text-tertiary: #94a3b8;
   --color-text-muted: #64748b;
-  --color-border: #334155;
-  --color-border-light: #1e293b;
+
+  --color-rising: #34d399;
+  --color-rising-hover: #10b981;
+  --color-rising-subtle: rgba(52, 211, 153, 0.12);
+  --color-rising-border: rgba(52, 211, 153, 0.25);
+  --color-rising-text: #6ee7b7;
+
+  --color-falling: #fb7185;
+  --color-falling-hover: #f43f5e;
+  --color-falling-subtle: rgba(251, 113, 133, 0.12);
+  --color-falling-border: rgba(251, 113, 133, 0.25);
+  --color-falling-text: #fda4af;
+
+  --color-brand: #818cf8;
+  --color-brand-hover: #6366f1;
+  --color-brand-subtle: rgba(129, 140, 248, 0.14);
+
+  --color-accent: #38bdf8;
+  --color-accent-subtle: rgba(56, 189, 248, 0.12);
+
+  --shadow-hairline: 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 14px -2px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 12px 28px -4px rgba(0, 0, 0, 0.6);
+  --shadow-xl: 0 24px 50px -12px rgba(0, 0, 0, 0.75);
 }
 
-/* 深色模式滚动条 */
-.dark .scrollbar-thin::-webkit-scrollbar-thumb {
-  background: #475569;
-}
-.dark .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  background: #64748b;
-}
-
-/* 深色模式骨架屏 */
-.dark .skeleton {
-  background: linear-gradient(
-    90deg,
-    #1e293b 25%,
-    #334155 50%,
-    #1e293b 75%
-  );
-  background-size: 200% 100%;
-}
-
-/* 深色模式面板卡片 */
-.dark .panel-card {
-  background: #1e293b;
-  border-color: #334155;
-}
-.dark .panel-card:hover {
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
-}
-
-/* 深色模式玻璃态 */
-.dark .glass_card,
-.dark .glass {
-  background: rgba(15, 23, 42, 0.8);
-  border-color: rgba(51, 65, 85, 0.5);
-}
-
-/* 深色模式渐变边框 */
-.dark .gradient-border {
-  background: #1e293b;
-}
-
-/* ==================== 全局动画样式 ==================== */
-
-/* 自定义滚动条 */
+/* ==========================================================================
+   4. 滚动条 (Minimalist Trackless Scrollbars)
+   ========================================================================== */
 .scrollbar-thin::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
-
 .scrollbar-thin::-webkit-scrollbar-track {
   background: transparent;
 }
-
 .scrollbar-thin::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 3px;
-  transition: background 0.2s ease;
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 9999px;
+  transition: background var(--duration-micro) var(--ease-smooth);
 }
-
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: rgba(100, 116, 139, 0.6);
+}
+.dark .scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.2);
+}
+.dark .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.45);
 }
 
-/* ==================== 动画关键帧 ==================== */
-
-/* 淡入 */
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-/* 淡入上移 */
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* 淡入下移 */
-@keyframes fadeInDown {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* 缩放进入 */
-@keyframes scaleIn {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-/* 弹跳 */
-@keyframes bounce {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.2); }
-}
-
-/* 脉冲 */
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-
-/* 骨架屏闪烁 */
-@keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
-}
-
-/* 数字滚动 */
-@keyframes countUp {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* 涟漪效果 */
-@keyframes ripple {
+/* ==========================================================================
+   5. 物理动效与关键帧 (Motion-Prompt Physics & Spring Transitions)
+   ========================================================================== */
+@keyframes springFadeIn {
   0% {
-    transform: scale(0);
-    opacity: 1;
+    opacity: 0;
+    transform: scale(0.97) translateY(4px);
   }
   100% {
-    transform: scale(4);
-    opacity: 0;
-  }
-}
-
-/* 摇晃 */
-@keyframes shake {
-  0%, 100% { transform: translateX(0); }
-  25% { transform: translateX(-5px); }
-  75% { transform: translateX(5px); }
-}
-
-/* 滑动进入 */
-@keyframes slideInRight {
-  from {
-    opacity: 0;
-    transform: translateX(20px);
-  }
-  to {
     opacity: 1;
-    transform: translateX(0);
+    transform: scale(1) translateY(0);
   }
 }
 
-/* ==================== 动画类 ==================== */
+@keyframes springSlideDown {
+  0% {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 
+@keyframes springSlideUp {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulseRadar {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+}
+
+@keyframes shimmerWave {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes subtleShake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-4px); }
+  40%, 80% { transform: translateX(4px); }
+}
+
+/* 动效工具类 */
 .animate-fade-in {
-  animation: fadeIn 0.3s ease-out;
+  animation: springFadeIn var(--duration-normal) var(--ease-spring) forwards;
 }
 
 .animate-fade-in-up {
-  animation: fadeInUp 0.4s ease-out;
+  animation: springSlideUp var(--duration-normal) var(--ease-spring) forwards;
 }
 
 .animate-fade-in-down {
-  animation: fadeInDown 0.4s ease-out;
+  animation: springSlideDown var(--duration-normal) var(--ease-spring) forwards;
 }
 
 .animate-scale-in {
-  animation: scaleIn 0.3s ease-out;
+  animation: springFadeIn var(--duration-entrance) var(--ease-spring) forwards;
 }
 
-.animate-bounce-once {
-  animation: bounce 0.5s ease-out;
-}
-
-.animate-pulse-slow {
-  animation: pulse 2s ease-in-out infinite;
+.animate-radar {
+  animation: pulseRadar 2.2s infinite var(--ease-smooth);
 }
 
 .animate-shake {
-  animation: shake 0.4s ease-in-out;
+  animation: subtleShake 0.4s var(--ease-smooth);
 }
 
-.animate-slide-in-right {
-  animation: slideInRight 0.3s ease-out;
+.animate-tooltip-in {
+  animation: springFadeIn 160ms var(--ease-spring) forwards;
 }
 
-/* ==================== 骨架屏样式 ==================== */
-
+/* ==========================================================================
+   6. 骨架屏 (Swiss Shimmer Skeleton)
+   ========================================================================== */
 .skeleton {
   background: linear-gradient(
     90deg,
-    #f1f5f9 25%,
-    #e2e8f0 50%,
-    #f1f5f9 75%
+    rgba(226, 232, 240, 0.5) 25%,
+    rgba(241, 245, 249, 0.8) 50%,
+    rgba(226, 232, 240, 0.5) 75%
   );
   background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
-  border-radius: 8px;
+  animation: shimmerWave 1.8s infinite linear;
+  border-radius: var(--border-radius-xs);
 }
 
-/* ==================== 涟漪效果容器 ==================== */
-
-.ripple-container {
-  position: relative;
-  overflow: hidden;
+.dark .skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(30, 41, 59, 0.6) 25%,
+    rgba(51, 65, 85, 0.8) 50%,
+    rgba(30, 41, 59, 0.6) 75%
+  );
+  background-size: 200% 100%;
 }
 
-.ripple-effect {
-  position: absolute;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.4);
-  transform: scale(0);
-  animation: ripple 0.6s ease-out;
-  pointer-events: none;
+/* ==========================================================================
+   7. 质感卡片与面板体系 (Impeccable Craftsmanship & Card Design)
+   ========================================================================== */
+.swiss-panel {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  transition: border-color var(--duration-micro) var(--ease-smooth);
 }
-
-/* ==================== 数字动画 ==================== */
-
-.number-animate {
-  display: inline-block;
-  transition: all 0.3s ease-out;
-}
-
-.number-animate.change-up {
-  animation: countUp 0.5s ease-out;
-  color: #0d9488;
-}
-
-.number-animate.change-down {
-  animation: countUp 0.5s ease-out;
-  color: #e11d48;
-}
-
-/* ==================== 卡片悬停3D效果 ==================== */
-
-.card-hover-3d {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  transform-style: preserve-3d;
-}
-
-.card-hover-3d:hover {
-  transform: translateY(-2px) scale(1.01);
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
-}
-
-/* ==================== 卡片样式 - 右侧面板 ==================== */
 
 .panel-card {
-  background: white;
-  border-radius: 0.75rem;
-  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  border: 1px solid var(--color-border-light);
-  transition: all 0.2s ease;
+  background: var(--color-surface);
+  border-radius: var(--border-radius-lg);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--duration-micro) var(--ease-spring),
+              box-shadow var(--duration-micro) var(--ease-smooth),
+              border-color var(--duration-micro) var(--ease-smooth);
 }
 
 .panel-card:hover {
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  border-color: var(--color-border-strong);
+  box-shadow: var(--shadow-md);
 }
 
-/* 卡片头部渐变下划线 */
+.dark .panel-card {
+  background: var(--color-surface-subtle);
+  border-color: var(--color-border);
+}
+
+.dark .panel-card:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow: var(--shadow-md);
+}
+
+/* 卡片模块标题排版规范 (Swiss Baseline Aligned) */
 .panel-card-header {
   position: relative;
-  padding-bottom: 0.75rem;
-  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.75rem;
+  border-bottom: 1px solid var(--color-border-subtle);
 }
 
-.panel-card-header::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, #0d9488, #0891b2, transparent);
-  border-radius: 1px;
+/* 触觉反馈按钮 (Tactile Micro-interactions) */
+.btn-tactile {
+  transition: all var(--duration-micro) var(--ease-spring);
+}
+.btn-tactile:hover {
+  transform: translateY(-0.5px);
+}
+.btn-tactile:active {
+  transform: scale(0.98) translateY(0);
 }
 
-/* 玻璃态卡片 */
+/* 金融数据等宽防抖 (Tabular Numbers) */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' on, 'zero' on;
+}
+
+/* 数字微动效 */
+.number-animate {
+  display: inline-block;
+  transition: color var(--duration-normal) var(--ease-smooth);
+}
+
+/* 玻璃态高斯模糊 (Glassmorphism) */
 .glass-card {
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border-radius: 0.75rem;
-  border: 1px solid rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(226, 232, 240, 0.7);
 }
 
-/* ==================== 玻璃态效果 ==================== */
-
-.glass {
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+.dark .glass-card {
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-/* ==================== 渐变边框 ==================== */
-
-.gradient-border {
-  position: relative;
-  background: white;
-}
-
-.gradient-border::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  padding: 1px;
-  border-radius: inherit;
-  background: linear-gradient(135deg, #0d9488, #0891b2);
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  pointer-events: none;
-}
-
-/* ==================== 延迟动画类 ==================== */
-
-.delay-100 { animation-delay: 100ms; }
-.delay-200 { animation-delay: 200ms; }
-.delay-300 { animation-delay: 300ms; }
-.delay-400 { animation-delay: 400ms; }
-.delay-500 { animation-delay: 500ms; }
+/* 列表进入交错渐变 */
+.delay-100 { animation-delay: 60ms; }
+.delay-200 { animation-delay: 120ms; }
+.delay-300 { animation-delay: 180ms; }
+.delay-400 { animation-delay: 240ms; }
+.delay-500 { animation-delay: 300ms; }

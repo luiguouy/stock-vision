@@ -24,7 +24,6 @@ import re
 import uuid
 import json
 import asyncio
-import pandas as pd
 from datetime import datetime, timedelta
 # pyrefly: ignore [missing-import]
 import httpx
@@ -33,7 +32,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 # pyrefly: ignore [missing-import]
 from pydantic import BaseModel
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any, Union
 
 from analysis import calculate_sr_levels, calculate_range_stats
 from data_provider import provider_manager, SUPPORTED_PERIODS
@@ -55,10 +54,23 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(title="智能股票技术分析平台", lifespan=lifespan)
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi import WebSocket, WebSocketDisconnect
+
+# 前端构建产物静态文件托管
+DIST_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend", "dist")
+if os.path.exists(DIST_DIR):
+    assets_dir = os.path.join(DIST_DIR, "assets")
+    if os.path.exists(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
 @app.get("/")
 def read_root():
+    if os.path.exists(DIST_DIR):
+        index_file = os.path.join(DIST_DIR, "index.html")
+        if os.path.exists(index_file):
+            return FileResponse(index_file)
     return RedirectResponse(url="/docs")
 
 
@@ -152,7 +164,7 @@ app.add_middleware(
 # 市场工具函数 (前后端约定: 带市场前缀的统一代码格式)
 #   美股: usAAPL   沪A: sh600000   深A: sz000001   港股: hk00700
 # ============================================================
-MARKET_LABEL = {"us": "美股", "ash": "沪A", "asz": "深A", "hk": "港股"}
+MARKET_LABEL = {"us": "美股", "ash": "沪A", "asz": "深A", "hk": "港股", "futures": "期货"}
 
 
 def norm_market_prefix(sym: str) -> str:
@@ -174,6 +186,9 @@ def normalize_symbol(raw: str, market: Optional[str] = None) -> Optional[str]:
         return None
     if s.startswith(("US", "SH", "SZ", "HK")):
         return s
+    if s.endswith("MAIN"):
+        # 期货: 平台以 xxxmain 作为期货标识, 保留 main 后缀(转小写), 不走股票兜底
+        return s[:-4] + "main"
     if market == "us":
         return "US" + s
     if market == "ash":
@@ -194,6 +209,8 @@ def normalize_symbol(raw: str, market: Optional[str] = None) -> Optional[str]:
 
 def market_of(symbol: str) -> Optional[str]:
     s = symbol.upper()
+    if s.endswith("MAIN"):
+        return "futures"
     if s.startswith("US"):
         return "us"
     if s.startswith("SH"):
@@ -213,37 +230,106 @@ def strip_prefix(symbol: str) -> str:
     return s
 
 
-# 本地常用股票池 (覆盖美股 / A股 / 港股)，用于模糊匹配
+# 本地常用股票池 (覆盖美股 / A股 / 港股 / 加密 / 期货)，用于高精度模糊匹配与纠错
 STOCKS_POOL = [
-    # 美股
-    {"symbol": "usAAPL", "name": "苹果 Apple", "pinyin": "pg", "pinyin_full": "pingguo", "market": "us"},
-    {"symbol": "usNVDA", "name": "英伟达 NVIDIA", "pinyin": "ywd", "pinyin_full": "yingweida", "market": "us"},
-    {"symbol": "usTSLA", "name": "特斯拉 Tesla", "pinyin": "tsl", "pinyin_full": "tesila", "market": "us"},
-    {"symbol": "usAMD", "name": "超微半导体 AMD", "pinyin": "cw", "pinyin_full": "chaowei", "market": "us"},
-    {"symbol": "usMSFT", "name": "微软 Microsoft", "pinyin": "wr", "pinyin_full": "weiruan", "market": "us"},
-    {"symbol": "usMETA", "name": "Meta", "pinyin": "meta", "pinyin_full": "meta", "market": "us"},
-    {"symbol": "usGOOGL", "name": "谷歌 Alphabet", "pinyin": "gg", "pinyin_full": "guge", "market": "us"},
-    {"symbol": "usAMZN", "name": "亚马逊 Amazon", "pinyin": "ymx", "pinyin_full": "yamaxun", "market": "us"},
-    {"symbol": "usMU", "name": "美光科技 Micron", "pinyin": "mg", "pinyin_full": "meiguang", "market": "us"},
-    {"symbol": "usSNDK", "name": "闪迪 SanDisk", "pinyin": "sd", "pinyin_full": "shandi", "market": "us"},
-    # A股 (沪市)
-    {"symbol": "sh600519", "name": "贵州茅台", "pinyin": "mt", "pinyin_full": "maotai", "market": "ash"},
-    {"symbol": "sh601318", "name": "中国平安", "pinyin": "zgap", "pinyin_full": "zhongguopingan", "market": "ash"},
-    {"symbol": "sh600036", "name": "招商银行", "pinyin": "zsyh", "pinyin_full": "zhaoshangyinhang", "market": "ash"},
-    {"symbol": "sh600276", "name": "恒瑞医药", "pinyin": "hryy", "pinyin_full": "hengruiyiyao", "market": "ash"},
-    {"symbol": "sh600900", "name": "长江电力", "pinyin": "cjdl", "pinyin_full": "changjiangdianli", "market": "ash"},
-    # A股 (深市)
-    {"symbol": "sz000001", "name": "平安银行", "pinyin": "payh", "pinyin_full": "pinganyinhang", "market": "asz"},
-    {"symbol": "sz000858", "name": "五粮液", "pinyin": "wly", "pinyin_full": "wuliangye", "market": "asz"},
-    {"symbol": "sz300750", "name": "宁德时代", "pinyin": "ndsd", "pinyin_full": "ningdeshidai", "market": "asz"},
-    {"symbol": "sz002594", "name": "比亚迪", "pinyin": "byd", "pinyin_full": "biyadi", "market": "asz"},
-    {"symbol": "sz000333", "name": "美的集团", "pinyin": "mdjt", "pinyin_full": "meidejituan", "market": "asz"},
-    # 港股
-    {"symbol": "hk00700", "name": "腾讯控股", "pinyin": "tx", "pinyin_full": "tengxunkonggu", "market": "hk"},
-    {"symbol": "hk09988", "name": "阿里巴巴", "pinyin": "albb", "pinyin_full": "alibaba", "market": "hk"},
-    {"symbol": "hk03690", "name": "美团", "pinyin": "mt", "pinyin_full": "meituan", "market": "hk"},
-    {"symbol": "hk01810", "name": "小米集团", "pinyin": "xm", "pinyin_full": "xiaomi", "market": "hk"},
-    {"symbol": "hk00939", "name": "建设银行", "pinyin": "jsyh", "pinyin_full": "jiansheyinhang", "market": "hk"},
+    # ── 美股科技七巨头 (Mag 7) ──────────────────────────
+    {"symbol": "usAAPL", "name": "苹果 Apple", "pinyin": "pg", "pinyin_full": "pingguo", "aliases": ["APPLE", "AAPL", "IPHONE", "MAC"], "market": "us"},
+    {"symbol": "usNVDA", "name": "英伟达 NVIDIA", "pinyin": "ywd", "pinyin_full": "yingweida", "aliases": ["NVIDIA", "NVDA", "GPU", "AI"], "market": "us"},
+    {"symbol": "usMSFT", "name": "微软 Microsoft", "pinyin": "wr", "pinyin_full": "weiruan", "aliases": ["MICROSOFT", "MSFT", "WINDOWS", "AZURE"], "market": "us"},
+    {"symbol": "usGOOGL", "name": "谷歌 Google Alphabet (A类)", "pinyin": "gg", "pinyin_full": "guge", "aliases": ["GOOGLE", "GOOGL", "ALPHABET"], "market": "us"},
+    {"symbol": "usGOOG", "name": "谷歌 Google Alphabet (C类)", "pinyin": "gg", "pinyin_full": "guge", "aliases": ["GOOGLE", "GOOG", "ALPHABET"], "market": "us"},
+    {"symbol": "usAMZN", "name": "亚马逊 Amazon", "pinyin": "ymx", "pinyin_full": "yamaxun", "aliases": ["AMAZON", "AMZN", "AWS"], "market": "us"},
+    {"symbol": "usMETA", "name": "Meta 脸书 Facebook", "pinyin": "fb", "pinyin_full": "meta", "aliases": ["META", "FACEBOOK", "FB", "INSTAGRAM"], "market": "us"},
+    {"symbol": "usTSLA", "name": "特斯拉 Tesla", "pinyin": "tsl", "pinyin_full": "tesila", "aliases": ["TESLA", "TSLA", "ELON"], "market": "us"},
+
+    # ── 美股核心半导体与硬科技 ──────────────────────────
+    {"symbol": "usAVGO", "name": "博通 Broadcom", "pinyin": "bt", "pinyin_full": "botong", "aliases": ["BROADCOM", "AVGO"], "market": "us"},
+    {"symbol": "usAMD", "name": "超微半导体 AMD", "pinyin": "cw", "pinyin_full": "chaowei", "aliases": ["AMD", "RADEON", "RYZEN"], "market": "us"},
+    {"symbol": "usTSM", "name": "台积电 TSMC", "pinyin": "tjd", "pinyin_full": "taijidian", "aliases": ["TSMC", "TSM"], "market": "us"},
+    {"symbol": "usQCOM", "name": "高通 Qualcomm", "pinyin": "gt", "pinyin_full": "gaotong", "aliases": ["QUALCOMM", "QCOM", "SNAPDRAGON"], "market": "us"},
+    {"symbol": "usINTC", "name": "英特尔 Intel", "pinyin": "yte", "pinyin_full": "yingteer", "aliases": ["INTEL", "INTC"], "market": "us"},
+    {"symbol": "usMU", "name": "美光科技 Micron", "pinyin": "mg", "pinyin_full": "meiguang", "aliases": ["MICRON", "MU", "MEMORY"], "market": "us"},
+    {"symbol": "usASML", "name": "阿斯麦 ASML", "pinyin": "asm", "pinyin_full": "asimai", "aliases": ["ASML", "LITHOGRAPHY"], "market": "us"},
+    {"symbol": "usARM", "name": "安谋 ARM", "pinyin": "am", "pinyin_full": "anmou", "aliases": ["ARM", "SOFTBANK"], "market": "us"},
+    {"symbol": "usORCL", "name": "甲骨文 Oracle", "pinyin": "jgw", "pinyin_full": "jiaguwen", "aliases": ["ORACLE", "ORCL"], "market": "us"},
+    {"symbol": "usPLTR", "name": "Palantir 帕兰提尔", "pinyin": "plt", "pinyin_full": "palantir", "aliases": ["PLTR", "PALANTIR", "AI"], "market": "us"},
+    {"symbol": "usCOIN", "name": "Coinbase 加密货币", "pinyin": "cb", "pinyin_full": "coinbase", "aliases": ["COIN", "COINBASE", "CRYPTO"], "market": "us"},
+    {"symbol": "usMSTR", "name": "微策略 MicroStrategy", "pinyin": "wcl", "pinyin_full": "weicelue", "aliases": ["MSTR", "MICROSTRATEGY", "BITCOIN"], "market": "us"},
+    {"symbol": "usSNDK", "name": "闪迪 SanDisk", "pinyin": "sd", "pinyin_full": "shandi", "aliases": ["SANDISK", "SNDK"], "market": "us"},
+
+    # ── 美股软件、流媒体与消费龙头 ──────────────────────
+    {"symbol": "usNFLX", "name": "奈飞 Netflix", "pinyin": "nf", "pinyin_full": "naifei", "aliases": ["NETFLIX", "NFLX"], "market": "us"},
+    {"symbol": "usUBER", "name": "优步 Uber", "pinyin": "yb", "pinyin_full": "youbu", "aliases": ["UBER"], "market": "us"},
+    {"symbol": "usABNB", "name": "爱彼迎 Airbnb", "pinyin": "aby", "pinyin_full": "aibiying", "aliases": ["AIRBNB", "ABNB"], "market": "us"},
+    {"symbol": "usCRM", "name": "赛富时 Salesforce", "pinyin": "sfs", "pinyin_full": "saifushi", "aliases": ["SALESFORCE", "CRM"], "market": "us"},
+    {"symbol": "usADBE", "name": "Adobe 奥多比", "pinyin": "adb", "pinyin_full": "aoduobi", "aliases": ["ADOBE", "ADBE", "PHOTOSHOP"], "market": "us"},
+    {"symbol": "usCSCO", "name": "思科 Cisco", "pinyin": "sk", "pinyin_full": "sike", "aliases": ["CISCO", "CSCO"], "market": "us"},
+    {"symbol": "usSNOW", "name": "Snowflake", "pinyin": "xue", "pinyin_full": "snowflake", "aliases": ["SNOW", "SNOWFLAKE"], "market": "us"},
+    {"symbol": "usDIS", "name": "迪士尼 Disney", "pinyin": "dsn", "pinyin_full": "dishini", "aliases": ["DISNEY", "DIS"], "market": "us"},
+    {"symbol": "usNKE", "name": "耐克 Nike", "pinyin": "nk", "pinyin_full": "naike", "aliases": ["NIKE", "NKE"], "market": "us"},
+    {"symbol": "usSBUX", "name": "星巴克 Starbucks", "pinyin": "xbk", "pinyin_full": "xingbake", "aliases": ["STARBUCKS", "SBUX"], "market": "us"},
+    {"symbol": "usCOST", "name": "开市客 Costco", "pinyin": "ksk", "pinyin_full": "kaishike", "aliases": ["COSTCO", "COST"], "market": "us"},
+    {"symbol": "usWMT", "name": "沃尔玛 Walmart", "pinyin": "wem", "pinyin_full": "woerma", "aliases": ["WALMART", "WMT"], "market": "us"},
+    {"symbol": "usJPM", "name": "摩根大通 JPMorgan", "pinyin": "mgdt", "pinyin_full": "morgandatong", "aliases": ["JPM", "JPMORGAN"], "market": "us"},
+    {"symbol": "usBAC", "name": "美国银行 BofA", "pinyin": "mgyh", "pinyin_full": "meiguoyinhang", "aliases": ["BAC", "BOFA"], "market": "us"},
+    {"symbol": "usGS", "name": "高盛 Goldman Sachs", "pinyin": "gs", "pinyin_full": "gaosheng", "aliases": ["GS", "GOLDMAN"], "market": "us"},
+
+    # ── 美股代表性 ETF ──────────────────────────────────
+    {"symbol": "usSPY", "name": "标普500 ETF (SPY)", "pinyin": "spy", "pinyin_full": "biaopu500etf", "aliases": ["SPY", "SP500", "S&P500"], "market": "us"},
+    {"symbol": "usQQQ", "name": "纳斯达克100 ETF (QQQ)", "pinyin": "qqq", "pinyin_full": "nasidaq100etf", "aliases": ["QQQ", "NASDAQ100", "NDX"], "market": "us"},
+    {"symbol": "usDIA", "name": "道琼斯工业 ETF (DIA)", "pinyin": "dia", "pinyin_full": "daoqiongsi", "aliases": ["DIA", "DOW"], "market": "us"},
+    {"symbol": "usIWM", "name": "罗素2000小盘股 ETF (IWM)", "pinyin": "iwm", "pinyin_full": "luosu2000", "aliases": ["IWM", "RUSSELL"], "market": "us"},
+    {"symbol": "usSOXX", "name": "半导体行业 ETF (SOXX)", "pinyin": "soxx", "pinyin_full": "bandaoti", "aliases": ["SOXX", "SEMI", "CHIPS"], "market": "us"},
+    {"symbol": "usTLT", "name": "20年+美债 ETF (TLT)", "pinyin": "tlt", "pinyin_full": "meizhai", "aliases": ["TLT", "BONDS"], "market": "us"},
+    {"symbol": "usSQQQ", "name": "3倍做空纳指 ETF (SQQQ)", "pinyin": "sqqq", "pinyin_full": "sanbeizuokongnazhi", "aliases": ["SQQQ", "SHORT"], "market": "us"},
+    {"symbol": "usTQQQ", "name": "3倍做多纳指 ETF (TQQQ)", "pinyin": "tqqq", "pinyin_full": "sanbeizuoduonazhi", "aliases": ["TQQQ", "LONG"], "market": "us"},
+
+    # ── 热门中概股 ──────────────────────────────────────
+    {"symbol": "usBABA", "name": "阿里巴巴 (美股 BABA)", "pinyin": "albb", "pinyin_full": "alibaba", "aliases": ["BABA", "ALIBABA", "TAOBAO"], "market": "us"},
+    {"symbol": "usPDD", "name": "拼多多 PDD Holdings", "pinyin": "pdd", "pinyin_full": "pingduoduo", "aliases": ["PDD", "PINGDUODUO", "TEMU"], "market": "us"},
+    {"symbol": "usJD", "name": "京东 JD.com", "pinyin": "jd", "pinyin_full": "jingdong", "aliases": ["JD", "JINGDONG"], "market": "us"},
+    {"symbol": "usBILI", "name": "哔哩哔哩 Bilibili (B站)", "pinyin": "blbl", "pinyin_full": "bilibili", "aliases": ["BILI", "BILIBILI", "BZHAN"], "market": "us"},
+    {"symbol": "usNIO", "name": "蔚来 NIO", "pinyin": "wl", "pinyin_full": "weilai", "aliases": ["NIO", "WEILAI"], "market": "us"},
+    {"symbol": "usLI", "name": "理想汽车 Li Auto", "pinyin": "lx", "pinyin_full": "lixiang", "aliases": ["LI", "LIXIANG"], "market": "us"},
+    {"symbol": "usXPEV", "name": "小鹏汽车 Xpeng", "pinyin": "xp", "pinyin_full": "xiaopeng", "aliases": ["XPEV", "XIAOPENG"], "market": "us"},
+    {"symbol": "usBIDU", "name": "百度 Baidu", "pinyin": "bd", "pinyin_full": "baidu", "aliases": ["BIDU", "BAIDU"], "market": "us"},
+    {"symbol": "usNTES", "name": "网易 NetEase", "pinyin": "wy", "pinyin_full": "wangyi", "aliases": ["NTES", "NETEASE"], "market": "us"},
+
+    # ── A股 (沪市) ──────────────────────────────────────
+    {"symbol": "sh600519", "name": "贵州茅台", "pinyin": "gzmt", "pinyin_full": "guizhoumaotai", "aliases": ["600519", "MAOTAI", "MT"], "market": "ash"},
+    {"symbol": "sh601318", "name": "中国平安", "pinyin": "zgap", "pinyin_full": "zhongguopingan", "aliases": ["601318", "PINGAN"], "market": "ash"},
+    {"symbol": "sh600036", "name": "招商银行", "pinyin": "zsyh", "pinyin_full": "zhaoshangyinhang", "aliases": ["600036", "ZHAOHANG"], "market": "ash"},
+    {"symbol": "sh600276", "name": "恒瑞医药", "pinyin": "hryy", "pinyin_full": "hengruiyiyao", "aliases": ["600276", "HENGRUI"], "market": "ash"},
+    {"symbol": "sh600900", "name": "长江电力", "pinyin": "cjdl", "pinyin_full": "changjiangdianli", "aliases": ["600900", "CHANGDIAN"], "market": "ash"},
+    {"symbol": "sh601899", "name": "紫金矿业", "pinyin": "zjky", "pinyin_full": "zijinkuangye", "aliases": ["601899", "ZIJIN", "GOLD"], "market": "ash"},
+    {"symbol": "sh688981", "name": "中芯国际 (A股)", "pinyin": "zxgj", "pinyin_full": "zhongxinguoji", "aliases": ["688981", "SMIC"], "market": "ash"},
+
+    # ── A股 (深市) ──────────────────────────────────────
+    {"symbol": "sz000001", "name": "平安银行", "pinyin": "payh", "pinyin_full": "pinganyinhang", "aliases": ["000001", "PAYH"], "market": "asz"},
+    {"symbol": "sz000858", "name": "五粮液", "pinyin": "wly", "pinyin_full": "wuliangye", "aliases": ["000858", "WULIANGYE"], "market": "asz"},
+    {"symbol": "sz300750", "name": "宁德时代", "pinyin": "ndsd", "pinyin_full": "ningdeshidai", "aliases": ["300750", "CATL", "NINGDE"], "market": "asz"},
+    {"symbol": "sz002594", "name": "比亚迪 (A股)", "pinyin": "byd", "pinyin_full": "biyadi", "aliases": ["002594", "BYD"], "market": "asz"},
+    {"symbol": "sz000333", "name": "美的集团", "pinyin": "mdjt", "pinyin_full": "meidejituan", "aliases": ["000333", "MIDEA"], "market": "asz"},
+    {"symbol": "sz300059", "name": "东方财富", "pinyin": "dfcf", "pinyin_full": "dongfangcaifu", "aliases": ["300059", "DONGFANGCAIFU", "EASTMONEY"], "market": "asz"},
+
+    # ── 港股 ────────────────────────────────────────────
+    {"symbol": "hk00700", "name": "腾讯控股", "pinyin": "txkg", "pinyin_full": "tengxunkonggu", "aliases": ["00700", "700", "TENCENT", "WECHAT"], "market": "hk"},
+    {"symbol": "hk09988", "name": "阿里巴巴 (港股 9988)", "pinyin": "albb", "pinyin_full": "alibaba", "aliases": ["09988", "9988", "ALIBABA", "BABA"], "market": "hk"},
+    {"symbol": "hk03690", "name": "美团", "pinyin": "mt", "pinyin_full": "meituan", "aliases": ["03690", "3690", "MEITUAN"], "market": "hk"},
+    {"symbol": "hk01810", "name": "小米集团", "pinyin": "xmjt", "pinyin_full": "xiaomijituan", "aliases": ["01810", "1810", "XIAOMI", "MI"], "market": "hk"},
+    {"symbol": "hk09626", "name": "哔哩哔哩 (港股 9626)", "pinyin": "blbl", "pinyin_full": "bilibili", "aliases": ["09626", "9626", "BILI", "BILIBILI"], "market": "hk"},
+    {"symbol": "hk00981", "name": "中芯国际 (港股)", "pinyin": "zxgj", "pinyin_full": "zhongxinguoji", "aliases": ["00981", "981", "SMIC"], "market": "hk"},
+    {"symbol": "hk01211", "name": "比亚迪股份 (港股)", "pinyin": "byd", "pinyin_full": "biyadi", "aliases": ["01211", "1211", "BYD"], "market": "hk"},
+    {"symbol": "hk00388", "name": "香港交易所", "pinyin": "gjs", "pinyin_full": "gangjiaosuo", "aliases": ["00388", "388", "HKEX"], "market": "hk"},
+
+    # ── 期货与加密货币 ──────────────────────────────────
+    {"symbol": "BTC-USD", "name": "比特币 Bitcoin (USD)", "pinyin": "btb", "pinyin_full": "bitebi", "aliases": ["BTC", "BITCOIN", "BTCUSD"], "market": "crypto"},
+    {"symbol": "ETH-USD", "name": "以太坊 Ethereum (USD)", "pinyin": "ytf", "pinyin_full": "yitaifang", "aliases": ["ETH", "ETHEREUM", "ETHUSD"], "market": "crypto"},
+    {"symbol": "SOL-USD", "name": "索拉纳 Solana (USD)", "pinyin": "sol", "pinyin_full": "suolana", "aliases": ["SOL", "SOLANA"], "market": "crypto"},
+    {"symbol": "NQmain", "name": "纳斯达克100期货 主力", "pinyin": "nq", "pinyin_full": "nasidaq100", "aliases": ["NQ", "NQMAIN"], "market": "futures"},
+    {"symbol": "ESmain", "name": "标普500期货 主力", "pinyin": "es", "pinyin_full": "biaopu500", "aliases": ["ES", "ESMAIN"], "market": "futures"},
+    {"symbol": "YMmain", "name": "道琼斯期货 主力", "pinyin": "ym", "pinyin_full": "daoqiongsi", "aliases": ["YM", "YMMAIN"], "market": "futures"},
+    {"symbol": "VXmain", "name": "VIX恐慌指数期货 主力", "pinyin": "vx", "pinyin_full": "vix", "aliases": ["VX", "VXMAIN", "VIX"], "market": "futures"},
 ]
 
 
@@ -274,8 +360,11 @@ async def get_klines_df(symbol: str, period: str, full: bool = True):
     # 统一在此处归一化, 保证缓存键与下游数据源调用一致, 杜绝港股/A股 404。
     symbol = norm_market_prefix(symbol)
     if full:
-        cached = get_cached_klines(symbol, period, max_age_hours=CACHE_TTL_HOURS)
+        # 分时周期 (5m/15m/1h/4h) 缓存 3 分钟 (0.05 小时)，日线及以上周期缓存 24 小时
+        ttl = 0.05 if period in ('5m', '15m', '1h', '4h') else CACHE_TTL_HOURS
+        cached = get_cached_klines(symbol, period, max_age_hours=ttl)
         if cached is not None:
+            import pandas as pd
             df = pd.DataFrame(cached)
             return df, "cache"
 
@@ -372,53 +461,150 @@ class AnalysisResponse(BaseModel):
 # API 端点
 # ============================================================
 
+def _score_stock(kw: str, stock: dict) -> int:
+    """对搜索关键字与标的进行高精相关度评分与模糊纠错。"""
+    kw_upper = kw.upper()
+    sym = stock["symbol"].upper()
+    raw_code = sym.replace("US", "").replace("SH", "").replace("SZ", "").replace("HK", "")
+    name = stock["name"].upper()
+    pinyin = stock.get("pinyin", "").upper()
+    pinyin_full = stock.get("pinyin_full", "").upper()
+    aliases = [a.upper() for a in stock.get("aliases", [])]
+
+    # 1. 股票代码精准匹配 (AAPL, 600519, GOOGL, BTC-USD) -> 1000
+    if kw_upper == raw_code or kw_upper == sym:
+        return 1000
+
+    # 2. 股票代码前缀匹配 (GOOG -> GOOGL, NV -> NVDA)
+    if raw_code.startswith(kw_upper):
+        return 850 - len(raw_code)
+
+    # 3. 别名精准匹配 (GOOGLE -> GOOGL, BABA -> 9988, TESLA -> TSLA)
+    if kw_upper in aliases:
+        return 800
+
+    # 4. 拼音首字母精准匹配 (GG -> 谷歌, YWD -> 英伟达, GZMT -> 贵州茅台)
+    if kw_upper == pinyin:
+        return 750
+
+    # 5. 拼音全拼精准匹配 (GUGE -> 谷歌, MEITUAN -> 美团)
+    if kw_upper == pinyin_full:
+        return 700
+
+    # 6. 中文名精准匹配
+    clean_name = name.split()[0]
+    if kw == clean_name:
+        return 720
+    if kw in clean_name:
+        return 650
+
+    # 7. 别名前缀匹配 (GOOG -> GOOGLE, ALIB -> ALIBABA)
+    if any(a.startswith(kw_upper) for a in aliases):
+        return 600
+
+    # 8. 拼音全拼前缀匹配
+    if pinyin_full and pinyin_full.startswith(kw.lower()):
+        return 500
+
+    # 9. 别名/名称/代码子串包含匹配
+    if any(kw_upper in a for a in aliases):
+        return 450
+    if kw_upper in name:
+        return 400
+    if kw_upper in raw_code:
+        return 350
+
+    # 10. 英文打错字模糊纠错 (Difflib / 编辑距离容错)
+    # 如: gogle -> GOOGL/GOOGLE, telsa -> TSLA/TESLA, aple -> AAPL/APPLE
+    if len(kw) >= 3 and kw.isascii():
+        import difflib
+        targets = [raw_code] + aliases + name.split()
+        best_ratio = 0.0
+        for t in targets:
+            if len(t) >= 3:
+                r = difflib.SequenceMatcher(None, kw_upper, t.upper()).ratio()
+                if r > best_ratio:
+                    best_ratio = r
+        if best_ratio >= 0.72:
+            return int(300 * best_ratio)
+
+    return 0
+
+
 @app.get("/api/search")
 async def search_stocks(
     keyword: Optional[str] = Query(None, description="搜索股票名称、英文名称、代码或拼音缩写（全市场范围内）"),
 ):
     """
     全局证券搜索（系统入口级检索）：
-      - 本地常用股票池(美股/A股/港股)优先模糊匹配，覆盖 中文名/英文名/代码/拼音缩写 四维度；
-      - 本地池未命中时，异步调用腾讯全量证券搜索兜底，实现「任意证券」定位；
-      - 仍无匹配：把输入当作代码，按自动识别归一化为带前缀代码（兼容直接输代码进分析）。
+      - 本地常用核心股票池优先多级加权评分与模糊纠错；
+      - 腾讯全量证券搜索异步补全与长尾标的兜底；
+      - 严禁盲目臆造虚假代码，未收录标的须经实盘行情校验才放行。
     """
     if not keyword:
         # 空关键词：返回全部在池股票（浏览用）
         return STOCKS_POOL
 
-    kw = keyword.strip().lower()
-    # 过滤关键字中的拼音字样以处理诸如 “小米拼音” 的搜索
+    kw = keyword.strip()
     kw_clean = kw.replace("拼音", "").strip()
-    matched = []
+    if not kw_clean:
+        return STOCKS_POOL
 
-    # 1. 尝试匹配本地常用股票池 (全市场，五维度)
+    # 1. 扫描本地多市场核心股票池并打分
+    scored_candidates = []
+    seen_symbols = set()
     for stock in STOCKS_POOL:
-        if (kw_clean in stock["symbol"].lower() or
-            kw_clean in stock["name"].lower() or
-            kw_clean in stock.get("pinyin", "").lower() or
-            kw_clean in stock.get("pinyin_full", "").lower() or
-            kw_clean in stock.get("name_en", "").lower()):
-            matched.append(stock)
+        score = _score_stock(kw_clean, stock)
+        if score > 0:
+            scored_candidates.append((score, stock))
+            seen_symbols.add(stock["symbol"].upper())
 
-    if matched:
-        return matched
+    # 2. 如果最高分候选已非常精准 (>= 750)，直接排序返回，保证首屏毫秒级响应
+    if scored_candidates:
+        scored_candidates.sort(key=lambda x: x[0], reverse=True)
+        if scored_candidates[0][0] >= 750 and len(scored_candidates) >= 3:
+            return [c[1] for c in scored_candidates[:20]]
 
-    # 2. 本地池未命中：腾讯全量证券搜索兜底（任意证券）
+    # 3. 异步查腾讯全量证券搜索 (覆盖全市场长尾股票)
     try:
-        tencent = await _tencent_security_search(kw_clean)
-        if tencent:
-            return tencent
+        tencent_results = await _tencent_security_search(kw_clean)
+        for t_item in tencent_results:
+            sym_upper = t_item["symbol"].upper()
+            if sym_upper in seen_symbols:
+                continue
+            seen_symbols.add(sym_upper)
+            t_score = 300 if t_item.get("type") == "GP" else 180
+            if kw_clean.upper() in sym_upper:
+                t_score += 150
+            scored_candidates.append((t_score, t_item))
     except Exception as e:
-        print(f"[search] 腾讯全量搜索失败，降级到代码归一化: {e}")
+        print(f"[search] 腾讯全量搜索异常: {e}")
 
-    # 3. 仍无匹配：仅当输入「像代码」(全 ASCII，如纯字母/数字/带前缀) 时按自动识别归一化；
-    #    含中文等自然语言输入若本地池与腾讯都无果，直接返回空，避免生成 "US台积电" 这类假代码。
-    if kw_clean.isascii():
+    # 4. 排序结果
+    scored_candidates.sort(key=lambda x: x[0], reverse=True)
+    if scored_candidates:
+        return [c[1] for c in scored_candidates[:20]]
+
+    # 5. 仍无匹配：严禁盲目臆造虚假股票！进行实盘行情探测验证
+    if kw_clean.isascii() and len(kw_clean) <= 10:
         norm = normalize_symbol(kw_clean)
         if norm:
-            m = market_of(norm)
-            label = MARKET_LABEL.get(m, "")
-            return [{"symbol": norm, "name": f"{label} {strip_prefix(norm)}"}]
+            try:
+                # 仅当真实存在行情报价时才放行，彻底消除类似 USGOGLE 虚假股票
+                q_res = await quote_provider.get_quotes([norm])
+                if q_res and q_res[0].get("status") == "ok" and q_res[0].get("price") is not None:
+                    m = market_of(norm)
+                    label = MARKET_LABEL.get(m, "")
+                    real_name = q_res[0].get("name") or strip_prefix(norm)
+                    return [{
+                        "symbol": norm,
+                        "name": f"{real_name} ({strip_prefix(norm)})",
+                        "market": m or "us",
+                        "label": label,
+                        "type": "GP",
+                    }]
+            except Exception:
+                pass
 
     return []
 
@@ -604,7 +790,10 @@ async def get_supported_periods():
     return {
         "periods": SUPPORTED_PERIODS,
         "descriptions": {
-            "4h": "4小时K线 (短期波段, 仅后端)",
+            "5m": "5分钟K线",
+            "15m": "15分钟K线",
+            "1h": "1小时K线",
+            "4h": "4小时K线",
             "1d": "日K线 (默认)",
             "1w": "周K线 (中期趋势)",
             "1M": "月K线 (长期结构)",
@@ -682,9 +871,406 @@ async def get_watchlist():
 
 @app.post("/api/watchlist")
 async def save_watchlist(req: WatchlistGroupsRequest):
-    """保存用户自选分组到后端。"""
+    """保存用户自选分组到后端，并通过 WebSocket 通知前端实时刷新。"""
     norm = _save_groups([g.dict() for g in req.groups])
+    try:
+        await ws_manager.broadcast({"action": "refresh_watchlist"})
+    except Exception:
+        pass
     return {"groups": norm}
+
+
+# ============================================================
+# Antigravity 操控面: WebSocket 双向实时管道 + HTTP 控制 API
+# ============================================================
+
+from db_cache import (
+    save_annotations_batch,
+    get_annotations,
+    clear_annotations,
+)
+from strategy_adapter import run_strategy_analysis, generate_wave_chart_html
+
+
+class WSManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+        self.capture_futures: Dict[str, asyncio.Future] = {}
+
+    async def connect(self, ws: WebSocket):
+        await ws.accept()
+        self.active_connections.append(ws)
+
+    def disconnect(self, ws: WebSocket):
+        if ws in self.active_connections:
+            self.active_connections.remove(ws)
+
+    async def broadcast(self, data: dict):
+        for conn in list(self.active_connections):
+            try:
+                await conn.send_json(data)
+            except Exception:
+                self.disconnect(conn)
+
+    def resolve_capture(self, request_id: str, image_base64: str):
+        if request_id in self.capture_futures and not self.capture_futures[request_id].done():
+            self.capture_futures[request_id].set_result(image_base64)
+
+
+ws_manager = WSManager()
+
+# 客户端运行态缓存
+active_chart_state = {
+    "symbol": "usAAPL",
+    "period": "1d",
+    "current_price": 0.0,
+    "last_seen": datetime.now().isoformat(),
+}
+
+
+@app.websocket("/ws/control")
+async def websocket_control(websocket: WebSocket):
+    await ws_manager.connect(websocket)
+    try:
+        while True:
+            msg_text = await websocket.receive_text()
+            try:
+                data = json.loads(msg_text)
+                msg_type = data.get("type")
+                if msg_type == "client_state_update":
+                    active_chart_state["symbol"] = data.get("symbol", active_chart_state["symbol"])
+                    active_chart_state["period"] = data.get("period", active_chart_state["period"])
+                    if "current_price" in data:
+                        active_chart_state["current_price"] = float(data["current_price"])
+                    active_chart_state["last_seen"] = datetime.now().isoformat()
+                elif msg_type == "capture_result":
+                    req_id = data.get("request_id")
+                    img = data.get("image_base64")
+                    if req_id and img:
+                        ws_manager.resolve_capture(req_id, img)
+            except Exception:
+                pass
+    except WebSocketDisconnect:
+        ws_manager.disconnect(websocket)
+    except Exception:
+        ws_manager.disconnect(websocket)
+
+
+class OpenChartRequest(BaseModel):
+    symbol: str
+    period: Optional[str] = "1d"
+
+
+class MarkerItem(BaseModel):
+    id: Optional[str] = None
+    time: Any
+    position: str = "aboveBar"  # 'aboveBar' | 'belowBar' | 'inBar'
+    color: str = "#10b981"
+    shape: str = "arrowDown"
+    text: str = ""
+
+
+class AddMarkersRequest(BaseModel):
+    symbol: str
+    markers: List[MarkerItem]
+    source: Optional[str] = "agent"
+
+
+class LineItem(BaseModel):
+    id: Optional[str] = None
+    price: float
+    color: str = "#3b82f6"
+    lineWidth: Optional[int] = 1
+    lineStyle: Optional[int] = 2  # 0=Solid, 1=Dotted, 2=Dashed
+    title: Optional[str] = ""
+
+
+class DrawLinesRequest(BaseModel):
+    symbol: str
+    lines: List[LineItem]
+    source: Optional[str] = "agent"
+
+
+class BoxItem(BaseModel):
+    id: Optional[str] = None
+    time1: Any
+    time2: Any
+    price1: float
+    price2: float
+    fillColor: Optional[str] = "rgba(59, 130, 246, 0.12)"
+    borderColor: Optional[str] = "#3b82f6"
+    label: Optional[str] = ""
+
+
+class DrawBoxesRequest(BaseModel):
+    symbol: str
+    boxes: List[BoxItem]
+    source: Optional[str] = "agent"
+
+
+class RunStrategyRequest(BaseModel):
+    symbol: str
+    period: Optional[str] = "1d"
+    mode: Optional[str] = "swing"  # 'swing' | 'day'
+    draw_on_chart: Optional[bool] = True
+    klines: Optional[List[Dict[str, Any]]] = None
+
+
+class ClearAnnotationsRequest(BaseModel):
+    symbol: str
+    kind: Optional[str] = None
+    source: Optional[str] = None
+
+
+@app.post("/api/control/open")
+async def control_open(req: OpenChartRequest):
+    """控制前端桌面软件切换当前标的与周期"""
+    norm_sym = normalize_symbol(req.symbol) or req.symbol
+    period = req.period or "1d"
+    active_chart_state["symbol"] = norm_sym
+    active_chart_state["period"] = period
+    active_chart_state["last_seen"] = datetime.now().isoformat()
+
+    await ws_manager.broadcast({
+        "action": "open",
+        "symbol": norm_sym,
+        "period": period,
+    })
+    return {"status": "ok", "state": active_chart_state}
+
+
+@app.get("/api/control/state")
+async def control_get_state():
+    """读取当前股票、周期与数据库中的所有已有标注"""
+    sym = active_chart_state["symbol"]
+    annos = get_annotations(sym)
+    return {
+        "status": "ok",
+        "state": active_chart_state,
+        "connected_clients": len(ws_manager.active_connections),
+        "annotations": annos,
+    }
+
+
+@app.post("/api/control/markers")
+async def control_add_markers(req: AddMarkersRequest):
+    """向当前或指定股票图表添加买卖点/拐点标注 (持久化并实时广播)"""
+    norm_sym = normalize_symbol(req.symbol) or req.symbol
+    raw_markers = [m.model_dump() if hasattr(m, "model_dump") else m.dict() for m in req.markers]
+    save_annotations_batch(norm_sym, "marker", raw_markers, source=req.source or "agent")
+    await ws_manager.broadcast({
+        "action": "add_markers",
+        "symbol": norm_sym,
+        "markers": raw_markers,
+    })
+    return {"status": "ok", "count": len(raw_markers)}
+
+
+@app.post("/api/control/lines")
+async def control_draw_lines(req: DrawLinesRequest):
+    """绘制水平价格线（入场、止损、目标、波浪证伪线）"""
+    norm_sym = normalize_symbol(req.symbol) or req.symbol
+    raw_lines = [l.model_dump() if hasattr(l, "model_dump") else l.dict() for l in req.lines]
+    save_annotations_batch(norm_sym, "line", raw_lines, source=req.source or "agent")
+    await ws_manager.broadcast({
+        "action": "draw_lines",
+        "symbol": norm_sym,
+        "lines": raw_lines,
+    })
+    return {"status": "ok", "count": len(raw_lines)}
+
+
+@app.post("/api/control/boxes")
+async def control_draw_boxes(req: DrawBoxesRequest):
+    """绘制震荡箱体与供求失衡区矩形"""
+    norm_sym = normalize_symbol(req.symbol) or req.symbol
+    raw_boxes = [b.model_dump() if hasattr(b, "model_dump") else b.dict() for b in req.boxes]
+    save_annotations_batch(norm_sym, "box", raw_boxes, source=req.source or "agent")
+    await ws_manager.broadcast({
+        "action": "draw_boxes",
+        "symbol": norm_sym,
+        "boxes": raw_boxes,
+    })
+    return {"status": "ok", "count": len(raw_boxes)}
+
+
+@app.post("/api/control/strategy")
+async def control_run_strategy(req: RunStrategyRequest):
+    """一键运行 Investment_Assistant 价格行为交易策略并在 K 线图上自动渲染"""
+    import pandas as pd
+    norm_sym = normalize_symbol(req.symbol) or req.symbol
+    period = req.period or "1d"
+    mode = req.mode or "swing"
+
+    df = None
+    # 优先使用前端直接传入的当前图表真实/演示K线
+    if req.klines and len(req.klines) > 0:
+        try:
+            df = pd.DataFrame(req.klines)
+        except Exception:
+            df = None
+
+    # 若未传K线或构建失败，向后端数据源拉取
+    if df is None or df.empty:
+        try:
+            df, src = await get_klines_df(norm_sym, period=period, full=True)
+        except Exception:
+            df = None
+
+    # 若远程拉取失败，尝试检查 Investment_Assistant 本地历史 CSV
+    if df is None or df.empty:
+        clean_sym = strip_prefix(norm_sym).upper()
+        csv_file = os.path.join(INVESTMENT_ASSISTANT_DIR, "data", f"{clean_sym}.csv")
+        if os.path.exists(csv_file):
+            try:
+                df = pd.read_csv(csv_file)
+            except Exception:
+                df = None
+
+    if df is None or df.empty:
+        raise HTTPException(status_code=404, detail=f"无法获取 {norm_sym} 的 {period} K线用于策略分析，请确认网络连接或传入K线数据")
+
+    # 执行 Investment_Assistant 策略
+    res = run_strategy_analysis(norm_sym, period=period, mode=mode, df=df)
+
+    if req.draw_on_chart:
+        # 清除该标的之前的所有策略标注，保证数据库只保留最新一版高精度标注
+        clear_annotations(norm_sym, source="pa_strategy")
+        annos = res.get("annotations", {})
+        markers = annos.get("markers", [])
+        lines = annos.get("lines", [])
+        boxes = annos.get("boxes", [])
+        channel_lines = annos.get("channel_lines", [])
+        wave_lines = annos.get("wave_lines", None)
+
+        if markers:
+            save_annotations_batch(norm_sym, "marker", markers, source="pa_strategy")
+        if lines:
+            save_annotations_batch(norm_sym, "line", lines, source="pa_strategy")
+        if boxes:
+            save_annotations_batch(norm_sym, "box", boxes, source="pa_strategy")
+        if channel_lines:
+            save_annotations_batch(norm_sym, "channel_line", channel_lines, source="pa_strategy")
+        if wave_lines:
+            save_annotations_batch(norm_sym, "wave_line", [wave_lines], source="pa_strategy")
+
+        await ws_manager.broadcast({
+            "action": "add_markers",
+            "symbol": norm_sym,
+            "markers": markers,
+        })
+        await ws_manager.broadcast({
+            "action": "draw_lines",
+            "symbol": norm_sym,
+            "lines": lines,
+        })
+        await ws_manager.broadcast({
+            "action": "draw_boxes",
+            "symbol": norm_sym,
+            "boxes": boxes,
+        })
+        await ws_manager.broadcast({
+            "action": "draw_channel_lines",
+            "symbol": norm_sym,
+            "channel_lines": channel_lines,
+        })
+        await ws_manager.broadcast({
+            "action": "draw_wave_lines",
+            "symbol": norm_sym,
+            "wave_lines": wave_lines,
+        })
+
+    return res
+
+
+@app.get("/api/strategy/html")
+async def get_strategy_chart_html(symbol: str, period: str = "1d"):
+    """返回由 Investment_Assistant 生成的高保真交互式波浪与通道分析 HTML 页面"""
+    import pandas as pd
+    from fastapi.responses import HTMLResponse
+    norm_sym = normalize_symbol(symbol) or symbol
+    df = None
+    try:
+        df, _ = await get_klines_df(norm_sym, period=period, full=True)
+    except Exception:
+        df = None
+
+    if df is None or df.empty:
+        clean_sym = strip_prefix(norm_sym).upper()
+        csv_file = os.path.join(INVESTMENT_ASSISTANT_DIR, "data", f"{clean_sym}.csv")
+        if os.path.exists(csv_file):
+            try:
+                df = pd.read_csv(csv_file)
+            except Exception:
+                df = None
+
+    if df is None or df.empty:
+        raise HTTPException(status_code=404, detail=f"无法获取 {norm_sym} 的K线数据")
+    
+    html_content = generate_wave_chart_html(norm_sym, period=period, df=df)
+    return HTMLResponse(content=html_content, media_type="text/html")
+
+
+@app.post("/api/control/clear")
+async def control_clear_annotations(req: ClearAnnotationsRequest):
+    """清理图表上的标注"""
+    norm_sym = normalize_symbol(req.symbol) or req.symbol
+    del_count = clear_annotations(norm_sym, kind=req.kind, source=req.source)
+    await ws_manager.broadcast({
+        "action": "clear",
+        "symbol": norm_sym,
+        "kind": req.kind,
+    })
+    return {"status": "ok", "deleted": del_count}
+
+
+@app.get("/api/control/annotations")
+async def control_get_annotations(
+    symbol: str = Query(..., description="股票代码"),
+    kind: Optional[str] = Query(None, description="标注类型: marker / line / box"),
+):
+    norm_sym = normalize_symbol(symbol) or symbol
+    return {"symbol": norm_sym, "annotations": get_annotations(norm_sym, kind=kind)}
+
+
+@app.post("/api/control/capture")
+async def control_capture_chart():
+    """截取当前前端图表 Canvas 图片保存为本地文件"""
+    req_id = str(uuid.uuid4())
+    future = asyncio.get_event_loop().create_future()
+    ws_manager.capture_futures[req_id] = future
+
+    await ws_manager.broadcast({
+        "action": "capture_chart",
+        "request_id": req_id,
+    })
+
+    try:
+        base64_data = await asyncio.wait_for(future, timeout=5.0)
+    except asyncio.TimeoutError:
+        ws_manager.capture_futures.pop(req_id, None)
+        return {"status": "error", "message": "截取图表超时 (可能前端窗口未连接或正在后台休眠)"}
+    finally:
+        ws_manager.capture_futures.pop(req_id, None)
+
+    # 保存图片文件到本地
+    import base64
+    app_data = os.environ.get("APPDATA")
+    out_dir = os.path.join(app_data, "StockVision", "screenshots") if app_data else os.path.join(os.path.dirname(__file__), "screenshots")
+    os.makedirs(out_dir, exist_ok=True)
+    out_path = os.path.join(out_dir, f"chart_{active_chart_state['symbol']}_{int(datetime.now().timestamp())}.png")
+
+    raw_b64 = base64_data.split(",")[-1]
+    with open(out_path, "wb") as f:
+        f.write(base64.b64decode(raw_b64))
+
+    return {
+        "status": "ok",
+        "file_path": out_path,
+        "symbol": active_chart_state["symbol"],
+        "timestamp": datetime.now().isoformat(),
+    }
+
 
 
 if __name__ == "__main__":

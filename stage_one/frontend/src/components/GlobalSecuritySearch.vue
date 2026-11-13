@@ -2,10 +2,10 @@
   <div class="relative w-full">
     <!-- 搜索输入（系统统一入口：常驻头部 + Ctrl/⌘K 唤起） -->
     <div
-      class="flex items-center bg-slate-50 dark:bg-slate-700/60 border border-slate-200/60 dark:border-slate-600/60 rounded-lg pl-2.5 pr-3 py-1.5 focus-within:border-teal-400 focus-within:ring-1 focus-within:ring-teal-400/20 transition-all cursor-text"
+      class="flex items-center bg-slate-100/80 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 rounded-lg pl-3 pr-2 py-1.5 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all cursor-text"
       @click="focusInput"
     >
-      <svg class="w-3.5 h-3.5 text-slate-400 shrink-0 mr-1.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <svg class="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 shrink-0 mr-2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
          <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
       </svg>
       <input
@@ -16,48 +16,52 @@
         @focus="openPanel"
         @keydown="onKeydown"
         :placeholder="placeholder"
-        class="flex-1 bg-transparent text-sm text-slate-700 dark:text-slate-200 focus:outline-none placeholder-slate-400 dark:placeholder-slate-500 min-w-0"
+        class="flex-1 bg-transparent text-xs text-slate-800 dark:text-slate-100 focus:outline-none placeholder-slate-400 dark:placeholder-slate-500 min-w-0 font-medium"
         autocomplete="off"
         spellcheck="false"
       />
+      <!-- 快捷键提示徽章 -->
+      <kbd class="hidden sm:inline-flex items-center px-1.5 py-0.5 text-[9px] font-mono text-slate-400 dark:text-slate-500 bg-white dark:bg-slate-700/80 rounded border border-slate-200 dark:border-slate-600 shadow-2xs select-none">
+        Ctrl K
+      </kbd>
     </div>
 
     <!-- 结果与历史面板（命令面板式：富信息 + 键盘导航 + 点击进入） -->
     <div
       v-if="open"
-      class="absolute top-full left-0 right-0 mt-1 z-[9999] bg-white dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700 rounded-xl shadow-lg overflow-hidden max-h-[22rem] overflow-y-auto select-none"
+      class="absolute top-full left-0 right-0 mt-1.5 z-[9999] bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl overflow-hidden max-h-[22rem] overflow-y-auto select-none animate-fade-in-down"
     >
       <!-- 1. 有输入时的搜索列表 -->
       <template v-if="query.trim()">
         <div v-if="loading" class="px-3 py-6 text-center text-xs text-slate-400">搜索中…</div>
         <div v-else-if="!results.length" class="px-3 py-6 text-center text-xs text-slate-400">
-          未找到匹配的证券，换个关键词或试试代码 / 拼音
+          未找到匹配标的
         </div>
-        <div v-else>
+        <div v-else class="divide-y divide-slate-100/60 dark:divide-slate-800/60">
           <button
             v-for="(r, i) in results"
             :key="r.symbol"
             @click="choose(r)"
             @mouseenter="active = i"
-            class="w-full text-left px-3 py-2 flex items-center gap-2 border-b border-slate-50 dark:border-slate-700/50 last:border-0 transition-colors"
-            :class="active === i ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'"
+            class="w-full text-left px-3.5 py-2.5 flex items-center gap-2.5 transition-colors cursor-pointer"
+            :class="active === i ? 'bg-indigo-50/80 dark:bg-indigo-950/40 text-indigo-900 dark:text-indigo-200' : 'hover:bg-slate-50 dark:hover:bg-slate-800/60'"
           >
-            <span class="text-[9px] px-1 rounded bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 shrink-0 w-9 text-center leading-4">
+            <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 shrink-0 w-11 text-center font-mono">
               {{ badge(r.symbol) }}
             </span>
             <span class="flex-1 min-w-0">
-              <span class="block text-sm text-slate-800 dark:text-slate-100 truncate">{{ r.name }}</span>
+              <span class="block text-xs font-semibold text-slate-900 dark:text-slate-100 truncate">{{ r.name }}</span>
               <span class="block text-[10px] text-slate-400 font-mono truncate">{{ formatSymbol(r.symbol) }}</span>
             </span>
-            <!-- 爱心收藏按钮（♡/♥） -->
+            <!-- 自选星标按钮 -->
             <span
               @click.stop="toggleFav(r.symbol)"
               :title="isFavored(r.symbol) ? '取消自选' : '加入自选'"
-              class="shrink-0 cursor-pointer p-1 text-slate-300 dark:text-slate-500 hover:text-rose-500 dark:hover:text-rose-400 transition-colors"
-              :class="isFavored(r.symbol) ? 'text-rose-500 dark:text-rose-400' : ''"
+              class="shrink-0 cursor-pointer p-1 text-slate-300 dark:text-slate-600 hover:text-amber-400 dark:hover:text-amber-400 transition-colors"
+              :class="isFavored(r.symbol) ? 'text-amber-400' : ''"
             >
-              <svg class="w-4 h-4" :class="isFavored(r.symbol) ? 'fill-rose-500 dark:fill-rose-400' : 'fill-none'" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+              <svg class="w-4 h-4" :class="isFavored(r.symbol) ? 'fill-amber-400' : 'fill-none'" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M11.48 3.499c.174-.383.72-.383.894 0l2.64 5.352 5.9 1.15c.422.082.59.59.282.895l-4.244 4.14 1.002 5.86c.071.423-.372.746-.75.545l-5.267-2.77-5.268 2.77c-.378.201-.821-.122-.75-.545l1.002-5.86-4.244-4.14c-.308-.305-.14-.813.282-.895l5.9-1.15 2.64-5.352z" />
               </svg>
             </span>
           </button>
@@ -67,35 +71,35 @@
       <!-- 2. 无输入时的历史与推荐面板 -->
       <template v-else>
         <!-- 最近搜索区域 -->
-        <div v-if="recentSearches.length > 0" class="border-b border-slate-100 dark:border-slate-700/50 pb-1">
-          <div class="px-3 pt-2.5 pb-1 flex justify-between items-center text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+        <div v-if="recentSearches.length > 0" class="border-b border-slate-100 dark:border-slate-800/80 pb-1">
+          <div class="px-3.5 pt-2.5 pb-1 flex justify-between items-center text-[10px] font-bold text-slate-400 uppercase tracking-wider">
             <span>最近搜索</span>
-            <button @click="clearAllRecent" class="text-slate-400 hover:text-rose-500 transition-colors capitalize text-[10px] font-medium">清空</button>
+            <button @click="clearAllRecent" class="text-slate-400 hover:text-rose-500 transition-colors text-[10px] font-medium cursor-pointer">清空</button>
           </div>
           <button
             v-for="(r, idx) in recentSearches"
             :key="'recent-' + r.symbol"
             @click="choose(r)"
             @mouseenter="active = idx"
-            class="w-full text-left px-3 py-2 flex items-center gap-2 transition-colors relative group"
-            :class="active === idx ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'"
+            class="w-full text-left px-3.5 py-2 flex items-center gap-2.5 transition-colors relative cursor-pointer"
+            :class="active === idx ? 'bg-indigo-50/80 dark:bg-indigo-950/40' : 'hover:bg-slate-50 dark:hover:bg-slate-800/60'"
           >
-            <span class="text-[9px] px-1 rounded bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 shrink-0 w-9 text-center leading-4">
+            <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 shrink-0 w-11 text-center font-mono">
               {{ badge(r.symbol) }}
             </span>
             <span class="flex-1 min-w-0">
-              <span class="block text-sm text-slate-800 dark:text-slate-100 truncate">{{ r.name }}</span>
+              <span class="block text-xs font-semibold text-slate-900 dark:text-slate-100 truncate">{{ r.name }}</span>
               <span class="block text-[10px] text-slate-400 font-mono truncate">{{ formatSymbol(r.symbol) }}</span>
             </span>
-            <!-- 爱心收藏按钮 -->
+            <!-- 自选星标按钮 -->
             <span
               @click.stop="toggleFav(r.symbol)"
               :title="isFavored(r.symbol) ? '取消自选' : '加入自选'"
-              class="shrink-0 cursor-pointer p-1 text-slate-300 dark:text-slate-500 hover:text-rose-500 dark:hover:text-rose-400 transition-colors"
-              :class="isFavored(r.symbol) ? 'text-rose-500 dark:text-rose-400' : ''"
+              class="shrink-0 cursor-pointer p-1 text-slate-300 dark:text-slate-600 hover:text-amber-400 dark:hover:text-amber-400 transition-colors"
+              :class="isFavored(r.symbol) ? 'text-amber-400' : ''"
             >
-              <svg class="w-4 h-4" :class="isFavored(r.symbol) ? 'fill-rose-500 dark:fill-rose-400' : 'fill-none'" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+              <svg class="w-4 h-4" :class="isFavored(r.symbol) ? 'fill-amber-400' : 'fill-none'" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M11.48 3.499c.174-.383.72-.383.894 0l2.64 5.352 5.9 1.15c.422.082.59.59.282.895l-4.244 4.14 1.002 5.86c.071.423-.372.746-.75.545l-5.267-2.77-5.268 2.77c-.378.201-.821-.122-.75-.545l1.002-5.86-4.244-4.14c-.308-.305-.14-.813.282-.895l5.9-1.15 2.64-5.352z" />
               </svg>
             </span>
             <!-- 单条删除按钮 -->
@@ -113,40 +117,40 @@
 
         <!-- 热门推荐区域 -->
         <div v-if="defaultRecommend.length > 0" class="pt-1.5">
-          <div class="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-            热门股票推荐
+          <div class="px-3.5 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+            主流活跃标的
           </div>
           <button
             v-for="(r, idx) in defaultRecommend"
             :key="'rec-' + r.symbol"
             @click="choose(r)"
             @mouseenter="active = recentSearches.length + idx"
-            class="w-full text-left px-3 py-2 flex items-center gap-2 transition-colors"
-            :class="active === (recentSearches.length + idx) ? 'bg-teal-50 dark:bg-teal-900/30' : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'"
+            class="w-full text-left px-3.5 py-2 flex items-center gap-2.5 transition-colors cursor-pointer"
+            :class="active === (recentSearches.length + idx) ? 'bg-indigo-50/80 dark:bg-indigo-950/40' : 'hover:bg-slate-50 dark:hover:bg-slate-800/60'"
           >
-            <span class="text-[9px] px-1 rounded bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 shrink-0 w-9 text-center leading-4">
+            <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 shrink-0 w-11 text-center font-mono">
               {{ badge(r.symbol) }}
             </span>
             <span class="flex-1 min-w-0">
-              <span class="block text-sm text-slate-800 dark:text-slate-100 truncate">{{ r.name }}</span>
+              <span class="block text-xs font-semibold text-slate-900 dark:text-slate-100 truncate">{{ r.name }}</span>
               <span class="block text-[10px] text-slate-400 font-mono truncate">{{ formatSymbol(r.symbol) }}</span>
             </span>
-            <!-- 爱心收藏按钮 -->
+            <!-- 自选星标按钮 -->
             <span
               @click.stop="toggleFav(r.symbol)"
               :title="isFavored(r.symbol) ? '取消自选' : '加入自选'"
-              class="shrink-0 cursor-pointer p-1 text-slate-300 dark:text-slate-500 hover:text-rose-500 dark:hover:text-rose-400 transition-colors"
-              :class="isFavored(r.symbol) ? 'text-rose-500 dark:text-rose-400' : ''"
+              class="shrink-0 cursor-pointer p-1 text-slate-300 dark:text-slate-600 hover:text-amber-400 dark:hover:text-amber-400 transition-colors"
+              :class="isFavored(r.symbol) ? 'text-amber-400' : ''"
             >
-              <svg class="w-4 h-4" :class="isFavored(r.symbol) ? 'fill-rose-500 dark:fill-rose-400' : 'fill-none'" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+              <svg class="w-4 h-4" :class="isFavored(r.symbol) ? 'fill-amber-400' : 'fill-none'" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M11.48 3.499c.174-.383.72-.383.894 0l2.64 5.352 5.9 1.15c.422.082.59.59.282.895l-4.244 4.14 1.002 5.86c.071.423-.372.746-.75.545l-5.267-2.77-5.268 2.77c-.378.201-.821-.122-.75-.545l1.002-5.86-4.244-4.14c-.308-.305-.14-.813.282-.895l5.9-1.15 2.64-5.352z" />
               </svg>
             </span>
           </button>
         </div>
 
         <div v-if="recentSearches.length === 0 && defaultRecommend.length === 0" class="px-3 py-6 text-center text-xs text-slate-400">
-          暂无搜索记录与热门推荐
+          无搜索历史
         </div>
       </template>
     </div>
@@ -186,8 +190,6 @@ const defaultRecommend = ref<StockInfo[]>([]);
 
 let timer: ReturnType<typeof setTimeout> | null = null;
 
-
-
 // 将键盘导航列表扁平化，能无缝支持无输入时的【最近搜索】+【热门推荐】键盘光标移动
 const displayList = computed<StockInfo[]>(() => {
   if (query.value.trim()) {
@@ -202,8 +204,15 @@ function openPanel() {
 }
 
 function focusInput() {
-  inputRef.value?.focus();
+  open.value = true;
+  nextTick(() => {
+    inputRef.value?.focus();
+  });
 }
+
+defineExpose({
+  focus: focusInput,
+});
 
 function onInput() {
   open.value = true;
@@ -276,7 +285,7 @@ function isFavored(symbol: string): boolean {
   return props.watchlist.some(s => s.toUpperCase() === target);
 }
 
-// 触发自选 (爱心按钮)
+// 触发自选 (星标按钮)
 function toggleFav(symbol: string) {
   emit('add-watch', symbol);
 }
@@ -323,6 +332,7 @@ function onGlobalKey(e: KeyboardEvent) {
 }
 
 function badge(symbol: string): string {
+  if (symbol.toLowerCase().endsWith('main')) return '期货';
   return MARKET_LABEL[marketOf(symbol) || 'us'] || '';
 }
 

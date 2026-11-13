@@ -71,6 +71,15 @@ MARKET = {
             "post":    {"label": "盘后", "min_interval": 30.0, "max_interval": 60.0},  # 盘后 30-60s
         },
     },
+    "futures": {
+        "name": "期货",
+        # 国际期货（东方财富 109 市场）服务端更新较频繁，本地 5s 轮询足够且合规
+        "min_interval": 5.0,
+        "server_update": [3.0, 15.0],
+        "batch_interval": 5.0,
+        "delay_label": "延迟 15 分钟，仅供参考",
+        "delay_full": "期货【延迟 15 分钟，仅供参考，不可实盘交易】",
+    },
 }
 
 
@@ -110,13 +119,16 @@ DEDUP_ENABLED = True            # 价格与涨跌幅均未变化时，不刷新�
 
 # ============================================================
 # 5. 市场识别工具（前后端共用同一套带前缀规则）
-#    美股 usAAPL / 沪A sh600000 / 深A sz000001 / 港股 hk00700
+#    美股 usAAPL / 沪A sh600000 / 深A sz000001 / 港股 hk00700 / 期货 NQmain,ESmain,YMmain,VXmain
 # ============================================================
 def market_of(symbol: str) -> Optional[str]:
     """识别带前缀代码所属市场。"""
     if not symbol:
         return None
     s = symbol.upper()
+    # 期货主力合约：NQmain/ESmain/YMmain/VXmain → 统一识别为 futures
+    if s.endswith("MAIN"):
+        return "futures"
     if s.startswith("US"):
         return "us"
     if s.startswith("SH"):
