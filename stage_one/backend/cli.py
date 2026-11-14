@@ -15,159 +15,122 @@ StockVision CLI 工具 (sv)
 """
 
 import sys
-import os
-import json
 import argparse
-import time
-import subprocess
-import httpx
 
-BASE_URL = "http://127.0.0.1:8000"
-APP_DIR = os.path.dirname(os.path.abspath(__file__))
-client = httpx.Client(base_url=BASE_URL, timeout=10.0, trust_env=False)
-
-
-def _ensure_app_running() -> bool:
-    try:
-        resp = client.get("/api/health")
-        if resp.status_code == 200:
-            return True
-    except Exception:
-        pass
-    venv_py = os.path.join(os.path.dirname(os.path.dirname(APP_DIR)), ".venv", "Scripts", "python.exe")
-    python_exe = venv_py if os.path.exists(venv_py) else sys.executable
-    desktop_script = os.path.join(APP_DIR, "desktop_main.py")
-    subprocess.Popen([python_exe, desktop_script], cwd=APP_DIR)
-    for _ in range(15):
-        time.sleep(0.2)
-        try:
-            resp = client.get("/api/health")
-            if resp.status_code == 200:
-                return True
-        except Exception:
-            continue
-    return False
+import control_client as cc
 
 
 def cmd_open(args):
-    _ensure_app_running()
-    try:
-        resp = client.post("/api/control/open", json={"symbol": args.symbol, "period": args.period})
-        data = resp.json()
-        print(f"已成功切换至: {data.get('state', {}).get('symbol')} ({data.get('state', {}).get('period')})")
-    except Exception as e:
-        print(f"打开图表失败 (请先启动桌面软件): {e}")
+    data = cc.open_chart(args.symbol, period=args.period)
+    if data.get("status") == "error":
+        print(data.get("message"))
+        return
+    st = data.get("state", {})
+    print(f"已成功切换至: {st.get('symbol')} ({st.get('period')})")
 
 
 def cmd_state(args):
-    try:
-        resp = client.get("/api/control/state")
-        data = resp.json()
-        st = data.get("state", {})
-        print(f"当前标的: {st.get('symbol')} | 周期: {st.get('period')} | 最新价: {st.get('current_price')}")
-        print(f"已连接前端窗口: {data.get('connected_clients', 0)} 个")
-        annos = data.get("annotations", [])
-        print(f"当前图表已有标注: {len(annos)} 项")
-        for a in annos[:5]:
-            print(f"  - [{a.get('kind')}] {a.get('id')}: {a.get('source')}")
-    except Exception as e:
-        print(f"获取状态失败: {e}")
+    data = cc.get_state()
+    if data.get("status") == "error":
+        print(data.get("message"))
+        return
+    st = data.get("state", {})
+    print(f"当前标的: {st.get('symbol')} | 周期: {st.get('period')} | 最新价: {st.get('current_price')}")
+    print(f"已连接前端窗口: {data.get('connected_clients', 0)} 个")
+    annos = data.get("annotations", [])
+    print(f"当前图表已有标注: {len(annos)} 项")
+    for a in annos[:5]:
+        print(f"  - [{a.get('kind')}] {a.get('id')}: {a.get('source')}")
 
 
 def cmd_mark(args):
-    try:
-        marker = {
-            "time": args.time,
-            "position": args.pos,
-            "color": args.color,
-            "shape": args.shape,
-            "text": args.text,
-        }
-        resp = client.post("/api/control/markers", json={"symbol": args.symbol, "markers": [marker]})
-        print(f"成功添加标记: {args.text} 于 {args.time}")
-    except Exception as e:
-        print(f"添加标记失败: {e}")
+    marker = {
+        "time": args.time,
+        "position": args.pos,
+        "color": args.color,
+        "shape": args.shape,
+        "text": args.text,
+    }
+    data = cc.add_markers(args.symbol, [marker])
+    if data.get("status") == "error":
+        print(data.get("message"))
+        return
+    print(f"成功添加标记: {args.text} 于 {args.time}")
 
 
 def cmd_line(args):
-    try:
-        line = {
-            "price": float(args.price),
-            "color": args.color,
-            "lineWidth": 2,
-            "lineStyle": int(args.style),
-            "title": args.title,
-        }
-        resp = client.post("/api/control/lines", json={"symbol": args.symbol, "lines": [line]})
-        print(f"成功绘制水平线: {args.title} (${args.price})")
-    except Exception as e:
-        print(f"绘制价格线失败: {e}")
+    line = {
+        "price": float(args.price),
+        "color": args.color,
+        "lineWidth": 2,
+        "lineStyle": int(args.style),
+        "title": args.title,
+    }
+    data = cc.draw_lines(args.symbol, [line])
+    if data.get("status") == "error":
+        print(data.get("message"))
+        return
+    print(f"成功绘制水平线: {args.title} (${args.price})")
 
 
 def cmd_box(args):
-    try:
-        box = {
-            "price1": float(args.price1),
-            "price2": float(args.price2),
-            "time1": args.time1,
-            "time2": args.time2,
-            "label": args.label,
-            "fillColor": args.fill,
-            "borderColor": args.border,
-        }
-        resp = client.post("/api/control/boxes", json={"symbol": args.symbol, "boxes": [box]})
-        print(f"成功绘制矩形区间: {args.label} [{args.price2} ~ {args.price1}]")
-    except Exception as e:
-        print(f"绘制矩形失败: {e}")
+    box = {
+        "price1": float(args.price1),
+        "price2": float(args.price2),
+        "time1": args.time1,
+        "time2": args.time2,
+        "label": args.label,
+        "fillColor": args.fill,
+        "borderColor": args.border,
+    }
+    data = cc.draw_boxes(args.symbol, [box])
+    if data.get("status") == "error":
+        print(data.get("message"))
+        return
+    print(f"成功绘制矩形区间: {args.label} [{args.price2} ~ {args.price1}]")
 
 
 def cmd_analyze(args):
-    try:
-        resp = client.post(
-            "/api/control/strategy",
-            json={
-                "symbol": args.symbol,
-                "period": args.period,
-                "mode": args.mode,
-                "draw_on_chart": args.draw,
-            },
-        )
-        data = resp.json()
-        summary = data.get("summary", {})
-        print(f"=== {args.symbol} 价格行为策略分析结果 ===")
-        print(f"道氏结构: {summary.get('dow_phase')}")
-        print(f"200 EMA 门禁: {summary.get('ema_200_gate', {}).get('trend')} ({summary.get('ema_200_gate', {}).get('status')})")
-        print(f"波浪结构: {summary.get('wave', {}).get('pattern')} -> {summary.get('wave', {}).get('current_wave')}")
-        if summary.get('wave', {}).get('invalidation_price'):
-            print(f"波浪铁律证伪价: ${summary.get('wave', {}).get('invalidation_price')} ({summary.get('wave', {}).get('invalidation_reason')})")
-        tp = summary.get("trade_plan", {})
-        print(f"交易计划: {tp.get('direction')} | 入场: ${tp.get('entry')} | 止损: ${tp.get('stop_loss')} | TP1: ${tp.get('tp1')}")
-        print(f"净盈亏比 (已扣8bps): {tp.get('rr_ratio')}R (>=2.5R 门禁: {'通过' if tp.get('passed_gates') else '未通过'})")
-        if args.draw:
-            print("✓ 已自动将标注、水平线与箱体渲染至桌面图表")
-    except Exception as e:
-        print(f"执行策略失败: {e}")
+    data = cc.run_strategy(
+        args.symbol,
+        period=args.period,
+        mode=args.mode,
+        draw_on_chart=args.draw,
+    )
+    if data.get("status") == "error":
+        print(data.get("message"))
+        return
+
+    summary = data.get("summary", {})
+    print(f"=== {args.symbol} 价格行为策略分析结果 ===")
+    print(f"道氏结构: {summary.get('dow_phase')}")
+    ema_gate = summary.get("ema_200_gate", {})
+    print(f"200 EMA 门禁: {ema_gate.get('trend')} ({ema_gate.get('status')})")
+    wave = summary.get("wave", {})
+    print(f"波浪结构: {wave.get('pattern')} -> {wave.get('current_wave')}")
+    if wave.get("invalidation_price"):
+        print(f"波浪铁律证伪价: ${wave.get('invalidation_price')} ({wave.get('invalidation_reason')})")
+    tp = summary.get("trade_plan", {})
+    print(f"交易计划: {tp.get('direction')} | 入场: ${tp.get('entry')} | 止损: ${tp.get('stop_loss')} | TP1: ${tp.get('tp1')}")
+    print(f"净盈亏比 (已扣8bps): {tp.get('rr_ratio')}R (>=2.5R 门禁: {'通过' if tp.get('passed_gates') else '未通过'})")
+    if args.draw:
+        print("✓ 已自动将标注、水平线与箱体渲染至桌面图表")
 
 
 def cmd_capture(args):
-    try:
-        resp = client.post("/api/control/capture")
-        data = resp.json()
-        if data.get("status") == "ok":
-            print(f"✓ 图表截图已保存至: {data.get('file_path')}")
-        else:
-            print(f"截图失败: {data.get('message')}")
-    except Exception as e:
-        print(f"截取图表失败: {e}")
+    data = cc.capture_chart()
+    if data.get("status") == "ok":
+        print(f"✓ 图表截图已保存至: {data.get('file_path')}")
+    else:
+        print(f"截图失败: {data.get('message')}")
 
 
 def cmd_clear(args):
-    try:
-        resp = client.post("/api/control/clear", json={"symbol": args.symbol, "kind": args.kind})
-        data = resp.json()
-        print(f"✓ 已清除 {args.symbol} 的标注 (共删除 {data.get('deleted', 0)} 项)")
-    except Exception as e:
-        print(f"清除标注失败: {e}")
+    data = cc.clear_annotations(args.symbol, kind=args.kind)
+    if data.get("status") == "error":
+        print(data.get("message"))
+        return
+    print(f"✓ 已清除 {args.symbol} 的标注 (共删除 {data.get('deleted', 0)} 项)")
 
 
 def main():
@@ -211,7 +174,7 @@ def main():
     p_box.add_argument("--border", default="#3b82f6", help="边框颜色")
 
     # analyze
-    p_ana = subparsers.add_parser("analyze", help="执行 Investment_Assistant 价格行为策略")
+    p_ana = subparsers.add_parser("analyze", help="执行价格行为策略")
     p_ana.add_argument("symbol", help="股票代码")
     p_ana.add_argument("--period", default="1d", help="周期")
     p_ana.add_argument("--mode", default="swing", choices=["swing", "day"], help="模式")

@@ -217,6 +217,63 @@ class TestStockBackend(unittest.TestCase):
         self.assertEqual(manager.yahoo.name, "yahoo")
         self.assertIsNone(manager.last_source)
 
+    def test_ash_and_hk_disabled(self):
+        """验证 A股与港股相关支持与分析功能已被注释/停用，仅美股等生效"""
+        import asyncio
+        from quote_config import MARKET, market_of
+        from main import normalize_symbol, norm_market_prefix, DEFAULT_WATCHLIST
+        from quote_provider import quote_provider
+        import mcp_server
+
+        # 1. MARKET 配置中不应包含 ash, asz, hk
+        self.assertNotIn("ash", MARKET)
+        self.assertNotIn("asz", MARKET)
+        self.assertNotIn("hk", MARKET)
+        self.assertIn("us", MARKET)
+
+        # 2. market_of 不再识别 A股与港股前缀
+        self.assertIsNone(market_of("sh600519"))
+        self.assertIsNone(market_of("sz000001"))
+        self.assertIsNone(market_of("hk00700"))
+        self.assertEqual(market_of("usAAPL"), "us")
+
+        # 3. STOCKS_POOL 中不应包含 A股和港股标的
+        pool_markets = {s.get("market") for s in STOCKS_POOL}
+        self.assertNotIn("ash", pool_markets)
+        self.assertNotIn("asz", pool_markets)
+        self.assertNotIn("hk", pool_markets)
+        self.assertIn("us", pool_markets)
+
+        # 4. DEFAULT_WATCHLIST 默认自选不应包含 A股和港股
+        for sym in DEFAULT_WATCHLIST:
+            self.assertFalse(sym.startswith(("sh", "sz", "hk")), f"默认自选不应包含 A/HK 标的: {sym}")
+
+        # 5. normalize_symbol 不再将纯数字识别为沪深/港股，默认兜底美股
+        self.assertEqual(normalize_symbol("600519"), "US600519")
+        self.assertEqual(normalize_symbol("00700"), "US00700")
+
+        # 6. quote_provider 对 A股/港股标的直接返回 disabled 状态，不再发起外部请求
+        quotes = asyncio.run(quote_provider.get_quotes(["sh600519", "hk00700"]))
+        self.assertEqual(len(quotes), 2)
+        self.assertEqual(quotes[0]["status"], "disabled")
+        self.assertEqual(quotes[1]["status"], "disabled")
+
+        # 7. DataProviderManager 对 A股/港股不提供候选源，直接抛出 404 HTTPException
+        from fastapi import HTTPException
+        manager = DataProviderManager()
+        with self.assertRaises(HTTPException) as ctx_sh:
+            asyncio.run(manager.fetch_klines("sh600519", "1d"))
+        self.assertEqual(ctx_sh.exception.status_code, 404)
+
+        with self.assertRaises(HTTPException) as ctx_hk:
+            asyncio.run(manager.fetch_klines("hk00700", "1d"))
+        self.assertEqual(ctx_hk.exception.status_code, 404)
+
+        # 8. MCP Server 辅助函数 _norm_symbol 不再将数字归一为 ash/asz/hk
+        self.assertEqual(mcp_server._norm_symbol("NVDA"), "usNVDA")
+        self.assertNotEqual(mcp_server._norm_symbol("600519"), "ash600519")
+        self.assertNotEqual(mcp_server._norm_symbol("00700"), "hk00700")
+
 
 def np_sin(x):
     """简易 sin 计算 (避免测试中引入 numpy 依赖问题)"""

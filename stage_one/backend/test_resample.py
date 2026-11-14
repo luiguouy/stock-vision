@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-_unit test_ for 季K/半年K/年K 重采样 (data_provider._resample_to_period)
+_unit test_ for 季K/半年K/年K 重采样 (data_provider.resample_to_period)
 以及前复权 + 重采样的正确顺序。
 """
 import sys
@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 import pandas as pd
 import numpy as np
-from data_provider import TencentProvider, apply_forward_adjustment, validate_klines
+from data_provider import resample_to_period, apply_forward_adjustment, validate_klines
 
 
 def _make_daily(start_year=2020, n_years=3, base=100.0, drift=0.0):
@@ -38,7 +38,7 @@ def _make_daily(start_year=2020, n_years=3, base=100.0, drift=0.0):
 
 def test_resample_quarterly():
     df = _make_daily(2020, 2, base=100)
-    out = TencentProvider._resample_to_period(df, "QS")
+    out = resample_to_period(df, "QS")
     # 2 年 => 8 个季度
     assert len(out) == 8, f"季K应为8根, 实际{len(out)}"
     # 每根季度K的 OHLC 聚合正确
@@ -51,14 +51,14 @@ def test_resample_quarterly():
 
 def test_resample_semiannual():
     df = _make_daily(2020, 2, base=100)
-    out = TencentProvider._resample_to_period(df, "2QS")
+    out = resample_to_period(df, "2QS")
     assert len(out) == 4, f"半年K应为4根, 实际{len(out)}"
     print("✓ test_resample_semiannual")
 
 
 def test_resample_yearly():
     df = _make_daily(2020, 3, base=100)
-    out = TencentProvider._resample_to_period(df, "YS")
+    out = resample_to_period(df, "YS")
     assert len(out) == 3, f"年K应为3根, 实际{len(out)}"
     # 年K第一根应为 2020-01-01
     assert out["date"].iloc[0] == "2020-01-01"
@@ -83,7 +83,7 @@ def test_forward_adjust_before_resample_continuous():
     raw = pd.DataFrame(rows)
     # 正确顺序: 先前复权再重采样
     adj = apply_forward_adjustment(raw)
-    yearly = TencentProvider._resample_to_period(adj, "YS")
+    yearly = resample_to_period(adj, "YS")
     # 年K相邻应连续 (下一根开盘≈上一根收盘)
     for i in range(1, len(yearly)):
         ratio = yearly["open"].iloc[i] / yearly["close"].iloc[i - 1]

@@ -1,6 +1,4 @@
-// 前端技术分析纯计算引擎 (移植自后端 analysis.py)
-// 用于当后端 API 发生 CORS 错误或不可用时，前端自包含降级运行计算分析
-// 支持多周期: 支撑阻力位会随K线周期自适应调整半衰期
+// 前端技术分析与降级计算引擎 (与后端 analysis.py 算法保持双向同步)
 
 export interface KLinePoint {
   time: string;
@@ -26,12 +24,21 @@ export interface RangeStatPoint {
 }
 
 export interface RangeStats {
+  bars_count?: number;
+  total_return_pct?: number;
+  period_amplitude_pct?: number;
+  avg_daily_range_pct?: number;
+  win_rate_pct?: number;
   max_rise: RangeStatPoint;
   max_fall: RangeStatPoint;
 }
 
 // 多周期算法参数表 (与后端 analysis.py PERIOD_PARAMS 保持一致)
 const PERIOD_PARAMS: Record<string, { half_life: number; window: number }> = {
+  '5m': { half_life: 30, window: 5 },
+  '15m': { half_life: 30, window: 5 },
+  '1h': { half_life: 30, window: 5 },
+  '4h': { half_life: 30, window: 5 },
   '1d': { half_life: 60, window: 5 },
   '1w': { half_life: 26, window: 4 },
   '1M': { half_life: 12, window: 3 },
@@ -41,24 +48,67 @@ const PERIOD_PARAMS: Record<string, { half_life: number; window: number }> = {
 };
 
 /**
- * 将日线 K 线按目标周期重采样 (测试模式下使用)。
- *
- * 测试模式默认生成的是 4500 根日线；若不重采样，选周K/月K/季K/半年K/年K 时
- * 会直接把日线渲染出来，导致「周K、月K 显示成了日K」。此函数复刻后端
- * PERIOD_MAP 的聚合行为 (周->按周一归桶 / 月->按月 / 季->按季 / 半年 / 年)，
- * open=桶内首根, high=max, low=min, close=桶内末根, volume=求和, 标签取桶内首根日期。
+ * 生成测试/演示模式下的模拟日线 K 线数据
  */
+export function generateMockKLines(symbol: string, days: number = 320, basePrice: number = 150): KLinePoint[] {
+  const data: KLinePoint[] = [];
+  let price = basePrice;
+  const now = new Date();
+
+  const volatilityMap: Record<string, number> = {
+    AAPL: 0.02,
+    NVDA: 0.035,
+    TSLA: 0.04,
+    MSFT: 0.018,
+    GOOGL: 0.022,
+    AMZN: 0.025,
+    META: 0.03,
+    AMD: 0.038,
+    MU: 0.045,
+    SNDK: 0.032,
+  };
+
+  const volatility = volatilityMap[symbol.toUpperCase()] || 0.025;
+
+  for (let i = days; i >= 0; i--) {
+    const date = new Date(now);
+    date.setDate(date.getDate() - i);
+
+    if (date.getDay() === 0 || date.getDay() === 6) continue;
+
+    const change = (Math.random() - 0.5) * 2 * volatility;
+    const open = price;
+    const close = price * (1 + change);
+    const high = Math.max(open, close) * (1 + Math.random() * volatility * 0.5);
+    const low = Math.min(open, close) * (1 - Math.random() * volatility * 0.5);
+    const volume = Math.floor(Math.random() * 50_000_000) + 5_000_000;
+
+    data.push({
+      time: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`,
+      open: parseFloat(open.toFixed(2)),
+      high: parseFloat(high.toFixed(2)),
+      low: parseFloat(low.toFixed(2)),
+      close: parseFloat(close.toFixed(2)),
+      volume,
+    });
+
+    price = close;
+  }
+
+  return data;
+}
+
 function parseYMD(t: string): [number, number, number] {
-  const [y, m, d] = t.split('-').map(Number);
+  const [y, m, d] = t.slice(0, 10).split('-').map(Number);
   return [y, m, d];
 }
 
 function bucketKey(t: string, period: string): string {
   const [y, m, d] = parseYMD(t);
   const dt = new Date(Date.UTC(y, m - 1, d));
-  const dow = dt.getUTCDay(); // 0=周日
+  const dow = dt.getUTCDay();
   if (period === '1w') {
-    const diff = (dow + 6) % 7; // 距离本周一的天数
+    const diff = (dow + 6) % 7;
     const monday = new Date(Date.UTC(y, m - 1, d - diff));
     return monday.toISOString().slice(0, 10);
   }
@@ -69,6 +119,9 @@ function bucketKey(t: string, period: string): string {
   return t;
 }
 
+/**
+ * 将日线 K 线按目标周期重采样 (演示模式下使用)
+ */
 export function resampleMockKLines(daily: KLinePoint[], period: string): KLinePoint[] {
   if (period === '1d' || !daily.length) return daily;
   const groups = new Map<string, KLinePoint[]>();
@@ -92,9 +145,6 @@ export function resampleMockKLines(daily: KLinePoint[], period: string): KLinePo
   return out;
 }
 
-/**
- * 局部极值寻找算法 (保留价格和K线位置索引)
- */
 function findExtrema(data: KLinePoint[], windowSize: number = 5) {
   const extrema: { price: number; idx: number }[] = [];
   for (let i = windowSize; i < data.length - windowSize; i++) {
@@ -111,45 +161,34 @@ function findExtrema(data: KLinePoint[], windowSize: number = 5) {
 }
 
 /**
- * 前端自适应阻力支撑位计算逻辑 (与后端算法完全一致，支持多周期)
- * @param data K线数据
- * @param windowSize 局部极值窗口 (默认5)
- * @param period K线周期 '1d'/'1w'/'1M'，决定半衰期 (默认 '1d')
+ * 自适应支撑阻力位计算（与后端 analysis.calculate_sr_levels 算法一致）
  */
 export function calculateSRLevels(data: KLinePoint[], windowSize: number = 5, period: string = '1d'): SRLevel[] {
   const totalLen = data.length;
-  
-  // 根据周期获取参数
   const params = PERIOD_PARAMS[period] || PERIOD_PARAMS['1d'];
   const halfLife = params.half_life;
-  // 若调用方未显式指定非默认 window，则使用周期对应的默认值
-  const win = (windowSize === 5 && period !== '1d') ? params.window : windowSize;
-  
+  const win = windowSize === 5 && period !== '1d' ? params.window : windowSize;
+
   if (totalLen < win * 2 + 1) return [];
 
   const latestPrice = data[totalLen - 1].close;
 
-  // 1. 自适应合并阈值：最近 20 根K线均波幅
   const lookback = Math.min(20, totalLen);
   let totalRange = 0;
   for (let i = totalLen - lookback; i < totalLen; i++) {
-    totalRange += (data[i].high - data[i].low);
+    totalRange += data[i].high - data[i].low;
   }
   const atrApprox = totalRange / lookback;
 
-  // 设置安全边界 [0.6%, 2.5%]
   const minDist = latestPrice * 0.006;
   const maxDist = latestPrice * 0.025;
   const absThreshold = Math.max(minDist, Math.min(atrApprox * 0.8, maxDist));
 
-  // 2. 提取局部极值点
   const extrema = findExtrema(data, win);
   if (extrema.length === 0) return [];
 
-  // 按价格从低到高排序
   extrema.sort((a, b) => a.price - b.price);
 
-  // 3. 价格合并与时间衰减权重累加 (半衰期随周期变化)
   const clusters: { price: number; weight: number; count: number }[] = [];
 
   extrema.forEach(({ price, idx }) => {
@@ -171,19 +210,15 @@ export function calculateSRLevels(data: KLinePoint[], windowSize: number = 5, pe
     }
   });
 
-  // 4. 重划支阻与接近度综合打分
   const supportCandidates: (SRLevel & { score: number })[] = [];
   const resistanceCandidates: (SRLevel & { score: number })[] = [];
 
-  clusters.forEach(c => {
+  clusters.forEach((c) => {
     const levelPrice = c.price;
     const distPct = Math.abs(levelPrice - latestPrice) / latestPrice;
-    
-    // 临近度因数
     const proximityFactor = 1.0 / (1.0 + 8.0 * distPct);
     const score = c.weight * proximityFactor;
 
-    // 确定强弱和星级
     let stars = 2;
     let rank: 'Weak' | 'Medium' | 'Strong' = 'Weak';
     if (c.weight >= 3.5) {
@@ -199,7 +234,7 @@ export function calculateSRLevels(data: KLinePoint[], windowSize: number = 5, pe
       count: c.count,
       stars,
       level: rank,
-      score
+      score,
     };
 
     if (levelPrice < latestPrice) {
@@ -209,38 +244,27 @@ export function calculateSRLevels(data: KLinePoint[], windowSize: number = 5, pe
     }
   });
 
-  // 5. 按最终 Score 排序并各取前 3 个
   supportCandidates.sort((a, b) => b.score - a.score);
   resistanceCandidates.sort((a, b) => b.score - a.score);
 
-  return [
-    ...resistanceCandidates.slice(0, 3),
-    ...supportCandidates.slice(0, 3)
-  ];
+  return [...resistanceCandidates.slice(0, 3), ...supportCandidates.slice(0, 3)].map(
+    ({ score: _score, ...item }) => item
+  );
 }
 
 /**
- * 前端区间最大涨跌统计
- *
- * 采用"运行峰值 / 运行谷值"的最大回撤 / 最大反弹算法：
- *   - 最大连贯上涨：扫描区间内每一个低点（运行中的最低点），记录从该谷值到其后
- *     最高点的累计涨幅峰值。不再只锁定"全局最低点之后"，因此对任何区间都会响应。
- *   - 最大连贯下跌：扫描区间内每一个高点（运行中的最高点），记录从该峰值到其后
- *     最低点的最大跌幅（最大回撤）。旧算法只取"全局最高点之后"的最低点，当区间
- *     最高点落在末尾时（近期上涨行情极常见）会退化为 0 且不随区间变化，故改为
- *     全程跟踪运行峰值，能正确捕获发生在最高点之前的大跌。
- *
- * 该实现与后端 analysis.calculate_range_stats 保持一致。
+ * 区间量化统计（与后端 analysis.calculate_range_stats 算法及输出结构一致）
  */
 export function calculateRangeStats(data: KLinePoint[], sDate: string, eDate: string): RangeStats | null {
-  const rangeData = data.filter(d => d.time >= sDate && d.time <= eDate);
+  const s = sDate.slice(0, 10);
+  const e = eDate.slice(0, 10);
+  const rangeData = data.filter((d) => d.time.slice(0, 10) >= s && d.time.slice(0, 10) <= e);
   if (rangeData.length === 0) return null;
 
-  // 最大连贯上涨：从运行谷值到其后最高点的区间涨幅峰值
   let trough = rangeData[0];
   let maxRisePct = 0;
-  let riseStart = trough.time;
-  let riseEnd = trough.time;
+  let riseStart = trough.time.slice(0, 10);
+  let riseEnd = trough.time.slice(0, 10);
   for (let i = 0; i < rangeData.length; i++) {
     const d = rangeData[i];
     if (d.low < trough.low) trough = d;
@@ -248,17 +272,16 @@ export function calculateRangeStats(data: KLinePoint[], sDate: string, eDate: st
       const rally = ((d.high - trough.low) / trough.low) * 100;
       if (rally > maxRisePct) {
         maxRisePct = rally;
-        riseStart = trough.time;
-        riseEnd = d.time;
+        riseStart = trough.time.slice(0, 10);
+        riseEnd = d.time.slice(0, 10);
       }
     }
   }
 
-  // 最大连贯下跌（最大回撤）：从运行峰值到其后最低点的区间跌幅谷值
   let peak = rangeData[0];
   let maxFallPct = 0;
-  let fallStart = peak.time;
-  let fallEnd = peak.time;
+  let fallStart = peak.time.slice(0, 10);
+  let fallEnd = peak.time.slice(0, 10);
   for (let i = 0; i < rangeData.length; i++) {
     const d = rangeData[i];
     if (d.high > peak.high) peak = d;
@@ -266,14 +289,33 @@ export function calculateRangeStats(data: KLinePoint[], sDate: string, eDate: st
       const drawdown = ((d.low - peak.high) / peak.high) * 100;
       if (drawdown < maxFallPct) {
         maxFallPct = drawdown;
-        fallStart = peak.time;
-        fallEnd = d.time;
+        fallStart = peak.time.slice(0, 10);
+        fallEnd = d.time.slice(0, 10);
       }
     }
   }
 
+  const firstOpen = rangeData[0].open > 0 ? rangeData[0].open : rangeData[0].close;
+  const lastClose = rangeData[rangeData.length - 1].close;
+  const totalReturnPct = firstOpen > 0 ? ((lastClose - firstOpen) / firstOpen) * 100 : 0;
+
+  const periodMin = Math.min(...rangeData.map((d) => d.low));
+  const periodMax = Math.max(...rangeData.map((d) => d.high));
+  const periodAmplitudePct = periodMin > 0 ? ((periodMax - periodMin) / periodMin) * 100 : 0;
+
+  const dailyRanges = rangeData.map((d) => (d.low > 0 ? ((d.high - d.low) / d.low) * 100 : 0));
+  const avgDailyRangePct = dailyRanges.reduce((acc, v) => acc + v, 0) / rangeData.length;
+
+  const upBars = rangeData.filter((d) => d.close >= d.open).length;
+  const winRatePct = (upBars / rangeData.length) * 100;
+
   return {
-    max_rise: { pct: maxRisePct, start: riseStart, end: riseEnd },
-    max_fall: { pct: maxFallPct, start: fallStart, end: fallEnd }
+    bars_count: rangeData.length,
+    total_return_pct: Number(totalReturnPct.toFixed(2)),
+    period_amplitude_pct: Number(periodAmplitudePct.toFixed(2)),
+    avg_daily_range_pct: Number(avgDailyRangePct.toFixed(2)),
+    win_rate_pct: Number(winRatePct.toFixed(2)),
+    max_rise: { pct: Number(maxRisePct.toFixed(2)), start: riseStart, end: riseEnd },
+    max_fall: { pct: Number(maxFallPct.toFixed(2)), start: fallStart, end: fallEnd },
   };
 }

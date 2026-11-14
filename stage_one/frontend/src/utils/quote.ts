@@ -32,6 +32,8 @@ export interface Quote {
   price: number | null;
   prevClose: number | null;
   open: number | null;
+  high: number | null;
+  low: number | null;
   change: number | null;      // 涨跌额
   changePct: number | null;   // 涨跌幅 %
   updateTime: string;         // 服务端更新时间（已格式化）
@@ -108,6 +110,19 @@ class QuoteEngine {
   private lastBatchAt = 0;
   // 单批最多请求标的数（避免一次性过大）
   private readonly BATCH_MAX = 20;
+  private activeSymbol: string = '';
+
+  /** 设置当前主图正在查看的标的（豁免冷门降频，立即激活高频轮询） */
+  setActiveSymbol(sym: string): void {
+    const prev = this.activeSymbol;
+    this.activeSymbol = sym;
+    const m = this.meta.get(sym);
+    if (m && prev !== sym) {
+      m.intervalMul = 1;
+      m.noChange = 0;
+      m.nextAllowed = 0;
+    }
+  }
 
   /** 启动时从后端拉取配置（刷新间隔/延迟标注/阈值） */
   async loadConfig(): Promise<void> {
@@ -290,6 +305,8 @@ class QuoteEngine {
             price: r.price ?? null,
             prevClose: r.prev_close ?? null,
             open: r.open ?? null,
+            high: r.high ?? null,
+            low: r.low ?? null,
             change: r.change ?? null,
             changePct: r.change_pct ?? null,
             updateTime: r.update_time ?? '',
@@ -316,14 +333,19 @@ class QuoteEngine {
         }
         // 去重：价格与涨跌幅均未变化 → 不通知、不重渲染
         const prev = this.quotes.get(s);
-        const changed = !prev || prev.price !== q.price || prev.changePct !== q.changePct;
+        const changed =
+          !prev ||
+          prev.price !== q.price ||
+          prev.changePct !== q.changePct ||
+          prev.extendedPrice !== q.extendedPrice ||
+          prev.updateTime !== q.updateTime;
         m.status = 'ok';
         m.lastUpdate = now;                  // 服务端真有新行情
-        if (changed) {
+        if (changed || s === this.activeSymbol) {
           m.noChange = 0;
-          m.intervalMul = 1;                 // 有变化 → 复位为基准间隔
+          m.intervalMul = 1;                 // 有变化或为主图标的 → 复位为基准间隔
           this.quotes.set(s, q);
-          this.listeners.forEach((cb) => cb(s, q)); // 仅变化时通知 UI 刷新
+          this.listeners.forEach((cb) => cb(s, q)); // 通知 UI 刷新
         } else {
           m.noChange += 1;
           // 冷门：连续无变化达阈值 → 间隔放大（自适应），但不超上限

@@ -10,6 +10,7 @@ export interface WSControlMessage {
     | 'draw_boxes'
     | 'draw_channel_lines'
     | 'draw_wave_lines'
+    | 'draw_time_lines'
     | 'clear'
     | 'run_strategy'
     | 'capture_chart'
@@ -23,6 +24,7 @@ export interface WSControlMessage {
   boxes?: any[];
   channel_lines?: any[];
   wave_lines?: any;
+  time_lines?: any[];
   kind?: string;
   request_id?: string;
 }
@@ -34,6 +36,7 @@ export function useWebSocketControl(handlers: {
   onDrawBoxes?: (boxes: any[], symbol?: string) => void;
   onDrawChannelLines?: (channelLines: any[], symbol?: string) => void;
   onDrawWaveLines?: (waveLines: any, symbol?: string) => void;
+  onDrawTimeLines?: (timeLines: any[], symbol?: string) => void;
   onClearAnnotations?: (kind?: string, symbol?: string) => void;
   onRunStrategy?: (mode?: string, symbol?: string) => void;
   onCaptureChart?: (requestId?: string) => Promise<string | null> | (string | null);
@@ -81,6 +84,8 @@ export function useWebSocketControl(handlers: {
             handlers.onDrawChannelLines(msg.channel_lines, msg.symbol);
           } else if (msg.action === 'draw_wave_lines' && msg.wave_lines && handlers.onDrawWaveLines) {
             handlers.onDrawWaveLines(msg.wave_lines, msg.symbol);
+          } else if (msg.action === 'draw_time_lines' && handlers.onDrawTimeLines) {
+            handlers.onDrawTimeLines(msg.time_lines || [], msg.symbol);
           } else if (msg.action === 'clear' && handlers.onClearAnnotations) {
             handlers.onClearAnnotations(msg.kind, msg.symbol);
           } else if (msg.action === 'run_strategy' && handlers.onRunStrategy) {

@@ -73,15 +73,32 @@ export interface ChartWaveLinesItem {
   } | null;
 }
 
+export interface TimeLineItem {
+  id?: string;
+  time: any;
+  color?: string;
+  lineWidth?: number;
+  lineStyle?: 'solid' | 'dashed' | 'dotted';
+  isResonance?: boolean;
+  score?: number;
+  daysFromNow?: number;
+  label?: string;
+  reasons?: string[];
+}
+
+
 /**
  * 转换通用时间为 Lightweight Charts 接受的 HorzScaleItem (UTC 秒数或 YYYY-MM-DD 字符串)
  */
 export function toChartTime(t: string | number): any {
+  if (t === null || t === undefined) return '';
   if (typeof t === 'number') {
-    return t > 1e11 ? Math.floor(t / 1000) : t;
+    if (isNaN(t) || !isFinite(t)) return '';
+    return t > 1e11 ? Math.floor(t / 1000) : Math.floor(t);
   }
   const s = String(t).trim();
-  if (!s) return '';
+  if (!s || s === 'NaN' || s === 'undefined' || s === 'null') return '';
+
   // 分钟/小时: '2024-05-01 10:30' 或带秒或 ISO
   if (s.includes(' ') || s.includes('T') || s.includes(':')) {
     const cleanStr = s.replace('T', ' ').replace(/\.\d+/, '');
@@ -93,9 +110,18 @@ export function toChartTime(t: string | number): any {
     if (!isNaN(msDirect)) {
       return Math.floor(msDirect / 1000);
     }
+    return '';
   }
+
   // 日期: 'YYYY-MM-DD'
-  return s.slice(0, 10);
+  const dateStr = s.slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    const ms = new Date(dateStr).getTime();
+    if (!isNaN(ms)) {
+      return dateStr;
+    }
+  }
+  return '';
 }
 
 /**
@@ -174,6 +200,8 @@ class AnnotationOverlayPrimitive implements ISeriesPrimitive<any> {
   private _boxes: ChartBoxItem[] = [];
   private _channelLines: ChartChannelLineItem[] = [];
   private _waveLines: ChartWaveLinesItem | null = null;
+  private _timeLines: TimeLineItem[] = [];
+  private _highlightedTime: string | null = null;
   private _param: any = null;
   private _paneViews: readonly IPrimitivePaneView[];
   private _renderer: IPrimitivePaneRenderer;
@@ -182,6 +210,8 @@ class AnnotationOverlayPrimitive implements ISeriesPrimitive<any> {
     this._boxes = [];
     this._channelLines = [];
     this._waveLines = null;
+    this._timeLines = [];
+    this._highlightedTime = null;
     const self = this;
 
     this._renderer = {
@@ -379,6 +409,63 @@ class AnnotationOverlayPrimitive implements ISeriesPrimitive<any> {
               ctx.restore();
             }
           }
+
+          // 4. 绘制艾略特变盘时间窗垂直线 (Turn Date Vertical Lines)
+          const width = scope.mediaSize.width;
+          const height = scope.mediaSize.height;
+          for (const tl of self._timeLines || []) {
+            const x = getTimeCoordinate(timeScale, tl.time);
+            if (x === null || x < 0 || x > width) continue;
+
+            ctx.save();
+            const isHighlighted = self._highlightedTime === String(tl.time);
+            const strokeColor = tl.color || (tl.isResonance ? '#f59e0b' : '#6366f1');
+
+            if (tl.isResonance || isHighlighted) {
+              const bandWidth = isHighlighted ? 14 : 8;
+              const grad = ctx.createLinearGradient(0, 0, 0, height);
+              grad.addColorStop(0, tl.isResonance ? 'rgba(245, 158, 11, 0.22)' : 'rgba(99, 102, 241, 0.20)');
+              grad.addColorStop(1, 'rgba(245, 158, 11, 0.01)');
+              ctx.fillStyle = grad;
+              ctx.fillRect(x - bandWidth / 2, 0, bandWidth, height);
+            }
+
+            ctx.beginPath();
+            ctx.strokeStyle = strokeColor;
+            ctx.lineWidth = isHighlighted ? 2.5 : (tl.lineWidth || 1.5);
+            if (tl.lineStyle === 'dashed' && !isHighlighted) {
+              ctx.setLineDash([5, 5]);
+            }
+            ctx.moveTo(x, 24);
+            ctx.lineTo(x, height);
+            ctx.stroke();
+
+            if (tl.label) {
+              ctx.setLineDash([]);
+              ctx.font = 'bold 10px -apple-system, BlinkMacSystemFont, "JetBrains Mono", monospace';
+              const textMetrics = ctx.measureText(tl.label);
+              const padX = 6;
+              const badgeW = textMetrics.width + padX * 2;
+              const badgeH = 18;
+              const badgeX = Math.max(4, Math.min(width - badgeW - 4, x - badgeW / 2));
+              const badgeY = 6;
+
+              ctx.fillStyle = tl.isResonance ? '#f59e0b' : '#4f46e5';
+              ctx.beginPath();
+              if (typeof ctx.roundRect === 'function') {
+                ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 4);
+              } else {
+                ctx.rect(badgeX, badgeY, badgeW, badgeH);
+              }
+              ctx.fill();
+
+              ctx.fillStyle = '#ffffff';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              ctx.fillText(tl.label, badgeX + badgeW / 2, badgeY + badgeH / 2);
+            }
+            ctx.restore();
+          }
         });
       },
     };
@@ -410,10 +497,22 @@ class AnnotationOverlayPrimitive implements ISeriesPrimitive<any> {
     this.requestUpdate();
   }
 
+  public setTimeLines(timeLines: TimeLineItem[]) {
+    this._timeLines = timeLines || [];
+    this.requestUpdate();
+  }
+
+  public setHighlightedTime(timeStr: string | null) {
+    this._highlightedTime = timeStr;
+    this.requestUpdate();
+  }
+
   public clear() {
     this._boxes = [];
     this._channelLines = [];
     this._waveLines = null;
+    this._timeLines = [];
+    this._highlightedTime = null;
     this.requestUpdate();
   }
 
@@ -450,6 +549,7 @@ export function useChartAnnotations() {
   const boxesCount = ref(0);
   const channelLinesCount = ref(0);
   const waveLinesCount = ref(0);
+  const timeLinesCount = ref(0);
 
   function init(chart: IChartApi, series: ISeriesApi<any>, existingMarkersPlugin?: any) {
     _chartApi = chart;
@@ -555,6 +655,17 @@ export function useChartAnnotations() {
     waveLinesCount.value = waveLines ? waveLines.points.length : 0;
   }
 
+  function setTimeLines(lines: TimeLineItem[]) {
+    if (!overlayPrimitive) return;
+    overlayPrimitive.setTimeLines(lines || []);
+    timeLinesCount.value = (lines || []).length;
+  }
+
+  function highlightTimeLine(dateStr: string | null) {
+    if (!overlayPrimitive) return;
+    overlayPrimitive.setHighlightedTime(dateStr);
+  }
+
   function setAllAnnotations(anno: {
     markers?: ChartMarkerItem[];
     lines?: ChartPriceLineItem[];
@@ -563,6 +674,8 @@ export function useChartAnnotations() {
     channelLines?: ChartChannelLineItem[];
     wave_lines?: ChartWaveLinesItem | null;
     waveLines?: ChartWaveLinesItem | null;
+    time_lines?: TimeLineItem[];
+    timeLines?: TimeLineItem[];
   }) {
     setMarkers(anno.markers || []);
     setPriceLines(anno.lines || []);
@@ -571,6 +684,8 @@ export function useChartAnnotations() {
     setChannelLines(chans);
     const waves = anno.wave_lines !== undefined ? anno.wave_lines : (anno.waveLines !== undefined ? anno.waveLines : null);
     setWaveLines(waves);
+    const times = anno.time_lines ?? anno.timeLines ?? [];
+    setTimeLines(times);
   }
 
   function clearAnnotations() {
@@ -579,6 +694,8 @@ export function useChartAnnotations() {
     setBoxes([]);
     setChannelLines([]);
     setWaveLines(null);
+    setTimeLines([]);
+    highlightTimeLine(null);
   }
 
   return {
@@ -588,6 +705,8 @@ export function useChartAnnotations() {
     setBoxes,
     setChannelLines,
     setWaveLines,
+    setTimeLines,
+    highlightTimeLine,
     setAllAnnotations,
     clearAnnotations,
     markersCount,
@@ -595,5 +714,6 @@ export function useChartAnnotations() {
     boxesCount,
     channelLinesCount,
     waveLinesCount,
+    timeLinesCount,
   };
 }

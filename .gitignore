@@ -36,3 +36,5 @@ yarn-error.log*
 stage_one/backend/stock_data.db
 stage_one/backend/backend.log
 stage_one/backend/watchlist.json
+# graft local graph cache — regenerable, not committed (run `graft build`).
+/graft/

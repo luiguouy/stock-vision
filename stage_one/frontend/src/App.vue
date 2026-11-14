@@ -47,6 +47,17 @@
               :class="displayChange >= 0 ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'">
               {{ displayChange >= 0 ? '+' : '' }}{{ displayChange.toFixed(2) }}%
             </span>
+            <div v-if="displayExtendedInfo" class="flex items-center gap-1 pl-2 border-l border-slate-200 dark:border-slate-800 text-[11px] font-mono">
+              <span class="text-[9px] font-bold px-1 py-0.2 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                {{ displayExtendedInfo.label }}
+              </span>
+              <span class="font-bold text-slate-700 dark:text-slate-200">
+                {{ currencyOf(currentSymbol) }}{{ displayExtendedInfo.price.toFixed(2) }}
+              </span>
+              <span :class="displayExtendedInfo.changePct >= 0 ? 'text-emerald-500' : 'text-rose-500'">
+                {{ displayExtendedInfo.changePct >= 0 ? '+' : '' }}{{ displayExtendedInfo.changePct.toFixed(2) }}%
+              </span>
+            </div>
           </div>
           <button @click="toggleWatchlist(currentSymbol)"
             class="btn-tactile p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
@@ -68,18 +79,8 @@
           </span>
           <span>{{ useMockData ? 'MOCK' : 'LIVE' }}</span>
         </span>
-        <!-- 深色模式 -->
-        <button @click="toggleDarkMode()"
-          class="btn-tactile p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-          :title="isDarkMode ? '切换到浅色模式' : '切换到深色模式'">
-          <svg class="w-4 h-4 transition-transform duration-300" :class="isDarkMode ? 'text-amber-400 rotate-180' : 'text-slate-500 rotate-0'"
-            fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path v-if="!isDarkMode" stroke-linecap="round" stroke-linejoin="round"
-              d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-            <path v-else stroke-linecap="round" stroke-linejoin="round"
-              d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-          </svg>
-        </button>
+        <!-- 拟物微质感跑道流光主题切换开关 -->
+        <ThemeToggle :model-value="isDarkMode" @toggle="toggleDarkMode()" />
       </div>
     </header>
 
@@ -353,6 +354,23 @@
                 {{ periodLabels[p] }}
               </button>
             </div>
+            <!-- EMA / VWAP 指标开关 -->
+            <div class="flex items-center gap-1 ml-1">
+              <button
+                @click="showEMA = !showEMA; updateIndicators(klineData)"
+                class="btn-tactile px-2 py-0.5 text-[11px] font-semibold rounded-md border transition-all cursor-pointer"
+                :class="showEMA ? 'border-purple-500 bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold' : 'border-slate-200 dark:border-slate-700 text-slate-500'"
+              >
+                EMA
+              </button>
+              <button
+                @click="showVWAP = !showVWAP; updateIndicators(klineData)"
+                class="btn-tactile px-2 py-0.5 text-[11px] font-semibold rounded-md border transition-all cursor-pointer"
+                :class="showVWAP ? 'border-pink-500 bg-pink-500/10 text-pink-600 dark:text-pink-400 font-bold' : 'border-slate-200 dark:border-slate-700 text-slate-500'"
+              >
+                VWAP
+              </button>
+            </div>
           </div>
           <!-- 右侧：时间范围下拉（主角，选中时高亮） -->
           <div v-if="klineData.length > 0" class="relative shrink-0">
@@ -493,163 +511,21 @@
         :style="{ width: rightPanelWidth + 'px' }"
         class="bg-white dark:bg-[#0f172a] border-l border-slate-200/80 dark:border-slate-800 flex flex-col shrink-0 overflow-hidden">
 
-        <!-- Tab 导航 (Swiss Linear Tabs with Spring Sliding Indicator) -->
-        <div class="flex border-b border-slate-200/80 dark:border-slate-800 bg-slate-50/70 dark:bg-[#0f172a] shrink-0 relative">
-          <button 
-            @click="rightPanelTab = 'strategy'"
-            class="flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors relative cursor-pointer flex items-center justify-center gap-1.5"
-            :class="rightPanelTab === 'strategy' 
-              ? 'text-indigo-600 dark:text-indigo-400 font-bold' 
-              : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'">
-            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"/>
-              <line x1="22" y1="12" x2="18" y2="12"/>
-              <line x1="6" y1="12" x2="2" y2="12"/>
-              <line x1="12" y1="6" x2="12" y2="2"/>
-              <line x1="12" y1="22" x2="12" y2="18"/>
-            </svg>
-            <span>PA策略</span>
-          </button>
-          <button 
-            @click="rightPanelTab = 'range'"
-            class="flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors relative cursor-pointer flex items-center justify-center gap-1.5"
-            :class="rightPanelTab === 'range' 
-              ? 'text-indigo-600 dark:text-indigo-400 font-bold' 
-              : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'">
-            <svg class="w-3.5 h-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-            </svg>
-            <span>区间统计</span>
-          </button>
-          <!-- 动态滑动底条 (Motion Spring transition) -->
-          <div class="absolute bottom-0 h-0.5 bg-indigo-600 dark:bg-indigo-400 transition-all duration-200 ease-out"
-            :style="{
-              width: '50%',
-              left: rightPanelTab === 'strategy' ? '0%' : '50%'
-            }"></div>
-        </div>
-
-        <!-- Tab 内容容器 -->
-        <div class="flex-1 overflow-y-auto scrollbar-thin">
-          <!-- Tab 0: Investment_Assistant 价格行为策略矩阵 (含关键支撑阻力位) -->
-          <div v-show="rightPanelTab === 'strategy'" class="h-full p-4 overflow-y-auto">
-            <StrategyPanel
-              :symbol="currentSymbol"
-              :period="currentPeriod"
-              :summary="strategySummary"
-              :loading="strategyLoading"
-              :sr-levels="srLevels"
-              :highlighted-s-r="highlightedSR"
-              @run="(mode) => handleRunStrategy(mode, true)"
-              @clear="handleClearStrategy"
-              @highlight-sr="highlightSRLevel"
-              @scroll-to-sr="scrollToSRLevel"
-            />
-          </div>
-
-          <!-- Tab 2: 区间统计 -->
-          <div v-show="rightPanelTab === 'range'" class="h-full p-4 space-y-4">
-            <div class="panel-card-header mb-1">
-              <div class="flex items-center justify-between">
-                <h4 class="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-                  区间涨跌统计 (Range Stats)
-                </h4>
-                <!-- 信息小气泡 -->
-                <div class="group relative cursor-help shrink-0">
-                  <span class="text-slate-400 hover:text-slate-600 transition-colors">
-                    <svg class="w-3.5 h-3.5 transition-transform group-hover:scale-110" xmlns="http://www.w3.org/2000/svg"
-                      fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                      <path stroke-linecap="round" stroke-linejoin="round"
-                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </span>
-                  <div
-                    class="absolute right-0 bottom-6 hidden group-hover:block bg-slate-900 text-white text-[10px] leading-relaxed p-3 rounded-lg shadow-xl border border-slate-700 w-52 z-30 font-medium animate-fade-in-up">
-                    设定任意时间跨度，自动捕获该范围内的最大连贯上涨波段以及最大连贯下跌波段。
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- 快捷区间 -->
-            <div class="flex flex-wrap gap-1.5">
-              <button
-                v-for="p in rangePresets"
-                :key="p.value"
-                type="button"
-                @click="applyRangePreset(p.value)"
-                :class="[
-                  'btn-tactile px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all cursor-pointer',
-                  isPresetActive(p.value)
-                    ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-bold'
-                    : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600',
-                ]"
-              >
-                {{ p.label }}
-              </button>
-            </div>
-
-            <!-- 时间选择表单 -->
-            <div>
-              <DateRangePicker
-                v-model:modelStart="inputStartDate"
-                v-model:modelEnd="inputEndDate"
-                :min-date="klineData.length ? klineData[0].time : ''"
-                :max-date="klineData.length ? klineData[klineData.length - 1].time : ''"
-              />
-            </div>
-
-            <!-- 重新计算按钮 -->
-            <button @click="createRipple($event); handleReCalculate()" :disabled="!klineData.length"
-              class="btn-tactile w-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200/80 dark:border-slate-700 text-slate-800 dark:text-slate-200 font-semibold py-2 px-4 rounded-xl text-xs transition-all disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs">
-              <svg class="w-3.5 h-3.5 text-slate-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 7.89M9 11l3-3 3 3m-3-3v12" />
-              </svg>
-              重新计算 (Re-calculate)
-            </button>
-
-            <!-- 统计数据输出面板 -->
-            <div v-if="!rangeStats"
-              class="text-xs text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-900/60 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl p-5 text-center italic">
-              请在上方指定日期后执行智能分析
-            </div>
-
-            <div v-else class="space-y-2.5">
-              <!-- 上涨 -->
-              <div
-                class="bg-emerald-50/40 dark:bg-emerald-950/20 border border-emerald-500/20 rounded-xl p-3.5 transition-all hover:shadow-sm">
-                <div class="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-bold text-xs mb-1">
-                  <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                  </svg>
-                  <span>最大连贯上涨</span>
-                </div>
-                <div class="text-xl font-extrabold text-emerald-600 dark:text-emerald-400 font-mono tabular-nums number-animate">
-                  +{{ animatedRisePct.toFixed(2) }}%
-                </div>
-                <div class="text-[10px] text-slate-400 dark:text-slate-500 mt-1 font-medium font-mono">
-                  {{ rangeStats.max_rise.start }} &rarr; {{ rangeStats.max_rise.end }}
-                </div>
-              </div>
-
-              <!-- 下跌 -->
-              <div
-                class="bg-rose-50/40 dark:bg-rose-950/20 border border-rose-500/20 rounded-xl p-3.5 transition-all hover:shadow-sm">
-                <div class="flex items-center gap-1.5 text-rose-700 dark:text-rose-400 font-bold text-xs mb-1">
-                  <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M13 17h8m0 0v-8m0 8l-8-8-4 4-6-6" />
-                  </svg>
-                  <span>最大连贯下跌</span>
-                </div>
-                <div class="text-xl font-extrabold text-rose-600 dark:text-rose-400 font-mono tabular-nums number-animate">
-                  {{ animatedFallPct.toFixed(2) }}%
-                </div>
-                <div class="text-[10px] text-slate-400 dark:text-slate-500 mt-1 font-medium font-mono">
-                  {{ rangeStats.max_fall.start }} &rarr; {{ rangeStats.max_fall.end }}
-                </div>
-              </div>
-            </div>
-          </div>
+        <div class="flex-1 overflow-y-auto scrollbar-thin p-4">
+          <StrategyPanel
+            :symbol="currentSymbol"
+            :period="currentPeriod"
+            :summary="strategySummary"
+            :loading="strategyLoading"
+            :sr-levels="srLevels"
+            :highlighted-s-r="highlightedSR"
+            @run="(mode) => handleRunStrategy(mode, true)"
+            @clear="handleClearStrategy"
+            @highlight-sr="highlightSRLevel"
+            @scroll-to-sr="scrollToSRLevel"
+            @highlight-time="(d) => chartAnnotations.highlightTimeLine(d)"
+            @switch-symbol="(sym) => selectWatchlist(sym)"
+          />
         </div>
       </div>
     </main>
@@ -784,231 +660,251 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick, watch, computed } from 'vue';
+import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import { createChart, CandlestickSeries, HistogramSeries, createSeriesMarkers } from 'lightweight-charts';
 import type { IChartApi } from 'lightweight-charts';
 import GlobalSecuritySearch from './components/GlobalSecuritySearch.vue';
-import { getKLines, getStockAnalysis, searchStocks, generateMockKLines, getWatchlist, saveWatchlist, SUPPORTED_PERIODS, PERIOD_LABELS, BASE_URL, normalizeSymbol, stripPrefix, marketOf, formatSymbol, MARKET_LABEL, runPAStrategy } from './utils/api';
-import type { KLinePoint, SRLevel, AnalysisResponse, Period, WatchGroup } from './utils/api';
-import { getChartOptions } from './utils/chartUtils';
-import { calculateSRLevels, calculateRangeStats, resampleMockKLines } from './utils/mockEngine';
-import DateRangePicker from './components/DateRangePicker.vue';
 import StrategyPanel from './components/StrategyPanel.vue';
+import ThemeToggle from './components/ThemeToggle.vue';
+import {
+  searchStocks,
+  SUPPORTED_PERIODS,
+  PERIOD_LABELS,
+  BASE_URL,
+  normalizeSymbol,
+  stripPrefix,
+  marketOf,
+  formatSymbol,
+  MARKET_LABEL,
+  runPAStrategy,
+  type Period,
+} from './utils/api';
+import { getChartOptions } from './utils/chartUtils';
+import { calculateSRLevels } from './utils/mockEngine';
 import { useChartAnnotations, toChartTime as toChartTimeHelper } from './composables/useChartAnnotations';
 import { useSmartThrottling } from './composables/useSmartThrottling';
 import { useWebSocketControl } from './composables/useWebSocketControl';
-// 实时行情引擎（多市场：美股/A股/港股），负责分层刷新与限流防护
-import { quoteEngine, type Quote, type SymbolMeta, type QuoteConfig } from './utils/quote';
+import { useChartIndicators } from './composables/useChartIndicators';
+import { useWatchlist, MARKET_TABS, canonSym, currencyOf } from './composables/useWatchlist';
+import { useLiveQuoteSync } from './composables/useLiveQuoteSync';
+import { useChartViewport, TIME_RANGES } from './composables/useChartViewport';
+
+const { showEMA, showVWAP, initIndicators, updateIndicators } = useChartIndicators();
+const chartAnnotations = useChartAnnotations();
+const { isWindowActive } = useSmartThrottling();
 
 const searchComponentRef = ref<InstanceType<typeof GlobalSecuritySearch> | null>(null);
-
 const symbolInput = ref('AAPL');
 const currentSymbol = ref('');
+const currentPeriod = ref<Period>('1d');
+const periodOptions = SUPPORTED_PERIODS;
+const periodLabels = PERIOD_LABELS;
+const searchPlaceholder = '搜索代码或名称 (Ctrl+K)';
+
+const useMockData = ref(true);
+const chartReady = ref(false);
+const backendOnline = ref(false);
+const isDarkMode = ref(false);
 
 // 浏览器风格导航历史
 const navBackHistory = ref<string[]>([]);
 const navForwardHistory = ref<string[]>([]);
 
-/** 后退到上一个浏览的标的 */
+// 图表实例与 DOM 引用
+const chartContainer = ref<HTMLElement | null>(null);
+const chartArea = ref<HTMLElement | null>(null);
+const tooltipEl = ref<HTMLElement | null>(null);
+let chartInstance: IChartApi | null = null;
+let candlestickSeries: any = null;
+let volumeSeries: any = null;
+let markersPlugin: any = null;
+
+// 策略状态与竞态令牌
+const strategySummary = ref<any>(null);
+const strategyLoading = ref(false);
+let activeStrategyRequestId = 0;
+
+// 1. 组合图表视口与 K 线加载
+const viewport = useChartViewport({
+  useMockData,
+  isDarkMode,
+  currentSymbol,
+  currentPeriod,
+  getChartInstance: () => chartInstance,
+  getCandlestickSeries: () => candlestickSeries,
+  getVolumeSeries: () => volumeSeries,
+  getMarkersPlugin: () => markersPlugin,
+  clearChartAnnotations: () => chartAnnotations.clearAnnotations(),
+  updateIndicators,
+  onBeforeLoad: () => {
+    activeStrategyRequestId++;
+    strategySummary.value = null;
+  },
+  onLoadSuccess: () => {
+    wl.updateWatchlistPrices();
+    if (!useMockData.value) liveSync.refreshEngineSymbols();
+    handleRunStrategy('swing');
+  },
+  onLoadError: () => {
+    strategySummary.value = null;
+    wl.markAllLoadingFailed();
+  },
+});
+
+const {
+  klineData,
+  isLoading,
+  errorMsg,
+  dataWarning,
+  srLevels,
+  highlightedSR,
+  activeTimeRange,
+  showTimeRangeMenu,
+  latestPrice,
+  latestChange,
+  selectTimeRange,
+  highlightSRLevel,
+  scrollToSRLevel,
+  loadKlineData,
+} = viewport;
+
+const timeRanges = TIME_RANGES;
+const timeRangeLabel = (v: string): string => timeRanges.find((r) => r.value === v)?.label ?? v;
+
+// 2. 组合实时行情同步引擎
+const liveSync = useLiveQuoteSync({
+  useMockData,
+  currentSymbol,
+  currentPeriod,
+  klineData,
+  latestPrice,
+  latestChange,
+  watchlist: { get value() { return wl.watchlist.value; } } as any,
+  getChartInstance: () => chartInstance,
+  getCandlestickSeries: () => candlestickSeries,
+  setSuppressRangeEvents: viewport.setSuppressRangeEvents,
+  onCacheUpdate: viewport.updateCache,
+  onIndicatorsUpdate: updateIndicators,
+});
+
+const {
+  quoteConfig,
+  liveQuoteMap,
+  displayPrice,
+  displayChange,
+  displayExtendedInfo,
+  currentRefreshCycle,
+  quoteEngineStatus,
+  startQuoteEngine,
+  stopQuoteEngine,
+} = liveSync;
+
+// 3. 组合自选分组与列表状态
+const selectWatchlist = (sym: string) => {
+  const target = canonSym(sym) || sym;
+  if (currentSymbol.value && currentSymbol.value !== target) {
+    navBackHistory.value.push(currentSymbol.value);
+    navForwardHistory.value = [];
+  }
+  symbolInput.value = formatSymbol(target);
+  loadKlineData(target, currentPeriod.value);
+};
+
+const wl = useWatchlist({
+  useMockData,
+  liveQuoteMap,
+  quoteConfig,
+  currentSymbol,
+  onSelectSymbol: selectWatchlist,
+  onSymbolsChanged: () => liveSync.refreshEngineSymbols(),
+});
+
+const {
+  watchGroups,
+  watchlist,
+  activeMarketTab,
+  activeGroupId,
+  showGroupDropdown,
+  sortBy,
+  sortDir,
+  filteredWatchlist,
+  sortedFilteredWatchlist,
+  activeGroupName,
+  isCurrentGroupEmpty,
+  getStockName,
+  delayFullOf,
+  loadStockNameMap,
+  watchPriceInfo,
+  secondaryLineInfo,
+  loadWatchlist,
+  isWatchlisted,
+  toggleWatchlist,
+  renameGroup,
+  deleteGroup,
+  selectGroup,
+  toggleGroupDropdown,
+  setSort,
+} = wl;
+
+// 导航与搜索
 const navBack = () => {
   if (navBackHistory.value.length === 0) return;
   const prev = navBackHistory.value.pop()!;
   if (currentSymbol.value) navForwardHistory.value.push(currentSymbol.value);
-  symbolInput.value = stripPrefix(prev);
-  handleSearch();
+  symbolInput.value = formatSymbol(prev);
+  loadKlineData(prev, currentPeriod.value);
 };
 
-/** 前进到下一个浏览的标的 */
 const navForward = () => {
   if (navForwardHistory.value.length === 0) return;
   const next = navForwardHistory.value.pop()!;
   if (currentSymbol.value) navBackHistory.value.push(currentSymbol.value);
-  symbolInput.value = stripPrefix(next);
+  symbolInput.value = formatSymbol(next);
+  loadKlineData(next, currentPeriod.value);
+};
+
+const refreshCurrent = () => {
+  if (currentSymbol.value) {
+    loadKlineData(currentSymbol.value, currentPeriod.value);
+  }
+};
+
+const selectSuggestion = (symbol: string) => {
+  symbolInput.value = symbol;
   handleSearch();
 };
 
-/** 刷新当前标的行情（重新加载K线） */
-const refreshCurrent = () => {
-  if (currentSymbol.value) {
-    symbolInput.value = stripPrefix(currentSymbol.value);
-    handleSearch();
-  }
-};
-
-// 根据代码所属市场返回计价货币符号 (美股 $, 港股 HK$, A股 ¥)
-const currencyOf = (sym: string): string => {
-  const m = marketOf(sym);
-  if (m === 'hk') return 'HK$';
-  if (m === 'ash' || m === 'asz') return '¥';
-  return '$';
-};
-
-// ================== 实时行情引擎（多市场）集成 ==================
-// 引擎生命周期：真实模式启动轮询，演示模式停用（复用 K 线末根作为价格来源）。
-// 以下响应式状态由引擎的订阅回调驱动更新。
-const quoteConfig = ref<QuoteConfig | null>(null);
-// 去重后的最新行情（仅价格/涨跌幅变化时才更新）
-const liveQuoteMap = ref<Record<string, Quote>>({});
-// 每只标的的轮询元数据（刷新周期/上次请求时间等，每 tick 同步）
-const liveMetaMap = ref<Record<string, SymbolMeta>>({});
-// 引擎是否处于冷却（限流/异常）
-const engineCooling = ref(false);
-
-// 股票名称映射表（symbol -> name），从后端股票池加载
-const stockNameMap = ref<Record<string, string>>({});
-
-/** 获取股票显示名称：优先从名称映射表取，无匹配则返回去前缀后的代码 */
-const getStockName = (sym: string): string => {
-  const normalized = canonSym(sym);
-  return stockNameMap.value[normalized] || stockNameMap.value[sym] || formatSymbol(sym);
-};
-
-/** 从后端拉取全部股票池，构建名称映射（演示模式下使用本地兜底名称） */
-async function loadStockNameMap() {
+async function resolveSymbol(raw: string): Promise<string> {
+  const s = (raw || '').trim();
+  if (!s) return s;
+  if (/^(us)/i.test(s)) return normalizeSymbol(s);
   try {
-    const res = await fetch(`${BASE_URL}/search`, { cache: 'no-store' });
-    if (res.ok) {
-      const pool = await res.json();
-      if (Array.isArray(pool)) {
-        const map: Record<string, string> = {};
-        for (const s of pool) {
-          if (s.symbol && s.name) {
-            map[canonSym(s.symbol)] = s.name;
-          }
-        }
-        stockNameMap.value = { ...stockNameMap.value, ...map };
-      }
-    }
-  } catch {
-    // 后端不可用时静默失败，模板会回退显示代码
-  }
+    const res = await searchStocks(s);
+    if (res && res.length > 0) return res[0].symbol;
+  } catch {}
+  return normalizeSymbol(s);
 }
 
-/** 各市场延迟标注兜底 */
-const DELAY_LABEL_FALLBACK: Record<string, { label: string; full: string }> = {
-  ash: { label: '实时', full: 'A股 LV1 实时' },
-  asz: { label: '实时', full: 'A股 LV1 实时' },
-  hk: { label: '实时', full: '港股 实时' },
-  us: { label: '15m 延迟', full: '美股 公开数据源 (15分钟延迟)' },
-};
-/** 读取某标的延迟完整提示语（悬浮标题） */
-const delayFullOf = (sym: string): string => {
-  const m = marketOf(sym) || 'us';
-  return quoteConfig.value?.markets[m]?.delayFull ?? DELAY_LABEL_FALLBACK[m].full;
+const handleSearch = async () => {
+  const raw = symbolInput.value.trim();
+  if (!raw) return;
+  const querySymbol = await resolveSymbol(raw);
+  if (!querySymbol) return;
+  await loadKlineData(querySymbol, currentPeriod.value);
 };
 
-// 头部展示价格：真实模式取实时引擎，演示模式取 K 线末根（latestPrice/latestChange）
-const displayPrice = computed<number | null>(() => {
-  if (useMockData.value) return latestPrice.value;
-  const q = currentSymbol.value ? liveQuoteMap.value[currentSymbol.value] : null;
-  return q && q.price != null ? q.price : latestPrice.value;
-});
-const displayChange = computed<number>(() => {
-  if (useMockData.value) return latestChange.value;
-  const q = currentSymbol.value ? liveQuoteMap.value[currentSymbol.value] : null;
-  return q && q.changePct != null ? q.changePct : latestChange.value;
-});
-
-/** 自选行统一价格信息：真实模式取引擎实时行情，演示模式取 K 线末根缓存 */
-function watchPriceInfo(item: string): {
-  price: number | null;
-  change: number | null;
-  loading: boolean;
-  extendedPrice: number | null;
-  extendedLabel: string;
-  prevClose: number | null;
-} {
-  if (!useMockData.value) {
-    const q = liveQuoteMap.value[item];
-    if (q && q.status === 'ok' && q.price != null && q.changePct != null) {
-      return {
-        price: q.price,
-        change: q.changePct,
-        loading: false,
-        extendedPrice: q.extendedPrice ?? null,
-        extendedLabel: q.extendedLabel ?? '',
-        prevClose: q.prevClose ?? null,
-      };
-    }
-    // 真实模式尚未取到首值 → 视为加载中
-    return { price: null, change: null, loading: true, extendedPrice: null, extendedLabel: '', prevClose: null };
+const changePeriod = (period: Period) => {
+  if (period === currentPeriod.value) return;
+  activeStrategyRequestId++;
+  currentPeriod.value = period;
+  viewport.clearOverlays();
+  strategySummary.value = null;
+  if (currentSymbol.value) {
+    loadKlineData(currentSymbol.value, period);
   }
-  const w = watchlistPriceMap.value[item] || {};
-  return { price: w.price ?? null, change: w.change ?? null, loading: !!w.loading, extendedPrice: null, extendedLabel: '', prevClose: null };
-}
+};
 
-/** 第二行辅助行情信息：优先展示扩展交易时段价格，否则展示昨收价 */
-function secondaryLineInfo(item: string): {
-  price: number | null;
-  changePct: number | null;
-  label: string;
-} | null {
-  const info = watchPriceInfo(item);
-  if (info.loading || info.price == null) return null;
-
-  // 优先：扩展交易时段价格（盘后/夜盘），需与当前价格不同才有展示价值
-  if (info.extendedPrice != null && info.prevClose != null && info.prevClose > 0) {
-    if (Math.abs(info.extendedPrice - info.price) >= 0.01) {
-      const chg = ((info.extendedPrice - info.prevClose) / info.prevClose) * 100;
-      return { price: info.extendedPrice, changePct: chg, label: info.extendedLabel || '盘后' };
-    }
-  }
-
-  // 兜底：展示昨收价（提供辅助参考信息）
-  if (info.prevClose != null && info.prevClose > 0) {
-    return { price: info.prevClose, changePct: null, label: '昨收' };
-  }
-
-  return null;
-}
-
-// 当前标的刷新周期（秒）= 市场最低间隔 × 自适应倍率（向上取整）
-const currentRefreshCycle = computed<number>(() => {
-  const meta = currentSymbol.value ? liveMetaMap.value[currentSymbol.value] : null;
-  const base = marketOf(currentSymbol.value) === 'us' ? 10 : 2; // 兜底
-  const min = quoteConfig.value?.markets[marketOf(currentSymbol.value) || 'us']?.minInterval ?? base;
-  return Math.max(1, Math.round(min * (meta?.intervalMul ?? 1)));
-});
-
-// 引擎状态（供头部/底部状态展示）
-const quoteEngineStatus = computed<{ cooling: boolean; reason: string }>(() => ({
-  cooling: engineCooling.value,
-  reason: engineCooling.value ? 'cooling' : '',
-}));
-
-/** 刷新引擎需要轮询的标的集合（当前股票 + 自选股） */
-function refreshEngineSymbols() {
-  const syms = [currentSymbol.value, ...watchlist.value].filter(Boolean);
-  quoteEngine.setSymbols(syms);
-}
-
-// 搜索框占位符（全市场统一，不再前置拆分市场）
-// @ts-ignore
-const searchPlaceholder = computed(() => '搜索代码或名称 (Ctrl+K)');
-const klineData = ref<KLinePoint[]>([]);
-// 按 "symbol_period" 缓存K线和分析结果，避免切换周期时重复网络请求
-const klineCache = new Map<string, KLinePoint[]>();
-const analysisCache = new Map<string, AnalysisResponse>();
-const cacheKey = (symbol: string, period: Period) => `${symbol}_${period}`;
-const isLoading = ref(false);
-const errorMsg = ref('');
-const starBounce = ref(false);
-
-// 数据模式：由后端探测自动决定。默认 true=演示模式(模拟数据)，
-// 后端可用时自动切换为 false=实时数据。无需手动切换按钮。
-const useMockData = ref(true);
-// 图表是否已完成初始化（避免在图表就绪前触发重算导致崩溃）
-const chartReady = ref(false);
-// 后端是否在线（仅用于状态展示）
-const backendOnline = ref(false);
-
-/**
- * 探测后端可用性：
- *  - 可达 ( /api/health 返回 200 ) → 实时数据 (useMockData=false)
- *  - 不可达 / 超时                → 演示模式 (useMockData=true, 模拟数据)
- * 这样单独启动前端(无后端)即自动进入演示模式便于测试页面；
- * 启动后端后刷新或点"重试连接"即自动切回实时数据。
- */
+// 后端连通性与模式检测
 async function detectBackend(): Promise<boolean> {
   try {
     const ctrl = new AbortController();
@@ -1018,420 +914,28 @@ async function detectBackend(): Promise<boolean> {
     const online = res.ok;
     backendOnline.value = online;
     if (online !== !useMockData.value) {
-      useMockData.value = !online; // 后端在线=真实(false)，离线=演示(true)
+      useMockData.value = !online;
     }
     return online;
   } catch {
     backendOnline.value = false;
-    if (!useMockData.value) useMockData.value = true; // 探测失败 → 演示模式
+    if (!useMockData.value) useMockData.value = true;
     return false;
   }
 }
 
-/** 后端启动后手动重试连接（非模式切换按钮，仅重新探测并刷新） */
 async function retryConnection() {
   errorMsg.value = '';
   const online = await detectBackend();
   if (online && chartReady.value && currentSymbol.value) {
-    watchlistKlineCache.clear();
-    watchlistPriceMap.value = {};
+    wl.clearWatchlistCache();
     handleSearch();
   } else if (!online) {
     errorMsg.value = '仍未检测到后端服务，请确认已启动后端 (python main.py)，或继续在演示模式下浏览前端页面。';
   }
 }
 
-// 深色模式开关
-const isDarkMode = ref(false);
-
-// 应用图表双模式主题（背景、网格、K线蜡烛、成交量柱）
-const applyChartTheme = (isDark: boolean) => {
-  if (!chartInstance) return;
-  chartInstance.applyOptions(getChartOptions(isDark));
-  if (candlestickSeries) {
-    const upColor = isDark ? '#34d399' : '#10b981';
-    const downColor = isDark ? '#fb7185' : '#f43f5e';
-    candlestickSeries.applyOptions({
-      upColor,
-      downColor,
-      wickUpColor: upColor,
-      wickDownColor: downColor,
-    });
-  }
-  if (volumeSeries && klineData.value.length > 0) {
-    const upVol = isDark ? 'rgba(52, 211, 153, 0.35)' : 'rgba(16, 185, 129, 0.25)';
-    const downVol = isDark ? 'rgba(251, 113, 133, 0.35)' : 'rgba(244, 63, 94, 0.25)';
-    volumeSeries.setData(klineData.value.map(d => ({
-      time: toChartTime(d.time),
-      value: d.volume,
-      color: d.close >= d.open ? upVol : downVol,
-    })));
-  }
-};
-
-// 切换深色模式
-const toggleDarkMode = () => {
-  isDarkMode.value = !isDarkMode.value;
-  document.documentElement.classList.toggle('dark', isDarkMode.value);
-  localStorage.setItem('darkMode', isDarkMode.value ? 'true' : 'false');
-  applyChartTheme(isDarkMode.value);
-};
-
-// 初始化深色模式
-const initDarkMode = () => {
-  const saved = localStorage.getItem('darkMode');
-  if (saved === 'true') {
-    isDarkMode.value = true;
-    document.documentElement.classList.add('dark');
-  }
-};
-
-// 最新价格和涨跌幅计算
-const latestPrice = computed(() => {
-  if (klineData.value.length === 0) return null;
-  return klineData.value[klineData.value.length - 1].close;
-});
-
-const latestChange = computed(() => {
-  if (klineData.value.length < 2) return 0;
-  const current = klineData.value[klineData.value.length - 1].close;
-  const previous = klineData.value[klineData.value.length - 2].close;
-  return ((current - previous) / previous) * 100;
-});
-
-// ================== 自选股价格与区间涨跌幅 ==================
-interface WatchlistPriceInfo {
-  price: number | null;      // 最新(实时)收盘价
-  change: number | null;     // 当日涨跌幅 % (最新close vs 前一日close)
-  loading: boolean;          // 是否正在加载中
-}
-const watchlistPriceMap = ref<Record<string, WatchlistPriceInfo>>({});
-// 缓存已拉取的自选股K线（切换日期范围时复用，避免重复请求）
-const watchlistKlineCache = new Map<string, KLinePoint[]>();
-
-/**
- * 从日线 K 线中取「最新(实时)收盘价」与「当日涨跌幅%」(最新close vs 前一日close)。
- * 注意: 此处一律使用日线数据，与图表当前周期无关，也不依赖用户选中的日期区间，
- *       因此点击切换股票 / 修改区间时，自选栏数值保持稳定，不会跳动。
- */
-function calcLatestPrice(klines: KLinePoint[]): { price: number | null; change: number | null } {
-  if (!klines || klines.length === 0) return { price: null, change: null };
-  const last = klines[klines.length - 1];
-  const price = last.close;
-  if (klines.length > 1) {
-    const prevClose = klines[klines.length - 2].close;
-    if (prevClose && prevClose !== 0) {
-      const change = ((price - prevClose) / prevClose) * 100;
-      return { price, change };
-    }
-  }
-  // 仅有第一根 K 线，无法算涨跌
-  return { price, change: null };
-}
-
-/** 测试模式各股票基准价（与 loadStock 中一致） */
-const MOCK_BASE_PRICES: Record<string, number> = {
-  'AAPL': 180, 'NVDA': 450, 'TSLA': 250, 'MSFT': 370,
-  'GOOGL': 140, 'AMZN': 175, 'META': 480, 'AMD': 160, 'MU': 130, 'SNDK': 95,
-};
-
-/** 更新所有自选股的实时价格与当日涨跌幅（始终基于日线，与图表周期/选中区间解耦，故点击切换不跳动）
- *  注：仅演示模式使用。真实模式改由实时行情引擎(quoteEngine)批量拉取实时报价，
- *      避免每切一只股票就对每只自选股各发一次 K 线请求（浪费限流额度）。 */
-async function updateWatchlistPrices() {
-  if (!useMockData.value) return; // 真实模式：行情由引擎负责，此处跳过
-  const symbols = watchlist.value.slice();
-  if (!symbols.length) return;
-
-  // 先标记所有股票为 loading
-  const newMap: Record<string, WatchlistPriceInfo> = {};
-  for (const sym of symbols) {
-    const prev = watchlistPriceMap.value[sym];
-    newMap[sym] = prev ? { ...prev, loading: true } : { price: null, change: null, loading: true };
-  }
-  watchlistPriceMap.value = newMap;
-
-  // 并行获取每只股票的日线数据（自选栏只看「实时价 + 当日涨跌」，故固定用 1d，不随图表周期变化）
-  await Promise.allSettled(symbols.map(async (sym) => {
-    try {
-      let klines: KLinePoint[];
-      if (useMockData.value) {
-        // 测试模式：生成模拟日线（缓存，避免每次调用都重新随机生成导致数值跳动）
-        const mockKey = 'mock_' + sym;
-        if (watchlistKlineCache.has(mockKey)) {
-          klines = watchlistKlineCache.get(mockKey)!;
-        } else {
-          klines = generateMockKLines(stripPrefix(sym), 4500, MOCK_BASE_PRICES[stripPrefix(sym)] || 150);
-          watchlistKlineCache.set(mockKey, klines);
-        }
-      } else {
-        // 真实数据模式：优先用缓存，未命中则请求后端日线。
-        // 统一用 normalizeSymbol 补全市场前缀 (与 loadStock 完全一致，避免漏加前缀导致后端 404)。
-        const querySym = normalizeSymbol(sym);
-        const key = 'real_' + querySym + '_1d';
-        if (watchlistKlineCache.has(key)) {
-          klines = watchlistKlineCache.get(key)!;
-        } else {
-          klines = await getKLines(querySym, '1d');
-          watchlistKlineCache.set(key, klines); // 写入自选股专用缓存
-        }
-      }
-      const result = calcLatestPrice(klines);
-      watchlistPriceMap.value[sym] = { price: result.price, change: result.change, loading: false };
-    } catch (e) {
-      console.warn(`[自选股价格] ${sym} 获取失败:`, e);
-      watchlistPriceMap.value[sym] = { price: null, change: null, loading: false };
-    }
-  }));
-}
-
-// 自选分组：用户自创，用来自由归类标的（不再由系统硬分市场）
-const watchGroups = ref<WatchGroup[]>([]);
-// 规范化为「小写前缀」统一形态 (usAAPL / hk00700)，避免存储值大小写不一导致比较错位
-const canonSym = (s: string): string => {
-  const n = normalizeSymbol(s);
-  if (!n) return n;
-  return n.replace(/^(US|SH|SZ|HK)/i, (m) => m.toLowerCase());
-};
-// 扁平并集（供实时行情引擎 / 演示模式 / 自动加载使用），与分组保持同步派生
-const watchlist = computed<string[]>(() => {
-  const set = new Set<string>();
-  for (const g of watchGroups.value) {
-    for (const s of g.stocks) {
-      const n = canonSym(s);
-      if (n) set.add(n);
-    }
-  }
-  return [...set];
-});
-
-// ================== 自选列表：市场 Tab 过滤 + 分组多选筛选（交集） ==================
-type MarketTabKey = 'all' | 'ash' | 'hk' | 'us' | 'futures';
-const MARKET_TABS: { key: MarketTabKey; label: string }[] = [
-  { key: 'all', label: '全部' },
-  { key: 'ash', label: 'A股' },
-  { key: 'hk', label: '港股' },
-  { key: 'us', label: '美股' },
-  { key: 'futures', label: '期货' },
-];
-// 当前激活的市场 Tab（默认全部）；切换 Tab 仅过滤视图，不影响分组勾选状态
-const activeMarketTab = ref<MarketTabKey>('all');
-// 当前激活的分组 ID（'all' = 全部自选，或具体的 g.id）
-const activeGroupId = ref<string>('all');
-// 分组下拉面板开关
-const showGroupDropdown = ref(false);
-
-// 新建分组、添加自选及分组管理 Modals
-const showCreateGroupModal = ref(false);
-const showManageGroupsModal = ref(false);
-const showSearchModal = ref(false);
-
-const newGroupNameInput = ref('');
-const modalSearchQuery = ref('');
-const modalSearchResults = ref<any[]>([]);
-const modalSearchLoading = ref(false);
-
-const createGroupInputRef = ref<HTMLInputElement | null>(null);
-const modalSearchInputRef = ref<HTMLInputElement | null>(null);
-
-// ================== 自选列表排序：点击 名称代码 / 最新价 / 涨跌幅 表头切换 ==================
-type SortKey = 'name' | 'price' | 'change';
-// 当前排序字段（null = 不排序，保持分组原始顺序）；方向 asc 升序 / desc 降序
-const sortBy = ref<SortKey | null>(null);
-const sortDir = ref<'asc' | 'desc'>('desc');
-const setSort = (key: SortKey) => {
-  if (sortBy.value === key) {
-    sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc';
-  } else {
-    sortBy.value = key;
-    // 名称默认按代码升序；价格 / 涨跌幅默认降序（数值大者在前）
-    sortDir.value = key === 'name' ? 'asc' : 'desc';
-  }
-};
-
-// 市场 Tab 命中判断：期货按代码以 main 结尾识别，其余按前缀
-const matchMarketTab = (sym: string, tab: MarketTabKey): boolean => {
-  if (tab === 'all') return true;
-  if (tab === 'futures') return sym.toLowerCase().endsWith('main');
-  const m = marketOf(sym);
-  if (tab === 'ash') return m === 'ash' || m === 'asz';
-  if (tab === 'hk') return m === 'hk';
-  if (tab === 'us') return m === 'us';
-  return false;
-};
-
-// 过滤后的自选列表 = 市场 Tab 过滤 ∩ 当前选中的单选分组（实时刷新）
-const filteredWatchlist = computed<string[]>(() => {
-  const gid = activeGroupId.value;
-  return watchlist.value.filter((sym) => {
-    const okMarket = matchMarketTab(sym, activeMarketTab.value);
-    let okGroup = true;
-    if (gid !== 'all') {
-      const g = watchGroups.value.find((x) => x.id === gid);
-      okGroup = g ? g.stocks.some((s) => canonSym(s) === canonSym(sym)) : false;
-    }
-    return okMarket && okGroup;
-  });
-});
-
-// 在「市场 Tab ∩ 分组」过滤结果之上，再按表头选择排序（无数据项恒置末尾）
-const sortedFilteredWatchlist = computed<string[]>(() => {
-  const arr = filteredWatchlist.value.slice();
-  if (!sortBy.value) return arr;
-  const dir = sortDir.value === 'asc' ? 1 : -1;
-  const k = sortBy.value;
-  arr.sort((a, b) => {
-    if (k === 'name') return a.localeCompare(b) * dir;
-    const va = k === 'price' ? watchPriceInfo(a).price : watchPriceInfo(a).change;
-    const vb = k === 'price' ? watchPriceInfo(b).price : watchPriceInfo(b).change;
-    const na = va == null;
-    const nb = vb == null;
-    if (na && nb) return 0;
-    if (na) return 1; // 无数据恒排末尾
-    if (nb) return -1;
-    return (va - vb) * dir;
-  });
-  return arr;
-});
-
-const selectGroup = (id: string) => {
-  activeGroupId.value = id;
-  showGroupDropdown.value = false;
-};
-const toggleGroupDropdown = () => {
-  showGroupDropdown.value = !showGroupDropdown.value;
-};
-const activeGroupName = computed(() => {
-  if (activeGroupId.value === 'all') return '选择分组';
-  const g = watchGroups.value.find((x) => x.id === activeGroupId.value);
-  return g ? g.name : '选择分组';
-});
-const triggerCreateGroup = () => {
-  showGroupDropdown.value = false;
-  showCreateGroupModal.value = true;
-  nextTick(() => {
-    createGroupInputRef.value?.focus();
-  });
-};
-const triggerManageGroups = () => {
-  showGroupDropdown.value = false;
-  showManageGroupsModal.value = true;
-};
-
-// 分析数据状态
-const srLevels = ref<SRLevel[]>([]);
-const startDate = ref('');
-const endDate = ref('');
-const inputStartDate = ref('');
-const inputEndDate = ref('');
-const rangeStats = ref<any>(null);
-
-// 每支股票的区间选择记忆（localStorage 持久化）
-interface RangePref { start: string; end: string; }
-const RANGE_PREFS_KEY = 'stockvision_range_prefs';
-const rangePrefs = ref<Record<string, RangePref>>(loadRangePrefs());
-
-function loadRangePrefs(): Record<string, RangePref> {
-  try {
-    const raw = localStorage.getItem(RANGE_PREFS_KEY);
-    return raw ? (JSON.parse(raw) as Record<string, RangePref>) : {};
-  } catch {
-    return {};
-  }
-}
-function saveRangePrefs() {
-  try {
-    localStorage.setItem(RANGE_PREFS_KEY, JSON.stringify(rangePrefs.value));
-  } catch {
-    /* 忽略写入失败（如隐私模式） */
-  }
-}
-function clampDate(d: string, min: string, max: string): string {
-  if (min && d < min) return min;
-  if (max && d > max) return max;
-  return d;
-}
-// 把"当前生效的区间"记到对应股票下，下次切回该股票时恢复
-function persistCurrentRange() {
-  const sym = currentSymbol.value;
-  if (!sym || !startDate.value || !endDate.value || startDate.value > endDate.value) return;
-  const next = { ...rangePrefs.value, [sym]: { start: startDate.value, end: endDate.value } };
-  rangePrefs.value = next;
-  saveRangePrefs();
-}
-
-// 数据完整性提示 (真实模式下返回根数过少时给出警告)
-const dataWarning = ref('');
-
-// SR 联动高亮状态
-const highlightedSR = ref<number | null>(null);
-
-// 右侧面板 Tab 状态 (默认显示 Investment_Assistant 价格行为策略)
-const rightPanelTab = ref<'strategy' | 'range'>('strategy');
-
-// 时间范围配置（仅负责缩放视图，与上方K线周期按钮相互独立）
-const timeRanges = [
-  { label: '近1月', value: 'r1m' },
-  { label: '近3月', value: 'r3m' },
-  { label: '近6月', value: 'r6m' },
-  { label: '近1年', value: 'r1y' },
-  { label: '全部', value: 'ALL' },
-];
-const activeTimeRange = ref('ALL');
-const showTimeRangeMenu = ref(false);
-
-// 时间范围中文标签映射
-const timeRangeLabel = (v: string): string => {
-  const found = timeRanges.find(r => r.value === v);
-  return found ? found.label : v;
-};
-
-
-// K线周期选择 (日K/周K/月K)
-const currentPeriod = ref<Period>('1d');
-const periodOptions = SUPPORTED_PERIODS;
-const periodLabels = PERIOD_LABELS;
-
-// 数字动画状态
-const animatedRisePct = ref(0);
-const animatedFallPct = ref(0);
-
-// 左右拖拽初始列宽
-const leftSidebarWidth = ref(320); // 左侧边栏固定宽度
-const rightPanelWidth = ref(340); // 右侧面板固定宽度
-
-// lightweight-charts 绘图实例引用
-const chartContainer = ref<HTMLElement | null>(null);
-const chartArea = ref<HTMLElement | null>(null);
-const tooltipEl = ref<HTMLElement | null>(null);
-let chartInstance: IChartApi | null = null;
-let candlestickSeries: any = null;
-let volumeSeries: any = null;
-let priceLines: any[] = [];
-let markersPlugin: any = null;
-
-// ================== Investment_Assistant 价格行为与 Antigravity 双向管道 ==================
-const chartAnnotations = useChartAnnotations();
-const { isWindowActive } = useSmartThrottling();
-const strategySummary = ref<any>(null);
-const strategyLoading = ref(false);
-let activeStrategyRequestId = 0;
-
-watch(isWindowActive, (active) => {
-  if (active) {
-    quoteEngine.start();
-  } else {
-    quoteEngine.stop();
-  }
-});
-
-// 监听侧边栏 Tab 切换: 当切到 PA 策略矩阵面板且当前无分析结果时，自动发起高精度分析
-watch(rightPanelTab, (tab) => {
-  if (tab === 'strategy' && !strategySummary.value && currentSymbol.value && !strategyLoading.value) {
-    handleRunStrategy('swing');
-  }
-});
-
+// 策略执行与 WebSocket 控制面
 const handleRunStrategy = async (mode: string = 'swing', isManual: boolean = false) => {
   if (!currentSymbol.value) return;
   const targetSymbol = currentSymbol.value;
@@ -1440,18 +944,15 @@ const handleRunStrategy = async (mode: string = 'swing', isManual: boolean = fal
 
   try {
     strategyLoading.value = true;
-    if (!srLevels.value.length) {
-      await runAnalysis();
+    if (!srLevels.value.length && klineData.value.length) {
+      srLevels.value = calculateSRLevels(klineData.value, 5, targetPeriod);
     }
-    // 竞态排查: 若在准备过程中标的或周期已变更，终止
     if (reqId !== activeStrategyRequestId || currentSymbol.value !== targetSymbol || currentPeriod.value !== targetPeriod) {
       return;
     }
 
     const res = await runPAStrategy(targetSymbol, targetPeriod, mode, klineData.value);
-    // 竞态守卫: 若在请求过程中用户已切换标的或周期，丢弃过时结果，杜绝错位标注覆盖
     if (reqId !== activeStrategyRequestId || currentSymbol.value !== targetSymbol || currentPeriod.value !== targetPeriod) {
-      console.log(`[PA策略] 丢弃过时结果: 当前已切换至 ${currentSymbol.value} (${currentPeriod.value})，忽略 ${targetSymbol} (${targetPeriod})`);
       return;
     }
     strategySummary.value = res.summary;
@@ -1460,10 +961,7 @@ const handleRunStrategy = async (mode: string = 'swing', isManual: boolean = fal
     }
   } catch (e: any) {
     if (reqId === activeStrategyRequestId && currentSymbol.value === targetSymbol && currentPeriod.value === targetPeriod) {
-      console.error('Run PA strategy error:', e);
-      if (isManual) {
-        errorMsg.value = e.message || '策略执行失败，请检查K线数据';
-      }
+      if (isManual) errorMsg.value = e.message || '策略执行失败，请检查K线数据';
     }
   } finally {
     if (reqId === activeStrategyRequestId && currentSymbol.value === targetSymbol && currentPeriod.value === targetPeriod) {
@@ -1479,9 +977,7 @@ const handleClearStrategy = () => {
 };
 
 const wsControl = useWebSocketControl({
-  onRefreshWatchlist() {
-    loadWatchlist();
-  },
+  onRefreshWatchlist: () => loadWatchlist(),
   onOpenChart(symbol, period) {
     currentSymbol.value = symbol;
     symbolInput.value = stripPrefix(symbol);
@@ -1510,6 +1006,10 @@ const wsControl = useWebSocketControl({
     if (!sym || normalizeSymbol(sym) !== normalizeSymbol(currentSymbol.value)) return;
     chartAnnotations.setWaveLines(waveLines);
   },
+  onDrawTimeLines(timeLines, sym) {
+    if (!sym || normalizeSymbol(sym) !== normalizeSymbol(currentSymbol.value)) return;
+    chartAnnotations.setTimeLines(timeLines);
+  },
   onClearAnnotations(kind, sym) {
     if (sym && normalizeSymbol(sym) !== normalizeSymbol(currentSymbol.value)) return;
     if (kind === 'marker') chartAnnotations.setMarkers([]);
@@ -1517,47 +1017,185 @@ const wsControl = useWebSocketControl({
     else if (kind === 'box') chartAnnotations.setBoxes([]);
     else if (kind === 'channel') chartAnnotations.setChannelLines([]);
     else if (kind === 'wave') chartAnnotations.setWaveLines(null);
+    else if (kind === 'time_line') chartAnnotations.setTimeLines([]);
     else chartAnnotations.clearAnnotations();
   },
-  async onRunStrategy(mode) {
-    await handleRunStrategy(mode, true);
-  },
-  onCaptureChart(_reqId) {
+  onRunStrategy: async (mode) => handleRunStrategy(mode, true),
+  onCaptureChart() {
     if (chartInstance && typeof (chartInstance as any).takeScreenshot === 'function') {
       try {
         const canvas = (chartInstance as any).takeScreenshot();
         if (canvas) return canvas.toDataURL('image/png');
-      } catch (e) {
-        console.warn('takeScreenshot error, falling back:', e);
-      }
+      } catch {}
     }
-    if (!chartContainer.value) return null;
-    const canvas = chartContainer.value.querySelector('canvas');
+    const canvas = chartContainer.value?.querySelector('canvas');
     return canvas ? canvas.toDataURL('image/png') : null;
   },
 });
 
-watch([currentSymbol, currentPeriod, klineData], () => {
-  const lastBar = klineData.value.length ? klineData.value[klineData.value.length - 1] : null;
-  wsControl.sendState({
-    symbol: currentSymbol.value,
-    period: currentPeriod.value,
-    current_price: lastBar ? lastBar.close : 0,
+// 主题切换
+const toChartTime = (timeStr: any): any => toChartTimeHelper(timeStr);
+
+const applyChartTheme = (isDark: boolean) => {
+  if (!chartInstance) return;
+  chartInstance.applyOptions(getChartOptions(isDark));
+  if (candlestickSeries) {
+    const upColor = isDark ? '#34d399' : '#10b981';
+    const downColor = isDark ? '#fb7185' : '#f43f5e';
+    candlestickSeries.applyOptions({ upColor, downColor, wickUpColor: upColor, wickDownColor: downColor });
+  }
+  if (volumeSeries && klineData.value.length > 0) {
+    const upVol = isDark ? 'rgba(52, 211, 153, 0.35)' : 'rgba(16, 185, 129, 0.25)';
+    const downVol = isDark ? 'rgba(251, 113, 133, 0.35)' : 'rgba(244, 63, 94, 0.25)';
+    volumeSeries.setData(
+      klineData.value.map((d) => ({
+        time: toChartTime(d.time),
+        value: d.volume,
+        color: d.close >= d.open ? upVol : downVol,
+      }))
+    );
+  }
+};
+
+const toggleDarkMode = () => {
+  isDarkMode.value = !isDarkMode.value;
+  document.documentElement.classList.toggle('dark', isDarkMode.value);
+  localStorage.setItem('darkMode', isDarkMode.value ? 'true' : 'false');
+  applyChartTheme(isDarkMode.value);
+};
+
+const initDarkMode = () => {
+  if (localStorage.getItem('darkMode') === 'true') {
+    isDarkMode.value = true;
+    document.documentElement.classList.add('dark');
+  }
+};
+
+// 模态框与分组管理 UI 状态
+const showCreateGroupModal = ref(false);
+const showManageGroupsModal = ref(false);
+const showSearchModal = ref(false);
+const newGroupNameInput = ref('');
+const modalSearchQuery = ref('');
+const modalSearchResults = ref<any[]>([]);
+const modalSearchLoading = ref(false);
+const createGroupInputRef = ref<HTMLInputElement | null>(null);
+const modalSearchInputRef = ref<HTMLInputElement | null>(null);
+const editingGroupId = ref<string | null>(null);
+const editingGroupName = ref('');
+
+const triggerCreateGroup = () => {
+  showGroupDropdown.value = false;
+  showCreateGroupModal.value = true;
+  nextTick(() => createGroupInputRef.value?.focus());
+};
+
+const triggerManageGroups = () => {
+  showGroupDropdown.value = false;
+  showManageGroupsModal.value = true;
+};
+
+const handleCreateGroupSubmit = () => {
+  wl.createGroup(newGroupNameInput.value);
+  newGroupNameInput.value = '';
+  showCreateGroupModal.value = false;
+};
+
+const confirmRename = (id: string) => {
+  if (editingGroupId.value !== id) return;
+  renameGroup(id, editingGroupName.value);
+  editingGroupId.value = null;
+};
+
+let modalSearchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+const handleModalSearchInput = () => {
+  const q = modalSearchQuery.value.trim();
+  if (modalSearchDebounceTimer) clearTimeout(modalSearchDebounceTimer);
+  if (!q) {
+    modalSearchResults.value = [];
+    modalSearchLoading.value = false;
+    return;
+  }
+  modalSearchLoading.value = true;
+  modalSearchDebounceTimer = setTimeout(async () => {
+    try {
+      modalSearchResults.value = (await searchStocks(q)) || [];
+    } catch {
+      modalSearchResults.value = [];
+    } finally {
+      modalSearchLoading.value = false;
+    }
+  }, 250);
+};
+
+const handleModalSearchSelect = (sym: string) => {
+  const target = wl.addToActiveGroup(sym);
+  selectWatchlist(target);
+  showSearchModal.value = false;
+  modalSearchQuery.value = '';
+  modalSearchResults.value = [];
+};
+
+// 左右栏拖拽调宽
+const leftSidebarWidth = ref(320);
+const rightPanelWidth = ref(340);
+let resizeRaf: number | null = null;
+
+const syncChartSize = () => {
+  requestAnimationFrame(() => {
+    if (chartInstance && chartArea.value) {
+      const rect = chartArea.value.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        chartInstance.applyOptions({ width: Math.floor(rect.width), height: Math.floor(rect.height) });
+      }
+    }
   });
-});
+};
 
-// ================== 缩放记忆 (鼠标滚轮缩放后跨切换保持) ==================
-// 以"可见逻辑范围占全长的比例"存储缩放，跨股票 / 周期 / 日期范围均可按比例还原。
-const ZOOM_MEMORY_KEY = 'kline_zoom_memory_v1';
-let zoomMemory: { fromFrac: number; toFrac: number } | null = null;
-// 程序化设置可见范围时抑制回调，避免回声写回
-let suppressRangeEvents = false;
-// 持久化节流定时器
-let persistThrottleTimer: any = null;
+const createColumnResizer = (getStartWidth: () => number, setWidth: (w: number) => void, sign: 1 | -1) => {
+  return (e: MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = getStartWidth();
+    let latestWidth = startWidth;
 
-// ================== K线悬停提示框状态 ==================
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const deltaX = (moveEvent.clientX - startX) * sign;
+      const maxL = Math.floor(window.innerWidth / 3);
+      latestWidth = Math.max(260, Math.min(startWidth + deltaX, maxL));
+      if (resizeRaf === null) {
+        resizeRaf = requestAnimationFrame(() => {
+          setWidth(latestWidth);
+          syncChartSize();
+          resizeRaf = null;
+        });
+      }
+    };
+
+    const cleanup = () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', cleanup);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      if (resizeRaf !== null) {
+        cancelAnimationFrame(resizeRaf);
+        resizeRaf = null;
+      }
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', cleanup);
+  };
+};
+
+const startResizeLeft = createColumnResizer(() => leftSidebarWidth.value, (w) => (leftSidebarWidth.value = w), 1);
+const startResizeRight = createColumnResizer(() => rightPanelWidth.value, (w) => (rightPanelWidth.value = w), -1);
+
+// 十字准线悬停 Tooltip
 const tooltipVisible = ref(false);
-const tooltipSide = ref<'left' | 'right'>('right');
 const tooltipStyle = ref<Record<string, string>>({});
 const tooltipData = ref({
   date: '',
@@ -1571,360 +1209,8 @@ const tooltipData = ref({
   volumeStr: '',
 });
 
-// 骨架屏占位：预生成假 K线/量能柱高度，避免渲染时 Math.random 抖动
 const skeletonCandles = Array.from({ length: 56 }, () => 28 + Math.floor(Math.random() * 68));
 const skeletonVol = Array.from({ length: 56 }, () => 18 + Math.floor(Math.random() * 62));
-
-// 骨架屏最短展示时长 (ms)：即使本地/测试数据瞬时返回，也保证扫光动画可被用户感知
-const MIN_SKELETON_MS = 700;
-
-// 搜索防抖定时器
-let searchDebounceTimer: any = null;
-let resizeRaf: number | null = null;
-
-// ================== 涟漪效果 ==================
-const createRipple = (event: MouseEvent) => {
-  const button = event.currentTarget as HTMLElement;
-  const ripple = document.createElement('span');
-  const rect = button.getBoundingClientRect();
-  const size = Math.max(rect.width, rect.height);
-  const x = event.clientX - rect.left - size / 2;
-  const y = event.clientY - rect.top - size / 2;
-
-  ripple.style.width = ripple.style.height = size + 'px';
-  ripple.style.left = x + 'px';
-  ripple.style.top = y + 'px';
-  ripple.className = 'ripple-effect';
-
-  button.appendChild(ripple);
-
-  setTimeout(() => {
-    ripple.remove();
-  }, 600);
-};
-
-// ================== 数字滚动动画 ==================
-const animateNumber = (target: number, isRise: boolean) => {
-  const duration = 800;
-  const startTime = performance.now();
-  const startValue = isRise ? animatedRisePct.value : animatedFallPct.value;
-  const diff = target - startValue;
-
-  const animate = (currentTime: number) => {
-    const elapsed = currentTime - startTime;
-    const progress = Math.min(elapsed / duration, 1);
-
-    // 缓动函数 - easeOutCubic
-    const easeProgress = 1 - Math.pow(1 - progress, 3);
-    const currentValue = startValue + diff * easeProgress;
-
-    if (isRise) {
-      animatedRisePct.value = currentValue;
-    } else {
-      animatedFallPct.value = currentValue;
-    }
-
-    if (progress < 1) {
-      requestAnimationFrame(animate);
-    }
-  };
-
-  requestAnimationFrame(animate);
-};
-
-
-
-const selectSuggestion = (symbol: string) => {
-  symbolInput.value = symbol;
-  handleSearch();
-};
-
-// ================== 自选分组方法 ==================
-// 生成分组 id（优先 crypto.randomUUID，回退到随机串）
-const genGroupId = (): string =>
-  (typeof crypto !== 'undefined' && crypto.randomUUID)
-    ? crypto.randomUUID()
-    : `g${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
-
-// 默认分组（首次启动示例，用户可自由改名/删除/另建）
-const defaultGroups = (): WatchGroup[] => ([
-  { id: genGroupId(), name: '我的自选', stocks: ['usAAPL', 'usNVDA', 'sh600519', 'hk00700'] },
-]);
-
-const loadWatchlist = async () => {
-  // 优先从后端加载 (跨浏览器 / 跨 origin / 跨预览会话持久)
-  try {
-    const remote = await getWatchlist();
-    if (Array.isArray(remote) && remote.length) {
-      watchGroups.value = remote.map((g: WatchGroup) => ({
-        id: g.id || genGroupId(),
-        name: g.name || '未命名分组',
-        stocks: g.stocks.map((s: string) => canonSym(s) || s),
-      }));
-      persistWatchlistLocal(); // 同步本地兜底
-    }
-  } catch {
-    // 后端不可用时忽略，回退本地
-  }
-  // 回退：本地 localStorage（兼容旧版扁平 list）
-  if (!watchGroups.value.length) {
-    const local = localStorage.getItem('stock_watchlist');
-    if (local) {
-      try {
-        const parsed = JSON.parse(local);
-        if (Array.isArray(parsed)) {
-          // 旧版扁平 list -> 归入默认分组
-          watchGroups.value = [{ id: genGroupId(), name: '我的自选', stocks: parsed.map((s: string) => canonSym(s) || s) }];
-        } else if (parsed && Array.isArray(parsed.groups)) {
-          watchGroups.value = parsed.groups as WatchGroup[];
-        } else {
-          watchGroups.value = defaultGroups();
-        }
-      } catch {
-        watchGroups.value = defaultGroups();
-      }
-    } else {
-      watchGroups.value = defaultGroups();
-      persistWatchlistLocal();
-    }
-  }
-  // 初始化价格地图为 loading 态：updateWatchlistPrices 要等 loadStock 完成后才调用，
-  // 此间 watchlist 已有值但 watchlistPriceMap 为空 → 模板取到 undefined 会崩溃。
-  // 预先填 loading 条目，既防崩溃又让初始显示骨架屏而非 "--" 闪烁。
-  const initMap: Record<string, WatchlistPriceInfo> = {};
-  for (const s of watchlist.value) {
-    initMap[s] = { price: null, change: null, loading: true };
-  }
-  watchlistPriceMap.value = initMap;
-  // 真实模式：同步引擎需轮询的标的（当前股票 + 自选股）
-  if (!useMockData.value) refreshEngineSymbols();
-  // 竞态保护: onMounted 中 loadWatchlist(async, await getWatchlist) 与
-  // handleSearch→loadStock 并发执行。若 loadStock 先完成, 它末尾调用的
-  // updateWatchlistPrices 会因 watchlist 仍为空而 return; 等 loadWatchlist
-  // 在此设好 watchlist 后, 无人再触发更新 → 自选股永卡 loading。故此处补调一次。
-  if (!currentSymbol.value && watchlist.value.length) {
-    // 启动后自动加载第一只自选，确保图表与自选栏价格立即有数据
-    selectWatchlist(watchlist.value[0]);
-  } else if (currentSymbol.value && startDate.value && endDate.value) {
-    updateWatchlistPrices();
-  }
-};
-
-// 同时写后端 + 本地兜底
-const persistWatchlistLocal = () => {
-  localStorage.setItem('stock_watchlist', JSON.stringify({ groups: watchGroups.value }));
-};
-const persistWatchlist = () => {
-  persistWatchlistLocal();
-  saveWatchlist(watchGroups.value); // 异步写后端，不阻塞 UI
-};
-
-const isWatchlisted = (sym: string): boolean => {
-  const target = canonSym(sym);
-  return watchGroups.value.some((g) => g.stocks.some((s) => canonSym(s) === target));
-};
-
-const toggleWatchlist = (sym: string) => {
-  if (!sym) return;
-  const target = canonSym(sym);
-
-  // 触发弹跳动画
-  starBounce.value = true;
-  setTimeout(() => {
-    starBounce.value = false;
-  }, 500);
-
-  if (isWatchlisted(target)) {
-    removeFromWatchlist(target);
-  } else {
-    // 未自选 -> 加入当前激活的分组，如果是 all 则加入第一个分组
-    if (!watchGroups.value.length) watchGroups.value = defaultGroups();
-    const targetGroupId = activeGroupId.value !== 'all' ? activeGroupId.value : watchGroups.value[0].id;
-    const targetGroup = watchGroups.value.find(g => g.id === targetGroupId) || watchGroups.value[0];
-    if (!targetGroup.stocks.some((s) => canonSym(s) === target)) {
-      targetGroup.stocks.push(target);
-      watchlistPriceMap.value[target] = { price: null, change: null, loading: true };
-    }
-    persistWatchlist();
-    if (!useMockData.value) refreshEngineSymbols();
-  }
-  updateWatchlistPrices();
-};
-
-// 从指定分组移除股票 (不传 groupId 则从所有分组移除)
-const removeFromWatchlist = (sym: string, groupId?: string) => {
-  const target = canonSym(sym);
-  for (const g of watchGroups.value) {
-    if (groupId && g.id !== groupId) continue;
-    const idx = g.stocks.findIndex((s) => canonSym(s) === target);
-    if (idx > -1) g.stocks.splice(idx, 1);
-  }
-  const stillAny = watchGroups.value.some((g) => g.stocks.some((s) => canonSym(s) === target));
-  if (!stillAny) delete watchlistPriceMap.value[target];
-  persistWatchlist();
-  if (!useMockData.value) refreshEngineSymbols();
-};
-
-const selectWatchlist = (sym: string) => {
-  // 记录导航历史：当前标的压入后退栈，清空前进栈
-  if (currentSymbol.value && currentSymbol.value !== sym) {
-    navBackHistory.value.push(currentSymbol.value);
-    navForwardHistory.value = [];
-  }
-  // 搜索框显示纯净代码，handleSearch 会自动按前缀识别市场
-  symbolInput.value = stripPrefix(sym);
-  handleSearch();
-};
-
-// ================== 自选分组 CRUD ==================
-const handleCreateGroupSubmit = () => {
-  const name = (newGroupNameInput.value || '').trim();
-  if (name) {
-    const newId = genGroupId();
-    watchGroups.value.push({ id: newId, name, stocks: [] });
-    persistWatchlist();
-    // 自动在自选栏打开新建分组的列表
-    activeGroupId.value = newId;
-  }
-  newGroupNameInput.value = '';
-  showCreateGroupModal.value = false;
-};
-const editingGroupId = ref<string | null>(null);
-const editingGroupName = ref('');
-const confirmRename = (id: string) => {
-  if (editingGroupId.value !== id) return;
-  renameGroup(id, editingGroupName.value);
-  editingGroupId.value = null;
-};
-
-const renameGroup = (id: string, name: string) => {
-  const g = watchGroups.value.find((x) => x.id === id);
-  if (g) {
-    g.name = (name || '').trim() || g.name;
-    persistWatchlist();
-  }
-};
-const deleteGroup = (id: string) => {
-  const i = watchGroups.value.findIndex((x) => x.id === id);
-  if (i > -1) {
-    watchGroups.value.splice(i, 1);
-    // 删除分组时如果刚好被选中，切回全部
-    if (activeGroupId.value === id) {
-      activeGroupId.value = 'all';
-    }
-    persistWatchlist();
-    if (!useMockData.value) refreshEngineSymbols();
-  }
-};
-
-// ================== 拖拽时显式同步图表尺寸 ==================
-const syncChartSize = () => {
-  // 双重 RAF：第一帧更新 DOM，第二帧读取实际布局尺寸
-  requestAnimationFrame(() => {
-    if (chartInstance && chartArea.value) {
-      const rect = chartArea.value.getBoundingClientRect();
-      if (rect.width > 0 && rect.height > 0) {
-        chartInstance.applyOptions({
-          width: Math.floor(rect.width),
-          height: Math.floor(rect.height),
-        });
-      }
-    }
-  });
-};
-
-// ================== 拖动调宽 - 左侧边栏 ==================
-const startResizeLeft = (e: MouseEvent) => {
-  e.preventDefault();
-  const startX = e.clientX;
-  const startWidth = leftSidebarWidth.value;
-  let latestWidth = startWidth;
-
-  document.body.style.cursor = 'col-resize';
-  document.body.style.userSelect = 'none';
-
-  const handleMouseMove = (moveEvent: MouseEvent) => {
-    const deltaX = moveEvent.clientX - startX;
-    const newWidth = startWidth + deltaX;
-    const minL = 260;
-    const maxL = Math.floor(window.innerWidth / 3);
-    latestWidth = Math.max(minL, Math.min(newWidth, maxL));
-
-    if (resizeRaf === null) {
-      resizeRaf = requestAnimationFrame(() => {
-        leftSidebarWidth.value = latestWidth;
-        syncChartSize();
-        resizeRaf = null;
-      });
-    }
-  };
-
-  const cleanup = () => {
-    document.removeEventListener('mousemove', handleMouseMove);
-    document.removeEventListener('mouseup', handleMouseUp);
-    document.body.style.cursor = '';
-    document.body.style.userSelect = '';
-    if (resizeRaf !== null) {
-      cancelAnimationFrame(resizeRaf);
-      resizeRaf = null;
-    }
-  };
-
-  const handleMouseUp = () => {
-    cleanup();
-  };
-
-  document.addEventListener('mousemove', handleMouseMove);
-  document.addEventListener('mouseup', handleMouseUp);
-};
-
-// ================== 拖动调宽 - 右侧面板 ==================
-const startResizeRight = (e: MouseEvent) => {
-  e.preventDefault();
-  const startX = e.clientX;
-  const startWidth = rightPanelWidth.value;
-  let latestWidth = startWidth;
-
-  document.body.style.cursor = 'col-resize';
-  document.body.style.userSelect = 'none';
-
-  const handleMouseMove = (moveEvent: MouseEvent) => {
-    const deltaX = startX - moveEvent.clientX; // 反向计算
-    const newWidth = startWidth + deltaX;
-    const minL = 260;
-    const maxL = Math.floor(window.innerWidth / 3);
-    latestWidth = Math.max(minL, Math.min(newWidth, maxL));
-
-    if (resizeRaf === null) {
-      resizeRaf = requestAnimationFrame(() => {
-        rightPanelWidth.value = latestWidth;
-        syncChartSize();
-        resizeRaf = null;
-      });
-    }
-  };
-
-  const cleanup = () => {
-    document.removeEventListener('mousemove', handleMouseMove);
-    document.removeEventListener('mouseup', handleMouseUp);
-    document.body.style.cursor = '';
-    document.body.style.userSelect = '';
-    if (resizeRaf !== null) {
-      cancelAnimationFrame(resizeRaf);
-      resizeRaf = null;
-    }
-  };
-
-  const handleMouseUp = () => {
-    cleanup();
-  };
-
-  document.addEventListener('mousemove', handleMouseMove);
-  document.addEventListener('mouseup', handleMouseUp);
-};
-
-// ================== K线悬停提示框逻辑 ==================
-const formatPrice = (val: number): string => val.toFixed(2);
 
 const formatVolumeNum = (vol: number): string => {
   if (vol >= 1e9) return (vol / 1e9).toFixed(2) + 'B';
@@ -1936,94 +1222,36 @@ const formatVolumeNum = (vol: number): string => {
 const findPrevClose = (time: string): number | null => {
   const data = klineData.value;
   if (data.length < 2) return null;
-  const idx = data.findIndex(d => d.time === time);
-  if (idx > 0) return data[idx - 1].close;
-  return null;
+  const idx = data.findIndex((d) => d.time === time);
+  return idx > 0 ? data[idx - 1].close : null;
 };
 
 const formatDate = (input: Date | string): string => {
   try {
     const date = input instanceof Date ? input : new Date(input);
     if (isNaN(date.getTime())) return String(input);
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
     const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-    return `${y}/${m}/${d} ${weekdays[date.getDay()]}`;
+    return `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')} ${weekdays[date.getDay()]}`;
   } catch {
     return String(input);
   }
 };
 
-const updateTooltipPosition = (relX: number, _relY: number) => {
+const updateTooltipPosition = (relX: number) => {
   if (!chartArea.value || !tooltipEl.value) return;
-
   const areaRect = chartArea.value.getBoundingClientRect();
   const tipRect = tooltipEl.value.getBoundingClientRect();
-  const tipW = tipRect.width;
-
-  const padding = 8; // 距图表边缘间距
-
-  // 鼠标在左半区 → 提示框固定在右上角；鼠标在右半区 → 固定在左上角
-  let left: number;
-  if (relX > areaRect.width / 2) {
-    // 鼠标在右侧 → 提示框放左上角，不遮挡右侧K线
-    tooltipSide.value = 'left';
-    left = padding;
-  } else {
-    // 鼠标在左侧 → 提示框放右上角，不遮挡左侧K线
-    tooltipSide.value = 'right';
-    left = areaRect.width - tipW - padding;
-  }
-
-  // 垂直固定在顶部
-  const top = padding;
-
-  tooltipStyle.value = {
-    left: left + 'px',
-    top: top + 'px',
-  };
+  const padding = 8;
+  const left = relX > areaRect.width / 2 ? padding : areaRect.width - tipRect.width - padding;
+  tooltipStyle.value = { left: `${left}px`, top: `${padding}px` };
 };
 
-const hideTooltip = () => {
-  tooltipVisible.value = false;
-};
-
-// ================== 缩放记忆相关 ==================
-// 节流持久化到 localStorage，避免滚轮缩放过程中高频写入
-const persistZoomMemory = () => {
-  if (persistThrottleTimer) return;
-  persistThrottleTimer = setTimeout(() => {
-    persistThrottleTimer = null;
-    if (zoomMemory) {
-      try {
-        localStorage.setItem(ZOOM_MEMORY_KEY, JSON.stringify(zoomMemory));
-      } catch {
-        // localStorage 不可用时静默忽略
-      }
-    }
-  }, 400);
-};
-
-// 订阅缩放 / 平移变化：把当前可见逻辑范围折算成"占全长比例"并记忆
-const onVisibleLogicalRangeChanged = (range: any) => {
-  if (suppressRangeEvents) return;
-  if (!range) return;
-  const n = klineData.value.length;
-  if (n < 2) return;
-  const fromFrac = range.from / n;
-  const toFrac = range.to / n;
-  if (!isFinite(fromFrac) || !isFinite(toFrac)) return;
-  if (toFrac - fromFrac < 0.0005) return; // 防止异常窄范围
-  zoomMemory = { fromFrac, toFrac };
-  persistZoomMemory();
-};
-
-// ================== 绘图初始化 ==================
+// 初始化图表面板
 const initChart = () => {
   if (!chartContainer.value) return;
 
   chartInstance = createChart(chartContainer.value, getChartOptions(isDarkMode.value));
+  chartInstance.timeScale().applyOptions({ minBarSpacing: 3, rightOffset: 12, barSpacing: 8 });
 
   const upColor = isDarkMode.value ? '#34d399' : '#10b981';
   const downColor = isDarkMode.value ? '#fb7185' : '#f43f5e';
@@ -2038,834 +1266,165 @@ const initChart = () => {
   markersPlugin = createSeriesMarkers(candlestickSeries);
   chartAnnotations.init(chartInstance, candlestickSeries, markersPlugin);
   chartAnnotations.clearAnnotations();
+  initIndicators(chartInstance);
 
   volumeSeries = chartInstance.addSeries(HistogramSeries, {
     priceFormat: { type: 'volume' },
     priceScaleId: 'volume',
   });
 
-  chartInstance.priceScale('volume').applyOptions({
-    scaleMargins: {
-      top: 0.8,
-      bottom: 0,
-    },
-    visible: false,
-  });
-
-  chartInstance.priceScale('right').applyOptions({
-    scaleMargins: {
-      top: 0.1,
-      bottom: 0.25,
-    },
-  });
-
-  // Chart will auto-size based on the container size and CSS layout.
-
-  // ---- 缩放记忆：恢复上次记忆 + 订阅缩放变化 ----
-  try {
-    const saved = localStorage.getItem(ZOOM_MEMORY_KEY);
-    if (saved) {
-      const o = JSON.parse(saved);
-      if (typeof o.fromFrac === 'number' && typeof o.toFrac === 'number' && o.toFrac > o.fromFrac) {
-        zoomMemory = o;
-      }
-    }
-  } catch {
-    // 忽略损坏的记忆数据
-  }
-
-  chartInstance.timeScale().subscribeVisibleLogicalRangeChange(onVisibleLogicalRangeChanged);
-
-  // 初始化图表主题调色板
+  chartInstance.priceScale('volume').applyOptions({ scaleMargins: { top: 0.8, bottom: 0 }, visible: false });
+  chartInstance.priceScale('right').applyOptions({ scaleMargins: { top: 0.1, bottom: 0.25 } });
+  chartInstance.timeScale().subscribeVisibleLogicalRangeChange(viewport.onVisibleLogicalRangeChanged);
   applyChartTheme(isDarkMode.value);
 
-  // ---- 十字准线悬停 → 自定义提示框 ----
   chartInstance.subscribeCrosshairMove((param) => {
     if (!param.point || !param.time || !param.seriesData) {
-      hideTooltip();
+      tooltipVisible.value = false;
       return;
     }
-
     const candleData = param.seriesData.get(candlestickSeries) as any;
     if (!candleData) {
-      hideTooltip();
+      tooltipVisible.value = false;
       return;
     }
-
-    // param.time 为 'YYYY-MM-DD' 字符串格式
     const timeStr = String(param.time);
     const prevClose = findPrevClose(param.time as any);
     const change = prevClose !== null ? ((candleData.close - prevClose) / prevClose) * 100 : 0;
     const amplitude = prevClose !== null ? ((candleData.high - candleData.low) / prevClose) * 100 : 0;
-
-    // 成交量
     const volData = param.seriesData.get(volumeSeries) as any;
-    const volume = volData?.value ?? 0;
 
     tooltipData.value = {
       date: formatDate(timeStr),
-      open: formatPrice(candleData.open),
-      high: formatPrice(candleData.high),
-      low: formatPrice(candleData.low),
-      close: formatPrice(candleData.close),
+      open: candleData.open.toFixed(2),
+      high: candleData.high.toFixed(2),
+      low: candleData.low.toFixed(2),
+      close: candleData.close.toFixed(2),
       change,
-      changeStr: (change >= 0 ? '+' : '') + change.toFixed(2) + '%',
+      changeStr: `${change >= 0 ? '+' : ''}${change.toFixed(2)}%`,
       amplitude: +amplitude.toFixed(2),
-      volumeStr: formatVolumeNum(volume),
+      volumeStr: formatVolumeNum(volData?.value ?? 0),
     };
 
-    // 先让 DOM 渲染，再计算位置
     tooltipVisible.value = true;
-    nextTick(() => {
-      updateTooltipPosition(param.point!.x, param.point!.y);
-    });
+    nextTick(() => updateTooltipPosition(param.point!.x));
   });
 };
 
-// ================== 设置时间范围 ==================
-// 下拉选择时间范围（仅图表缩放，不触发网络请求）
-const selectTimeRange = (range: string) => {
-  showTimeRangeMenu.value = false;
-  setTimeRange(range);
-};
-
-const setTimeRange = (range: string) => {
-  if (!chartInstance || !klineData.value.length) return;
-
-  activeTimeRange.value = range;
-
-  const data = klineData.value;
-  const n = data.length;
-  const lastDate = new Date(data[n - 1].time);
-  let startDate: Date;
-
-  switch (range) {
-    case 'r1m':
-      startDate = new Date(lastDate);
-      startDate.setMonth(startDate.getMonth() - 1);
-      break;
-    case 'r3m':
-      startDate = new Date(lastDate);
-      startDate.setMonth(startDate.getMonth() - 3);
-      break;
-    case 'r6m':
-      startDate = new Date(lastDate);
-      startDate.setMonth(startDate.getMonth() - 6);
-      break;
-    case 'r1y':
-      startDate = new Date(lastDate);
-      startDate.setFullYear(startDate.getFullYear() - 1);
-      break;
-    case 'ALL':
-    default:
-      // 全部：清除缩放记忆，下次 setData 会 fitContent
-      zoomMemory = null;
-      try { localStorage.removeItem(ZOOM_MEMORY_KEY); } catch {}
-      chartInstance.timeScale().fitContent();
-      return;
-  }
-
-  // 在数据中查找目标起始日期对应的柱子索引（从末尾向前找第一个 <= startDate 的位置）
-  // 这样无论日K/周K/月K都能精确定位到正确的柱子
-  const startStr = toLocalDateStr(startDate);
-  let fromIndex = n - 1;  // 默认从第一根开始
-  for (let i = n - 1; i >= 0; i--) {
-    if (data[i].time <= startStr) {
-      fromIndex = i;
-      break;
-    }
-  }
-
-  // 用逻辑索引设置可见范围（精确到柱子级别，不依赖日期字符串匹配）
-  // 同时更新 zoomMemory：这样切换股票/周期时也会按此比例还原
-  const toIndex = n - 1;
-  if (toIndex - fromIndex >= 1) {
-    suppressRangeEvents = true;
-    zoomMemory = {
-      fromFrac: fromIndex / n,
-      toFrac: toIndex / n,
-    };
-    persistZoomMemory();  // 立即持久化
-    chartInstance.timeScale().setVisibleLogicalRange({ from: fromIndex, to: toIndex });
-    suppressRangeEvents = false;
-  } else {
-    // 目标范围太窄（数据不足），显示全部
-    zoomMemory = null;
-    chartInstance.timeScale().fitContent();
-  }
-};
-
-// ================== 切换K线周期 ==================
-const changePeriod = (period: Period) => {
-  if (period === currentPeriod.value) return;
-  activeStrategyRequestId++;
-  currentPeriod.value = period;
-  // 切换周期时立即清空旧周期的策略标注与摘要，防止上一周期的通道与波浪畸变残留
-  priceLines.forEach(line => candlestickSeries?.removePriceLine(line));
-  priceLines = [];
-  markersPlugin?.setMarkers([]);
-  chartAnnotations.clearAnnotations();
-  strategySummary.value = null;
-  // 切换周期后重新拉取K线并重算支撑阻力与最新策略
-  if (currentSymbol.value) {
-    handleSearch();
-  }
-};
-
-// ================== 时间格式转换 ==================
-// 兼容日/周/月线及分钟/小时级 UTC 时间戳格式
-const toChartTime = (timeStr: any): any => toChartTimeHelper(timeStr);
-
-// 本地日期格式化：避免 toISOString() 在东八区（本地 0~8 点）把日期回退一天
-const toLocalDateStr = (d: Date): string => {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-};
-
-const isCurrentGroupEmpty = computed(() => {
-  if (activeGroupId.value === 'all') return false;
-  const g = watchGroups.value.find((x) => x.id === activeGroupId.value);
-  return g ? g.stocks.length === 0 : false;
+// 生命周期与全局事件
+watch(isWindowActive, (active) => {
+  if (active && !useMockData.value) startQuoteEngine();
+  else stopQuoteEngine();
 });
 
-let modalSearchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
-const handleModalSearchInput = () => {
-  const q = modalSearchQuery.value.trim();
-  if (modalSearchDebounceTimer) clearTimeout(modalSearchDebounceTimer);
-  if (!q) {
-    modalSearchResults.value = [];
-    modalSearchLoading.value = false;
-    return;
-  }
-  modalSearchLoading.value = true;
-  modalSearchDebounceTimer = setTimeout(async () => {
-    try {
-      const res = await searchStocks(q);
-      modalSearchResults.value = res || [];
-    } catch (e) {
-      console.error(e);
-      modalSearchResults.value = [];
-    } finally {
-      modalSearchLoading.value = false;
-    }
-  }, 250);
-};
-
-const handleModalSearchSelect = (sym: string) => {
-  const target = canonSym(sym);
-  if (!watchGroups.value.length) watchGroups.value = defaultGroups();
-  const currentGroup = watchGroups.value.find(g => g.id === activeGroupId.value);
-  if (currentGroup) {
-    if (!currentGroup.stocks.some(s => canonSym(s) === target)) {
-      currentGroup.stocks.push(target);
-    }
-    if (!watchlistPriceMap.value[target]) {
-      watchlistPriceMap.value[target] = { price: null, change: null, loading: true };
-    }
-    persistWatchlist();
-    updateWatchlistPrices();
-    if (!useMockData.value) refreshEngineSymbols();
-    
-    // 选中新添加的股票以直接展示 K 线
-    selectWatchlist(target);
-  }
-  
-  showSearchModal.value = false;
-  modalSearchQuery.value = '';
-  modalSearchResults.value = [];
-};
-
-// ================== 行情搜索 ==================
-/**
- * 把用户输入解析为带市场前缀的统一代码。
- *  - 已带前缀 (us/hk/sh/sz)         -> 原样归一返回
- *  - 纯数字代码                     -> 按当前市场标签补全 (5位自动判港股, 6位自动判沪深)
- *  - 名称 / 拼音 (含中文或字母混合) -> 全局搜索解析, 避免被当前市场标签误判
- *                                     例如「小米」属港股, 在沪A标签下也应正确解析为 hk01810,
- *                                     而不是被强制拼成 SH小米 导致加载失败
- */
-async function resolveSymbol(raw: string): Promise<string> {
-  const s = (raw || '').trim();
-  if (!s) return s;
-  // 1) 已带市场前缀 -> 直接归一
-  if (/^(us|hk|sh|sz)/i.test(s)) return normalizeSymbol(s);
-  // 2) 纯数字代码 -> 自动识别市场补全 (6位沪深 / ≤5位港股 / 其它按美股)
-  if (/^\d+$/.test(s)) return normalizeSymbol(s);
-  // 3) 名称 / 拼音 -> 全局搜索解析 (跨市场)
-  try {
-    const res = await searchStocks(s);
-    if (res && res.length > 0) return res[0].symbol;
-  } catch {
-    /* 后端不可达时走下方兜底 */
-  }
-  // 4) 兜底: 自动识别市场补全 (演示模式 / 后端挂了)
-  return normalizeSymbol(s);
-}
-
-const handleSearch = async () => {
-  const raw = symbolInput.value.trim();
-  if (!raw) return;
-  // 解析为带前缀代码: 名称/拼音走全局搜索, 不盲目套用当前市场前缀
-  const querySymbol = await resolveSymbol(raw);
-  if (!querySymbol) return;
-  const code = querySymbol; // 供下方模拟数据基准价取纯净代码 (stripPrefix)
-
-  isLoading.value = true;
-  errorMsg.value = '';
-  srLevels.value = [];
-  rangeStats.value = null;
-  activeTimeRange.value = 'ALL'; // 重置时间范围
-
-  activeStrategyRequestId++;
-
-  // 搜索或切换标的时，立即同步清空图表上的所有策略标注与摘要，根除旧标的残存通道/波浪数据
-  priceLines.forEach(line => candlestickSeries?.removePriceLine(line));
-  priceLines = [];
-  markersPlugin?.setMarkers([]);
-  chartAnnotations.clearAnnotations();
-  strategySummary.value = null;
-
-  // 记录开始时间，用于保证骨架屏最短展示时长
-  const startedAt = performance.now();
-
-  try {
-    let klines: KLinePoint[];
-
-    if (useMockData.value) {
-      // 使用测试数据模式
-      console.log(`[测试模式] 生成 ${querySymbol} 的模拟K线数据`);
-      const basePriceMap: Record<string, number> = {
-        'AAPL': 180, 'NVDA': 450, 'TSLA': 250, 'MSFT': 370,
-        'GOOGL': 140, 'AMZN': 175, 'META': 480, 'AMD': 160,
-        'MU': 130, 'SNDK': 95,
-        '600519': 1700, '601318': 55, '600036': 40, '600276': 50, '600900': 30,
-        '000001': 12, '000858': 150, '300750': 250, '002594': 280, '000333': 70,
-        '00700': 400, '09988': 90, '03690': 180, '01810': 25, '00939': 7,
-      };
-      // 模拟数据按去前缀后的纯净代码取基准价
-      const basePrice = basePriceMap[stripPrefix(code)] || 150;
-      // 测试模式也生成"上市以来"的长历史 (约 4500 交易日 ≈ 18 年)，便于直观查看全量K线
-      klines = generateMockKLines(stripPrefix(code), 4500, basePrice);
-      // 按当前周期重采样：否则周K/月K/季K等会把 4500 根日线直接渲染出来（"成了日K的显示"）
-      klines = resampleMockKLines(klines, currentPeriod.value);
-    } else {
-      // 真实API模式：优先命中缓存，避免重复请求
-      const key = cacheKey(querySymbol, currentPeriod.value);
-      if (klineCache.has(key)) {
-        console.log(`[缓存命中] 直接复用 ${key} 的K线数据`);
-        klines = klineCache.get(key)!;
-      } else {
-        klines = await getKLines(querySymbol, currentPeriod.value);
-        if (klines.length > 0) klineCache.set(key, klines);
-      }
-    }
-    
-    if (!klines || klines.length === 0) {
-      throw new Error('未获取到有效的K线行情数据');
-    }
-
-    klineData.value = klines;
-    // currentSymbol 存带前缀代码 (如 usAAPL / sh600519)，作为标的唯一身份；
-    // UI 展示时通过 formatSymbol 去掉前缀，保持清晰。
-    const prevSym = currentSymbol.value;
-    currentSymbol.value = querySymbol;
-    // 导航历史：切换标的时记录（selectWatchlist 已推入的情况不重复推）
-    if (prevSym && prevSym !== querySymbol && navBackHistory.value[navBackHistory.value.length - 1] !== prevSym) {
-      navBackHistory.value.push(prevSym);
-      navForwardHistory.value = [];
-    }
-
-    // 真实模式下，若返回根数过少，提示数据可能不完整
-    // - 日K <400 根：可能被限流/退回腾讯上限
-    // - 聚合周期(季/半年/年) 根数少：该股票历史长度不足(如退市股 SNDK 只有 ~1.4 年日线)
-    if (!useMockData.value && klines.length > 0) {
-      const p = currentPeriod.value;
-      const n = klines.length;
-      if (p === '1d' && n < 400) {
-        dataWarning.value = `⚠️ 当前仅返回 ${n} 根日K线，可能不是该股票的完整历史（数据源被限流或网络异常时会发生）。请稍后重试，或确认后端数据源可用。`;
-      } else if ((p === '3M' && n < 4) || (p === '6M' && n < 2) || (p === '1Y' && n < 2)) {
-        const labels: Record<string, string> = { '3M': '季K', '6M': '半年K', '1Y': '年K' };
-        dataWarning.value = `⚠️ 该股票历史数据较短，当前仅 ${n} 根${labels[p] || p}（可能是退市/新上市股票）。建议切换到更短周期（如日K）查看更多细节。`;
-      } else {
-        dataWarning.value = '';
-      }
-    } else {
-      dataWarning.value = '';
-    }
-
-    // 重置绘图线与标记
-    priceLines.forEach(line => candlestickSeries?.removePriceLine(line));
-    priceLines = [];
-    markersPlugin?.setMarkers([]);
-    chartAnnotations.clearAnnotations();
-
-    if (klines.length > 0) {
-      const minD = klines[0].time;
-      const maxD = klines[klines.length - 1].time;
-      // 恢复该股票上次记住的区间；没有记录则用全量历史
-      const saved = rangePrefs.value[code];
-      let s = minD;
-      let e = maxD;
-      if (saved && saved.start && saved.end && saved.start <= saved.end) {
-        s = clampDate(saved.start, minD, maxD);
-        e = clampDate(saved.end, minD, maxD);
-        if (s > e) {
-          s = minD;
-          e = maxD;
-        }
-      }
-      startDate.value = s;
-      endDate.value = e;
-      inputStartDate.value = s;
-      inputEndDate.value = e;
-    }
-
-    await runAnalysis();
-    // 更新自选股列表中每只股票的价格与区间涨跌幅（不阻塞 UI，后台静默更新）
-    updateWatchlistPrices();
-    // 真实模式：把当前股票加入引擎轮询集合（切换标的后立即开始拉取实时行情）
-    if (!useMockData.value) refreshEngineSymbols();
-
-    // 自动发起最新标的与当前周期的策略高精度分析，确保通道、波浪与当前K线100%贴合
-    handleRunStrategy('swing');
-  } catch (err: any) {
-    errorMsg.value = err.message || '网络连接失败，无法加载行情图';
-    klineData.value = [];
-    currentSymbol.value = '';
-    priceLines.forEach(line => candlestickSeries?.removePriceLine(line));
-    priceLines = [];
-    markersPlugin?.setMarkers([]);
-    chartAnnotations.clearAnnotations();
-    strategySummary.value = null;
-    // 加载失败：清除自选股 loading 态，避免骨架屏永转（显示 "--"）
-    for (const s of watchlist.value) {
-      if (watchlistPriceMap.value[s]) watchlistPriceMap.value[s].loading = false;
-    }
-  } finally {
-    // 保证骨架屏至少展示 MIN_SKELETON_MS 毫秒，让扫光动画可被感知
-    const elapsed = performance.now() - startedAt;
-    const remain = Math.max(0, MIN_SKELETON_MS - elapsed);
-    if (remain > 0) {
-      setTimeout(() => { isLoading.value = false; }, remain);
-    } else {
-      isLoading.value = false;
-    }
-  }
-};
-
-// ================== SR 联动函数 ==================
-const highlightSRLevel = (idx: number, isHover: boolean) => {
-  highlightedSR.value = isHover ? idx : null;
-  
-  // 高亮对应的图表价格线
-  if (priceLines[idx]) {
-    if (isHover) {
-      // 悬停时加粗线条
-      priceLines[idx].applyOptions({
-        lineWidth: 3,
-        lineStyle: 0, // 实线
-      });
-    } else {
-      // 离开时恢复
-      priceLines[idx].applyOptions({
-        lineWidth: 1.5,
-        lineStyle: 2, // 虚线
-      });
-    }
-  }
-};
-
-const scrollToSRLevel = (level: SRLevel) => {
-  if (!chartInstance) return;
-  
-  // 将图表滚动到该价位附近
-  // 由于 lightweight-charts 没有直接滚动到价位的 API，
-  // 我们可以通过设置可见价格范围来实现
-  const currentRange = chartInstance.timeScale().getVisibleLogicalRange();
-  if (currentRange) {
-    // 保持时间范围不变，只是视觉提示
-    // 可以通过闪烁效果来提示用户
-    const idx = srLevels.value.indexOf(level);
-    if (idx >= 0) {
-      highlightedSR.value = idx;
-      setTimeout(() => {
-        highlightedSR.value = null;
-      }, 1000);
-    }
-  }
-};
-
-// ================== 手动重算区间 ==================
-const handleReCalculate = async () => {
-  startDate.value = inputStartDate.value;
-  endDate.value = inputEndDate.value;
-  await runAnalysis();
-  updateWatchlistPrices();
-};
-
-// 快捷区间预设：一键设定起止日期并重新计算，免去抠原生日历
-const rangePresets = [
-  { label: '近1周', value: 'r1w' },
-  { label: '近1月', value: 'r1m' },
-  { label: '近3月', value: 'r3m' },
-  { label: '近6月', value: 'r6m' },
-  { label: '近1年', value: 'r1y' },
-  { label: '全部', value: 'all' },
-];
-// 各预设相对"最新交易日"的回溯偏移（支持按天或按月）
-const PRESET_OFFSETS: Record<string, { months?: number; days?: number }> = {
-  r1w: { days: 7 },
-  r1m: { months: 1 },
-  r3m: { months: 3 },
-  r6m: { months: 6 },
-  r1y: { months: 12 },
-};
-
-function presetRange(value: string): { start: string; end: string } | null {
-  if (!klineData.value.length) return null;
-  const maxD = klineData.value[klineData.value.length - 1].time;
-  const minD = klineData.value[0].time;
-  if (value === 'all') return { start: minD, end: maxD };
-  const off = PRESET_OFFSETS[value];
-  if (!off) return null;
-  const d = new Date(maxD + 'T00:00:00');
-  if (off.months) d.setMonth(d.getMonth() - off.months);
-  if (off.days) d.setDate(d.getDate() - off.days);
-  let start = toLocalDateStr(d);
-  if (start < minD) start = minD;
-  return { start, end: maxD };
-}
-
-function applyRangePreset(value: string) {
-  const r = presetRange(value);
-  if (!r) return;
-  inputStartDate.value = r.start;
-  inputEndDate.value = r.end;
-  handleReCalculate();
-}
-
-// 高亮当前生效的预设（用于按钮 active 态）
-function isPresetActive(value: string): boolean {
-  const r = presetRange(value);
-  if (!r) return false;
-  return r.start === inputStartDate.value && r.end === inputEndDate.value;
-}
-
-// ================== 计算技术分析 ==================
-const runAnalysis = async () => {
-  if (!klineData.value.length || !currentSymbol.value) return;
-
-  const querySymbol = normalizeSymbol(currentSymbol.value);
-
-  try {
-    let res: AnalysisResponse | null;
-    
-    if (useMockData.value) {
-      // 使用前端本地计算引擎
-      console.log('[测试模式] 使用前端分析引擎计算支撑阻力位和区间统计');
-      const sr_levels = calculateSRLevels(klineData.value, 5, currentPeriod.value);
-      const statistics = calculateRangeStats(klineData.value, startDate.value, endDate.value);
-      
-      res = {
-        sr_levels,
-        statistics: statistics || {
-          max_rise: { pct: 0, start: '', end: '' },
-          max_fall: { pct: 0, start: '', end: '' }
-        }
-      };
-    } else {
-      // 调用后端API：优先命中缓存
-      // 注意: 分析结果里的"区间统计"依赖起止日期，缓存键必须包含日期区间，
-      // 否则改了起止日期点"重新计算"会命中旧缓存、返回旧区间的统计(表现为"无反应")。
-      // SR 支撑阻力位仅依赖 symbol+period(全量K线)，但键里带上日期只会让其随日期重算(结果一致)，不影响正确性。
-      const aKey = `${querySymbol}_${currentPeriod.value}_${startDate.value}_${endDate.value}`;
-      if (analysisCache.has(aKey)) {
-        console.log(`[缓存命中] 直接复用 ${aKey} 的分析结果`);
-        res = analysisCache.get(aKey)!;
-      } else {
-        res = await getStockAnalysis(querySymbol, startDate.value, endDate.value, klineData.value, currentPeriod.value);
-        if (res) analysisCache.set(aKey, res);
-      }
-    }
-    
-    if (!res) {
-      throw new Error('支撑阻力计算失败');
-    }
-
-    srLevels.value = res.sr_levels;
-    rangeStats.value = res.statistics;
-
-    // 记住当前股票的分析区间（切回时恢复）
-    persistCurrentRange();
-
-    // 触发数字动画
-    if (res.statistics) {
-      animateNumber(res.statistics.max_rise.pct, true);
-      animateNumber(res.statistics.max_fall.pct, false);
-    }
-
-    // 清除并重新绘制水平虚线
-    priceLines.forEach(line => candlestickSeries?.removePriceLine(line));
-    priceLines = [];
-
-    res.sr_levels.forEach(lvl => {
-      const isSupport = lvl.type === 'support';
-      const lineColor = isSupport
-        ? (isDarkMode.value ? '#34d399' : '#10b981')
-        : (isDarkMode.value ? '#fb7185' : '#f43f5e');
-      const line = candlestickSeries.createPriceLine({
-        price: lvl.price,
-        color: lineColor,
-        lineWidth: 1.5,
-        lineStyle: 2, // 虚线
-        axisLabelVisible: true,
-        title: `${isSupport ? '支撑' : '阻力'}: ${lvl.price.toFixed(2)} [${lvl.level}]`,
-      });
-      priceLines.push(line);
-    });
-
-    // 设置 K 线图上的最大上涨/下跌起点与终点标记 (SeriesMarker)
-    const markers: any[] = [];
-    if (res.statistics) {
-      const rise = res.statistics.max_rise;
-      if (rise && rise.start && rise.end && rise.pct > 0) {
-        markers.push({
-          time: rise.start,
-          position: 'belowBar',
-          color: '#10b981',
-          shape: 'arrowUp',
-          text: `▲上涨起点 (+${rise.pct.toFixed(1)}%)`,
-        });
-        markers.push({
-          time: rise.end,
-          position: 'aboveBar',
-          color: '#10b981',
-          shape: 'arrowDown',
-          text: '▼上涨终点',
-        });
-      }
-
-      const fall = res.statistics.max_fall;
-      if (fall && fall.start && fall.end && fall.pct < 0) {
-        markers.push({
-          time: fall.start,
-          position: 'aboveBar',
-          color: '#f43f5e',
-          shape: 'arrowDown',
-          text: `▼下跌起点 (${fall.pct.toFixed(1)}%)`,
-        });
-        markers.push({
-          time: fall.end,
-          position: 'belowBar',
-          color: '#f43f5e',
-          shape: 'arrowUp',
-          text: '▲下跌终点',
-        });
-      }
-    }
-
-    // 将 markers 排序，使日期从小到大排
-    markers.sort((a, b) => a.time.localeCompare(b.time));
-    markersPlugin?.setMarkers(markers);
-  } catch (err: any) {
-    errorMsg.value = err.message || '分析服务出错，请检查网络';
-  }
-};
-
-watch(klineData, (newData) => {
-  if (candlestickSeries && volumeSeries && newData.length > 0) {
-    // 防御：确保按时间严格升序且无重复 time，
-    // 否则 lightweight-charts 会渲染错位或对乱序数据报错
-    const sorted = [...newData].sort((a, b) =>
-      a.time < b.time ? -1 : a.time > b.time ? 1 : 0
-    );
-    const seen = new Set<string>();
-    const clean = sorted.filter(d => {
-      if (seen.has(d.time)) return false;
-      seen.add(d.time);
-      return true;
-    });
-
-    candlestickSeries.setData(clean.map(d => ({
-      time: toChartTime(d.time),
-      open: d.open,
-      close: d.close,
-      high: d.high,
-      low: d.low,
-    })));
-
-    const upVol = isDarkMode.value ? 'rgba(52, 211, 153, 0.35)' : 'rgba(16, 185, 129, 0.25)';
-    const downVol = isDarkMode.value ? 'rgba(251, 113, 133, 0.35)' : 'rgba(244, 63, 94, 0.25)';
-    volumeSeries.setData(clean.map(d => ({
-      time: toChartTime(d.time),
-      value: d.volume,
-      color: d.close >= d.open ? upVol : downVol
-    })));
-
-    // 恢复记忆的缩放比例：鼠标滚轮缩放 / 日期范围选择都会被记忆，
-    // 并在切换股票、周期、数据模式时按比例还原，保持用户当前视角。
-    const n = clean.length;
-    // 关键: 仅当数据足够长(n>10)才按比例还原缩放。短历史股票(退市/新上市/分拆股,
-    // 如 SNDK 半年K 仅 3-4 根、年K 仅 2 根)若套用长股票(如 AAPL 4500 根)留下的
-    // 高比例缩放记忆, 会把仅有的几根 K 线推到屏幕外 → 看似"无法显示"。
-    // 短数据集一律 fitContent 全量展示。
-    if (zoomMemory && n > 1 && n > 10) {
-      const from = Math.max(0, Math.min(n, zoomMemory.fromFrac * n));
-      const to = Math.max(0, Math.min(n, zoomMemory.toFrac * n));
-      if (to - from >= 1) {
-        suppressRangeEvents = true;
-        chartInstance?.timeScale().setVisibleLogicalRange({ from, to });
-        suppressRangeEvents = false;
-      } else {
-        chartInstance?.timeScale().fitContent();
-      }
-    } else {
-      chartInstance?.timeScale().fitContent();
-    }
-  }
+watch([showEMA, showVWAP], () => {
+  if (klineData.value.length > 0) updateIndicators(klineData.value);
 });
 
-// 模式由后端探测自动切换：清空自选股缓存并重新拉取，避免两种数据源混合显示。
-// 图表未就绪(chartReady=false)时不触发，避免未初始化图表时调用 runAnalysis 崩溃。
-// ================== 实时行情引擎：启动 / 停止 ==================
-let quoteWired = false; // 订阅回调只注册一次，避免模式来回切换导致重复绑定
-
-/** 启动实时行情引擎（真实模式）：加载配置、绑定订阅、开始分层轮询 */
-async function startQuoteEngine() {
-  await quoteEngine.loadConfig();
-  quoteConfig.value = quoteEngine.config;
-  if (!quoteWired) {
-    // 行情变化才更新去重映射（UI 仅在此刻重渲染）
-    quoteEngine.subscribe((sym, q) => {
-      liveQuoteMap.value = { ...liveQuoteMap.value, [sym]: q };
-    });
-    // 每轮 tick 同步元数据与冷却状态（状态面板用，不受价格是否变化影响）
-    quoteEngine.onTick(() => {
-      liveMetaMap.value = quoteEngine.snapshotMetas();
-      engineCooling.value = quoteEngine.getEngineStatus().cooling;
-    });
-    quoteWired = true;
-  }
-  refreshEngineSymbols();
-  quoteEngine.start();
-}
-
-/** 停止并清理引擎（切回演示模式时调用） */
-function stopQuoteEngine() {
-  quoteEngine.stop();
-  liveQuoteMap.value = {};
-  liveMetaMap.value = {};
-  engineCooling.value = false;
-}
+watch([currentSymbol, currentPeriod, klineData], () => {
+  const lastBar = klineData.value.length ? klineData.value[klineData.value.length - 1] : null;
+  wsControl.sendState({
+    symbol: currentSymbol.value,
+    period: currentPeriod.value,
+    current_price: lastBar ? lastBar.close : 0,
+  });
+});
 
 watch(useMockData, () => {
-  watchlistKlineCache.clear();
-  watchlistPriceMap.value = {};
-  // 模式切换：真实模式启动实时行情引擎，演示模式停止并清理
-  if (!useMockData.value) {
-    startQuoteEngine();
-  } else {
-    stopQuoteEngine();
-  }
-  if (chartReady.value && currentSymbol.value) {
-    console.log(`[模式切换] 切换到 ${useMockData.value ? '演示模式' : '实时数据模式'}，重新加载 ${currentSymbol.value}`);
-    handleSearch();
-  }
+  wl.clearWatchlistCache();
+  if (!useMockData.value) startQuoteEngine();
+  else stopQuoteEngine();
+  if (chartReady.value && currentSymbol.value) handleSearch();
 });
 
-onMounted(async () => {
-  loadStockNameMap(); // 先拉取股票名称映射，供自选栏显示名称
-  loadWatchlist();
-  initDarkMode(); // 初始化深色模式
+const handleClickOutside = (e: MouseEvent) => {
+  const target = e.target as HTMLElement;
+  if (showTimeRangeMenu.value && !target.closest('.relative')) showTimeRangeMenu.value = false;
+  if (showGroupDropdown.value && !target.closest('.group-dropdown-container')) showGroupDropdown.value = false;
+};
 
-  // 先探测后端是否可用，决定"演示/实时"模式，避免先加载模拟数据再刷新
-  await detectBackend();
+const PERIOD_KEY_MAP: Record<string, Period> = {
+  '1': '5m',
+  '2': '15m',
+  '3': '1h',
+  '4': '4h',
+  '5': '1d',
+  '6': '1w',
+  '7': '1M',
+  '8': '3M',
+};
 
-  // 真实模式：启动实时行情引擎（配置/订阅/轮询）
-  if (!useMockData.value) {
-    startQuoteEngine();
+const handleGlobalKeydown = (e: KeyboardEvent) => {
+  const target = e.target as HTMLElement;
+  if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
+
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+    e.preventDefault();
+    searchComponentRef.value?.focus();
+    return;
   }
+  if (PERIOD_KEY_MAP[e.key]) {
+    e.preventDefault();
+    changePeriod(PERIOD_KEY_MAP[e.key]);
+    return;
+  }
+  if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+    e.preventDefault();
+    const list = sortedFilteredWatchlist.value;
+    if (!list.length) return;
+    const current = canonSym(currentSymbol.value);
+    const currIdx = list.findIndex((s) => canonSym(s) === current);
+    const nextIdx =
+      e.key === 'ArrowDown'
+        ? currIdx < list.length - 1
+          ? currIdx + 1
+          : 0
+        : currIdx > 0
+          ? currIdx - 1
+          : list.length - 1;
+    selectWatchlist(list[nextIdx]);
+    return;
+  }
+  if (e.code === 'Space' || e.key === ' ') {
+    e.preventDefault();
+    if (currentSymbol.value && klineData.value.length > 0) handleRunStrategy('swing');
+  }
+};
+
+onMounted(async () => {
+  loadStockNameMap();
+  loadWatchlist();
+  initDarkMode();
+
+  await detectBackend();
+  if (!useMockData.value) startQuoteEngine();
 
   nextTick(() => {
     if (!chartContainer.value) return;
-
-    // 使用 ResizeObserver 确保图表在容器拥有实际高度后才初始化
     const observer = new ResizeObserver((entries) => {
-      // 一旦容器高度大于1px (意味着布局已完成)，就执行初始化
       if (entries[0] && entries[0].contentRect.height > 1) {
-        // 立即断开此观察者，因为它只用于首次初始化
         observer.disconnect();
-
-        // 现在可以安全地初始化图表并加载数据
         initChart();
         chartReady.value = true;
         handleSearch();
       }
     });
-
-    // 开始观察容器尺寸变化
     observer.observe(chartContainer.value);
   });
 
-  window.addEventListener('resize', () => {
-    // 窗口大小变化时不需要调整侧边栏宽度，它们有固定最小值
-  });
-
-  // 全局键盘快捷键
   window.addEventListener('keydown', handleGlobalKeydown);
-  // 点击外部关闭时间范围下拉菜单
   document.addEventListener('click', handleClickOutside);
 });
 
-// 点击非下拉菜单区域时关闭菜单
-const handleClickOutside = (e: MouseEvent) => {
-  const target = e.target as HTMLElement;
-  
-  // 关闭时间范围菜单
-  if (showTimeRangeMenu.value && !target.closest('.relative')) {
-    showTimeRangeMenu.value = false;
-  }
-  
-  // 关闭分组筛选/管理菜单
-  if (showGroupDropdown.value && !target.closest('.group-dropdown-container')) {
-    showGroupDropdown.value = false;
-  }
-};
-
-// 全局键盘快捷键处理
-const handleGlobalKeydown = (e: KeyboardEvent) => {
-  // 忽略输入框内的按键
-  const target = e.target as HTMLElement;
-  if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
-
-  // Ctrl+K / Cmd+K: 聚焦搜索框
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-    e.preventDefault();
-    searchComponentRef.value?.focus();
-  }
-  
-  // R: 触发分析重算
-  if (e.key === 'r' || e.key === 'R') {
-    if (klineData.value.length > 0) {
-      handleReCalculate();
-    }
-  }
-};
-
 onUnmounted(() => {
   if (chartInstance) {
-    chartInstance.timeScale().unsubscribeVisibleLogicalRangeChange(onVisibleLogicalRangeChanged);
+    chartInstance.timeScale().unsubscribeVisibleLogicalRangeChange(viewport.onVisibleLogicalRangeChanged);
     chartInstance.remove();
     chartInstance = null;
   }
-  clearTimeout(searchDebounceTimer);
   window.removeEventListener('keydown', handleGlobalKeydown);
   document.removeEventListener('click', handleClickOutside);
 });
-
-
 </script>
 
 <style>
