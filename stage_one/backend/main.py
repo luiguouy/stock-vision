@@ -337,14 +337,30 @@ def _load_local_csv_fallback(norm_sym: str) -> Optional[pd.DataFrame]:
 
 
 async def prewarm_cache():
-    targets = set(PREWARM_SYMBOLS)
-    for g in _load_groups():
+    """分级启动预热：首屏报价与默认日K零延迟并发拉取，其余历史K线错峰延后。"""
+    groups = _load_groups()
+    watch_syms: List[str] = []
+    for g in groups:
         for s in g.get("stocks", []):
-            targets.add(norm_market_prefix(s))
+            norm = norm_market_prefix(s)
+            if norm and norm not in watch_syms:
+                watch_syms.append(norm)
+
+    # 1. 最高优先级（服务启动即刻并发）：预热全部自选实时报价 + 首只标的日K
+    first_sym = watch_syms[0] if watch_syms else "usAAPL"
+    boot_tasks = [get_klines_df(first_sym, "1d", full=True)]
+    if watch_syms:
+        boot_tasks.append(quote_provider.get_quotes(watch_syms))
+    await asyncio.gather(*boot_tasks, return_exceptions=True)
+
+    # 2. 低优先级（延迟 8s 错峰）：后台低速补全热门标的周/月线缓存，避免抢占首屏带宽与限流额度
+    await asyncio.sleep(8)
+    targets = set(PREWARM_SYMBOLS) | set(watch_syms)
     for sym in targets:
-        for period in ["1d", "1w", "1M"]:
+        for period in ("1d", "1w", "1M"):
             try:
                 await get_klines_df(sym, period, full=True)
+                await asyncio.sleep(0.15)
             except Exception:
                 pass
 

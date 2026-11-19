@@ -20,10 +20,6 @@
         autocomplete="off"
         spellcheck="false"
       />
-      <!-- 快捷键提示徽章 -->
-      <kbd class="hidden sm:inline-flex items-center px-1.5 py-0.5 text-[9px] font-mono text-slate-400 dark:text-slate-500 bg-white dark:bg-slate-700/80 rounded border border-slate-200 dark:border-slate-600 shadow-2xs select-none">
-        Ctrl K
-      </kbd>
     </div>
 
     <!-- 结果与历史面板（命令面板式：富信息 + 键盘导航 + 点击进入） -->

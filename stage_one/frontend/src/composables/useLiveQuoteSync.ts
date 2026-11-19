@@ -33,7 +33,6 @@ export function resolveBarBucketTime(updateTime: string, period: Period, lastBar
 }
 
 export function useLiveQuoteSync(options: {
-  useMockData: Ref<boolean>;
   currentSymbol: Ref<string>;
   currentPeriod: Ref<Period>;
   klineData: Ref<KLinePoint[]>;
@@ -47,7 +46,6 @@ export function useLiveQuoteSync(options: {
   onIndicatorsUpdate: (data: KLinePoint[]) => void;
 }) {
   const {
-    useMockData,
     currentSymbol,
     currentPeriod,
     klineData,
@@ -61,8 +59,8 @@ export function useLiveQuoteSync(options: {
     onIndicatorsUpdate,
   } = options;
 
-  const quoteConfig = ref<QuoteConfig | null>(null);
-  const liveQuoteMap = ref<Record<string, Quote>>({});
+  const quoteConfig = ref<QuoteConfig | null>(quoteEngine.config);
+  const liveQuoteMap = ref<Record<string, Quote>>(quoteEngine.getAllQuotes());
   const liveMetaMap = ref<Record<string, SymbolMeta>>({});
   const engineCooling = ref(false);
 
@@ -70,20 +68,26 @@ export function useLiveQuoteSync(options: {
   let isSyncingTail = false;
 
   const displayPrice = computed<number | null>(() => {
-    if (useMockData.value) return latestPrice.value;
-    const q = currentSymbol.value ? liveQuoteMap.value[currentSymbol.value] : null;
+    const sym = currentSymbol.value;
+    if (!sym) return latestPrice.value;
+    const c = canonSym(sym) || sym;
+    const q = liveQuoteMap.value[c] || liveQuoteMap.value[sym] || quoteEngine.getQuote(c);
     return q && q.price != null ? q.price : latestPrice.value;
   });
 
   const displayChange = computed<number>(() => {
-    if (useMockData.value) return latestChange.value;
-    const q = currentSymbol.value ? liveQuoteMap.value[currentSymbol.value] : null;
+    const sym = currentSymbol.value;
+    if (!sym) return latestChange.value;
+    const c = canonSym(sym) || sym;
+    const q = liveQuoteMap.value[c] || liveQuoteMap.value[sym] || quoteEngine.getQuote(c);
     return q && q.changePct != null ? q.changePct : latestChange.value;
   });
 
   const displayExtendedInfo = computed(() => {
-    if (useMockData.value || !currentSymbol.value) return null;
-    const q = liveQuoteMap.value[currentSymbol.value];
+    if (!currentSymbol.value) return null;
+    const sym = currentSymbol.value;
+    const c = canonSym(sym) || sym;
+    const q = liveQuoteMap.value[c] || liveQuoteMap.value[sym] || quoteEngine.getQuote(c);
     if (!q || !q.extendedPrice || !q.prevClose || q.prevClose <= 0) return null;
     if (q.price != null && Math.abs(q.extendedPrice - q.price) < 0.01) return null;
     const chgPct = ((q.extendedPrice - q.prevClose) / q.prevClose) * 100;
@@ -115,7 +119,7 @@ export function useLiveQuoteSync(options: {
   }
 
   async function syncLatestBarsSilently(sym: string, period: Period) {
-    if (useMockData.value || isSyncingTail || !sym) return;
+    if (isSyncingTail || !sym) return;
     isSyncingTail = true;
     try {
       const freshData = await getKLines(sym, period, true, true);
@@ -142,7 +146,7 @@ export function useLiveQuoteSync(options: {
 
   function applyLiveQuoteToChart(q: Quote) {
     const series = getCandlestickSeries();
-    if (useMockData.value || !series || !klineData.value.length) return;
+    if (!series || !klineData.value.length) return;
 
     const isIntraday = ['5m', '15m', '1h', '4h'].includes(currentPeriod.value);
     const activePrice = isIntraday && q.extendedPrice && q.extendedPrice > 0 ? q.extendedPrice : q.price;
@@ -198,13 +202,14 @@ export function useLiveQuoteSync(options: {
   }
 
   async function startQuoteEngine() {
-    await quoteEngine.loadConfig();
     quoteConfig.value = quoteEngine.config;
     if (!quoteWired) {
-      quoteEngine.subscribe((sym, q) => {
-        liveQuoteMap.value = { ...liveQuoteMap.value, [sym]: q };
-        if (currentSymbol.value && canonSym(sym) === canonSym(currentSymbol.value)) {
-          applyLiveQuoteToChart(q);
+      quoteEngine.subscribeBatch((batch) => {
+        liveQuoteMap.value = { ...liveQuoteMap.value, ...batch };
+        if (currentSymbol.value) {
+          const activeCanon = canonSym(currentSymbol.value);
+          const q = batch[activeCanon] || batch[currentSymbol.value];
+          if (q) applyLiveQuoteToChart(q);
         }
       });
       quoteEngine.onTick(() => {
@@ -215,12 +220,43 @@ export function useLiveQuoteSync(options: {
     }
     refreshEngineSymbols();
     quoteEngine.start();
+
+    // 核心优化：配置在后台异步拉取，首屏启动 0 毫秒立即启动轮询，绝不等待 loadConfig 网络往返
+    void quoteEngine.loadConfig().then(() => {
+      quoteConfig.value = quoteEngine.config;
+    });
+  }
+
+  function pauseQuoteEngine() {
+    quoteEngine.stop();
+  }
+
+  let lastResumeCall = 0;
+  function resumeQuoteEngine() {
+    const now = Date.now();
+    if (now - lastResumeCall < 200) return;
+    lastResumeCall = now;
+
+    // 恢复时首先同步注入现有全部缓存行情，杜绝切回瞬间闪烁骨架屏
+    const cached = quoteEngine.getAllQuotes();
+    if (Object.keys(cached).length > 0) {
+      liveQuoteMap.value = { ...liveQuoteMap.value, ...cached };
+    }
+    refreshEngineSymbols();
+    quoteEngine.resume();
+  }
+
+  if (typeof window !== 'undefined') {
+    (window as any).__onDesktopWindowRestored = () => {
+      resumeQuoteEngine();
+    };
+    (window as any).__onDesktopWindowMinimized = () => {
+      pauseQuoteEngine();
+    };
   }
 
   function stopQuoteEngine() {
     quoteEngine.stop();
-    liveQuoteMap.value = {};
-    liveMetaMap.value = {};
     engineCooling.value = false;
   }
 
@@ -236,6 +272,8 @@ export function useLiveQuoteSync(options: {
     quoteEngineStatus,
     refreshEngineSymbols,
     startQuoteEngine,
+    pauseQuoteEngine,
+    resumeQuoteEngine,
     stopQuoteEngine,
   };
 }

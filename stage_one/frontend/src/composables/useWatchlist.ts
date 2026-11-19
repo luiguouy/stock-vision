@@ -1,7 +1,5 @@
 import { ref, computed, type Ref } from 'vue';
 import {
-  getKLines,
-  generateMockKLines,
   getWatchlist,
   saveWatchlist,
   BASE_URL,
@@ -9,10 +7,9 @@ import {
   stripPrefix,
   marketOf,
   formatSymbol,
-  type KLinePoint,
   type WatchGroup,
 } from '../utils/api';
-import type { Quote, QuoteConfig } from '../utils/quote';
+import { quoteEngine, type Quote, type QuoteConfig } from '../utils/quote';
 
 export type MarketTabKey = 'all' | 'us' | 'futures';
 export type SortKey = 'name' | 'price' | 'change';
@@ -23,24 +20,28 @@ export interface WatchlistPriceInfo {
   loading: boolean;
 }
 
+export interface WatchlistRowInfo {
+  price: number | null;
+  change: number | null;
+  formattedPrice: string;
+  formattedChange: string;
+  isUp: boolean;
+  secondary: {
+    price: string;
+    changePct: number | null;
+    formattedChange: string | null;
+    label: string;
+    isUp: boolean;
+  } | null;
+  status?: string;
+  reason?: string;
+}
+
 export const MARKET_TABS: { key: MarketTabKey; label: string }[] = [
   { key: 'all', label: '全部' },
   { key: 'us', label: '美股' },
   { key: 'futures', label: '期货' },
 ];
-
-const MOCK_BASE_PRICES: Record<string, number> = {
-  AAPL: 180,
-  NVDA: 450,
-  TSLA: 250,
-  MSFT: 370,
-  GOOGL: 140,
-  AMZN: 175,
-  META: 480,
-  AMD: 160,
-  MU: 130,
-  SNDK: 95,
-};
 
 const DELAY_LABEL_FALLBACK: Record<string, { label: string; full: string }> = {
   us: { label: '15m 延迟', full: '美股 公开数据源 (15分钟延迟)' },
@@ -56,39 +57,14 @@ export const canonSym = (s: string): string => {
 
 export const currencyOf = (_sym: string): string => '$';
 
-function calcLatestPrice(klines: KLinePoint[]): { price: number | null; change: number | null } {
-  if (!klines || klines.length === 0) return { price: null, change: null };
-  const last = klines[klines.length - 1];
-  const price = last.close;
-  if (klines.length > 1) {
-    const prevClose = klines[klines.length - 2].close;
-    if (prevClose && prevClose !== 0) {
-      return { price, change: ((price - prevClose) / prevClose) * 100 };
-    }
-  }
-  return { price, change: null };
-}
-
 export function useWatchlist(options: {
-  useMockData: Ref<boolean>;
   liveQuoteMap: Ref<Record<string, Quote>>;
   quoteConfig: Ref<QuoteConfig | null>;
   currentSymbol: Ref<string>;
   onSelectSymbol: (sym: string) => void;
   onSymbolsChanged: () => void;
 }) {
-  const { useMockData, liveQuoteMap, quoteConfig, currentSymbol, onSelectSymbol, onSymbolsChanged } = options;
-
-  const watchGroups = ref<WatchGroup[]>([]);
-  const watchlistPriceMap = ref<Record<string, WatchlistPriceInfo>>({});
-  const watchlistKlineCache = new Map<string, KLinePoint[]>();
-  const stockNameMap = ref<Record<string, string>>({});
-
-  const activeMarketTab = ref<MarketTabKey>('all');
-  const activeGroupId = ref<string>('all');
-  const showGroupDropdown = ref(false);
-  const sortBy = ref<SortKey | null>(null);
-  const sortDir = ref<'asc' | 'desc'>('desc');
+  const { liveQuoteMap, quoteConfig, currentSymbol, onSelectSymbol, onSymbolsChanged } = options;
 
   const genGroupId = (): string =>
     typeof crypto !== 'undefined' && crypto.randomUUID
@@ -98,6 +74,35 @@ export function useWatchlist(options: {
   const defaultGroups = (): WatchGroup[] => [
     { id: genGroupId(), name: '我的自选', stocks: ['usAAPL', 'usNVDA', 'usAMD', 'usTSLA', 'usQQQ'] },
   ];
+
+  function getInitialGroups(): WatchGroup[] {
+    try {
+      const local = localStorage.getItem('stock_watchlist');
+      if (local) {
+        const parsed = JSON.parse(local);
+        if (Array.isArray(parsed) && parsed.length) {
+          return [{ id: genGroupId(), name: '我的自选', stocks: parsed.map((s: string) => canonSym(s) || s) }];
+        } else if (parsed && Array.isArray(parsed.groups) && parsed.groups.length) {
+          return (parsed.groups as WatchGroup[]).map((g) => ({
+            id: g.id || genGroupId(),
+            name: g.name || '未命名分组',
+            stocks: (g.stocks || []).map((s: string) => canonSym(s) || s),
+          }));
+        }
+      }
+    } catch {}
+    return defaultGroups();
+  }
+
+  const watchGroups = ref<WatchGroup[]>(getInitialGroups());
+  const watchlistPriceMap = ref<Record<string, WatchlistPriceInfo>>({});
+  const stockNameMap = ref<Record<string, string>>({});
+
+  const activeMarketTab = ref<MarketTabKey>('all');
+  const activeGroupId = ref<string>('all');
+  const showGroupDropdown = ref(false);
+  const sortBy = ref<SortKey | null>(null);
+  const sortDir = ref<'asc' | 'desc'>('desc');
 
   const watchlist = computed<string[]>(() => {
     const set = new Set<string>();
@@ -159,29 +164,47 @@ export function useWatchlist(options: {
     extendedPrice: number | null;
     extendedLabel: string;
     prevClose: number | null;
+    status?: string;
+    reason?: string;
   } {
-    if (!useMockData.value) {
-      const q = liveQuoteMap.value[item];
-      if (q && q.status === 'ok' && q.price != null && q.changePct != null) {
-        return {
-          price: q.price,
-          change: q.changePct,
-          loading: false,
-          extendedPrice: q.extendedPrice ?? null,
-          extendedLabel: q.extendedLabel ?? '',
-          prevClose: q.prevClose ?? null,
-        };
-      }
-      return { price: null, change: null, loading: true, extendedPrice: null, extendedLabel: '', prevClose: null };
+    const c = canonSym(item) || item;
+    const itemUpper = (item || '').toUpperCase();
+    const itemLower = (item || '').toLowerCase();
+    const cleanSym = stripPrefix(item);
+
+    const q =
+      liveQuoteMap.value[c] ||
+      liveQuoteMap.value[item] ||
+      liveQuoteMap.value[itemUpper] ||
+      liveQuoteMap.value[itemLower] ||
+      liveQuoteMap.value[cleanSym] ||
+      quoteEngine.getQuote(c) ||
+      quoteEngine.getQuote(item) ||
+      quoteEngine.getQuote(itemUpper);
+
+    // 优先：无论当前处于 mock 还是 live 模式，只要引擎或本地缓存中有价格，零延迟直接退出骨架屏展示价格
+    if (q && q.price != null) {
+      return {
+        price: q.price,
+        change: q.changePct ?? 0,
+        loading: false,
+        extendedPrice: q.extendedPrice ?? null,
+        extendedLabel: q.extendedLabel ?? '',
+        prevClose: q.prevClose ?? null,
+        status: q.status,
+        reason: q.message,
+      };
     }
-    const w = watchlistPriceMap.value[item] || {};
+
     return {
-      price: w.price ?? null,
-      change: w.change ?? null,
-      loading: !!w.loading,
+      price: null,
+      change: null,
+      loading: false,
       extendedPrice: null,
       extendedLabel: '',
-      prevClose: null,
+      prevClose: q?.prevClose ?? null,
+      status: q ? q.status : 'loading',
+      reason: q?.message,
     };
   }
 
@@ -191,7 +214,7 @@ export function useWatchlist(options: {
     label: string;
   } | null {
     const info = watchPriceInfo(item);
-    if (info.loading || info.price == null) return null;
+    if (info.price == null) return null;
 
     if (info.extendedPrice != null && info.prevClose != null && info.prevClose > 0) {
       if (Math.abs(info.extendedPrice - info.price) >= 0.01) {
@@ -206,47 +229,34 @@ export function useWatchlist(options: {
     return null;
   }
 
-  async function updateWatchlistPrices() {
-    if (!useMockData.value) return;
-    const symbols = watchlist.value.slice();
-    if (!symbols.length) return;
-
-    const newMap: Record<string, WatchlistPriceInfo> = {};
-    for (const sym of symbols) {
-      const prev = watchlistPriceMap.value[sym];
-      newMap[sym] = prev ? { ...prev, loading: true } : { price: null, change: null, loading: true };
+  const rowInfoMap = computed<Record<string, WatchlistRowInfo>>(() => {
+    const map: Record<string, WatchlistRowInfo> = {};
+    for (const item of watchlist.value) {
+      const info = watchPriceInfo(item);
+      const sec = secondaryLineInfo(item);
+      const isUp = (info.change ?? 0) >= 0;
+      map[item] = {
+        price: info.price,
+        change: info.change,
+        formattedPrice: info.price != null ? info.price.toFixed(2) : '--',
+        formattedChange: info.change != null ? `${isUp ? '+' : ''}${info.change.toFixed(2)}%` : '',
+        isUp,
+        secondary: sec && sec.price != null ? {
+          price: sec.price.toFixed(2),
+          changePct: sec.changePct,
+          formattedChange: sec.changePct != null ? `${sec.changePct >= 0 ? '+' : ''}${sec.changePct.toFixed(2)}%` : null,
+          label: sec.label,
+          isUp: (sec.changePct ?? 0) >= 0,
+        } : null,
+        status: info.status,
+        reason: info.reason,
+      };
     }
-    watchlistPriceMap.value = newMap;
+    return map;
+  });
 
-    await Promise.allSettled(
-      symbols.map(async (sym) => {
-        try {
-          let klines: KLinePoint[];
-          if (useMockData.value) {
-            const mockKey = 'mock_' + sym;
-            if (watchlistKlineCache.has(mockKey)) {
-              klines = watchlistKlineCache.get(mockKey)!;
-            } else {
-              klines = generateMockKLines(stripPrefix(sym), 4500, MOCK_BASE_PRICES[stripPrefix(sym)] || 150);
-              watchlistKlineCache.set(mockKey, klines);
-            }
-          } else {
-            const querySym = normalizeSymbol(sym);
-            const key = 'real_' + querySym + '_1d';
-            if (watchlistKlineCache.has(key)) {
-              klines = watchlistKlineCache.get(key)!;
-            } else {
-              klines = await getKLines(querySym, '1d');
-              watchlistKlineCache.set(key, klines);
-            }
-          }
-          const result = calcLatestPrice(klines);
-          watchlistPriceMap.value[sym] = { price: result.price, change: result.change, loading: false };
-        } catch {
-          watchlistPriceMap.value[sym] = { price: null, change: null, loading: false };
-        }
-      })
-    );
+  async function updateWatchlistPrices() {
+    onSymbolsChanged();
   }
 
   const persistWatchlistLocal = () => {
@@ -296,11 +306,12 @@ export function useWatchlist(options: {
 
     const initMap: Record<string, WatchlistPriceInfo> = {};
     for (const s of watchlist.value) {
-      initMap[s] = { price: null, change: null, loading: true };
+      const prev = watchlistPriceMap.value[s];
+      initMap[s] = prev ?? { price: null, change: null, loading: false };
     }
     watchlistPriceMap.value = initMap;
 
-    if (!useMockData.value) onSymbolsChanged();
+    onSymbolsChanged();
 
     if (!currentSymbol.value && watchlist.value.length) {
       onSelectSymbol(watchlist.value[0]);
@@ -324,7 +335,7 @@ export function useWatchlist(options: {
     const stillAny = watchGroups.value.some((g) => g.stocks.some((s) => canonSym(s) === target));
     if (!stillAny) delete watchlistPriceMap.value[target];
     persistWatchlist();
-    if (!useMockData.value) onSymbolsChanged();
+    onSymbolsChanged();
   };
 
   const toggleWatchlist = (sym: string) => {
@@ -342,7 +353,7 @@ export function useWatchlist(options: {
         watchlistPriceMap.value[target] = { price: null, change: null, loading: true };
       }
       persistWatchlist();
-      if (!useMockData.value) onSymbolsChanged();
+      onSymbolsChanged();
     }
     updateWatchlistPrices();
   };
@@ -360,7 +371,7 @@ export function useWatchlist(options: {
       }
       persistWatchlist();
       updateWatchlistPrices();
-      if (!useMockData.value) onSymbolsChanged();
+      onSymbolsChanged();
     }
     return target;
   };
@@ -390,7 +401,7 @@ export function useWatchlist(options: {
         activeGroupId.value = 'all';
       }
       persistWatchlist();
-      if (!useMockData.value) onSymbolsChanged();
+      onSymbolsChanged();
     }
   };
 
@@ -455,7 +466,6 @@ export function useWatchlist(options: {
   });
 
   const clearWatchlistCache = () => {
-    watchlistKlineCache.clear();
     watchlistPriceMap.value = {};
   };
 
@@ -482,6 +492,7 @@ export function useWatchlist(options: {
     loadStockNameMap,
     watchPriceInfo,
     secondaryLineInfo,
+    rowInfoMap,
     updateWatchlistPrices,
     loadWatchlist,
     isWatchlisted,

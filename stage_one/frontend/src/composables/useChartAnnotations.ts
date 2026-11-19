@@ -1,5 +1,5 @@
 // useChartAnnotations.ts
-// Lightweight Charts v5 标注管理系统 (Markers / PriceLines / Canvas Overlay 矩形、通道线与波浪折线插件)
+// Lightweight Charts v5 标注管理系统 (Markers / PriceLines / Canvas Overlay 矩形、通道线、波浪锚点卡片、右延Fib目标位与缺口共振带插件)
 import { ref } from 'vue';
 import type {
   IChartApi,
@@ -57,7 +57,9 @@ export interface WavePointItem {
   time: string | number;
   price: number;
   label?: string;
+  short_label?: string;
   color?: string;
+  pos?: string;
   type?: 'High' | 'Low';
 }
 
@@ -71,6 +73,32 @@ export interface ChartWaveLinesItem {
     time: string | number;
     price: number;
   } | null;
+  subtle_swings?: Array<{ time: string | number; price: number }>;
+}
+
+export interface FibLineItem {
+  id?: string;
+  ratio?: string;
+  name?: string;
+  price: number;
+  startTime: string | number;
+  color?: string;
+  label?: string;
+}
+
+export interface GapBoxItem {
+  id?: string;
+  startTime: string | number;
+  price1: number;
+  price2: number;
+  fillColor?: string;
+  borderColor?: string;
+  label?: string;
+}
+
+export interface EmaPointItem {
+  time: string | number;
+  value: number;
 }
 
 export interface TimeLineItem {
@@ -85,7 +113,6 @@ export interface TimeLineItem {
   label?: string;
   reasons?: string[];
 }
-
 
 /**
  * 转换通用时间为 Lightweight Charts 接受的 HorzScaleItem (UTC 秒数或 YYYY-MM-DD 字符串)
@@ -130,7 +157,6 @@ export function toChartTime(t: string | number): any {
 export function getTimeCoordinate(timeScale: any, rawTime: string | number): number | null {
   if (!timeScale || rawTime === undefined || rawTime === null || rawTime === '') return null;
 
-  // 防御：若传入纯数字且不是大时间戳，说明是未格式化的行索引，不能作为图表时间轴坐标
   if (typeof rawTime === 'number' && rawTime < 1e9) {
     return null;
   }
@@ -165,7 +191,7 @@ export function getTimeCoordinate(timeScale: any, rawTime: string | number): num
     }
   }
 
-  // 4. 利用 timeToIndex(t, false) 精确匹配 Bar 索引 (严禁传 true 进行无限远距离模糊吸附，避免把旧标的或历史多年外的点强行吸附在 index 0)
+  // 4. 精确匹配 Bar 索引
   try {
     const idx = timeScale.timeToIndex(ct, false);
     if (idx !== null) {
@@ -194,13 +220,16 @@ export function getTimeCoordinate(timeScale: any, rawTime: string | number): num
 
 /**
  * AnnotationOverlayPrimitive: 基于 Lightweight Charts v5 ISeriesPrimitive 的轻量级 Canvas 叠加图层
- * 统一管理 箱体 (Box)、动态价格通道 (Channel Lines) 与 波浪折线结构 (Wave Structure Lines)
+ * 全面集成：盘整箱体、动态价格通道、波浪节点卡片 & 淡灰辅助连线、局部右延 Fib 扩展虚线、缺口共振区与底部微型时间窗
  */
 class AnnotationOverlayPrimitive implements ISeriesPrimitive<any> {
   private _boxes: ChartBoxItem[] = [];
   private _channelLines: ChartChannelLineItem[] = [];
   private _waveLines: ChartWaveLinesItem | null = null;
   private _timeLines: TimeLineItem[] = [];
+  private _fibLines: FibLineItem[] = [];
+  private _gapBoxes: GapBoxItem[] = [];
+  private _ema200Data: EmaPointItem[] = [];
   private _highlightedTime: string | null = null;
   private _param: any = null;
   private _paneViews: readonly IPrimitivePaneView[];
@@ -211,6 +240,9 @@ class AnnotationOverlayPrimitive implements ISeriesPrimitive<any> {
     this._channelLines = [];
     this._waveLines = null;
     this._timeLines = [];
+    this._fibLines = [];
+    this._gapBoxes = [];
+    this._ema200Data = [];
     this._highlightedTime = null;
     const self = this;
 
@@ -225,27 +257,51 @@ class AnnotationOverlayPrimitive implements ISeriesPrimitive<any> {
 
         target.useMediaCoordinateSpace((scope: any) => {
           const ctx = scope.context;
+          const mediaW = scope.mediaSize.width;
+          const mediaH = scope.mediaSize.height;
 
-          // 1. 绘制盘整箱体 (Boxes)
+          // 0. 绘制 200 EMA 连续均线 (深蓝色平滑连线)
+          if (self._ema200Data && self._ema200Data.length > 1) {
+            ctx.save();
+            ctx.strokeStyle = '#2563eb';
+            ctx.lineWidth = 1.8;
+            ctx.setLineDash([]);
+            ctx.beginPath();
+            let started = false;
+            for (const pt of self._ema200Data) {
+              const x = getTimeCoordinate(timeScale, pt.time);
+              const y = series.priceToCoordinate(pt.value);
+              if (x !== null && y !== null && Number.isFinite(x) && Number.isFinite(y)) {
+                if (!started) {
+                  ctx.moveTo(x, y);
+                  started = true;
+                } else {
+                  ctx.lineTo(x, y);
+                }
+              }
+            }
+            if (started) {
+              ctx.stroke();
+            }
+            ctx.restore();
+          }
+
+          // 1. 绘制盘整箱体 (Consolidation Boxes)
           for (const box of self._boxes) {
             const rawX1 = getTimeCoordinate(timeScale, box.time1);
             const rawX2 = getTimeCoordinate(timeScale, box.time2);
-
-            // 两端时间与价格必须均能在当前图表时间序列上有效定位，严禁回退至 0 或 width 避免畸变
             if (rawX1 === null || rawX2 === null) continue;
             const y1 = series.priceToCoordinate(box.price1);
             const y2 = series.priceToCoordinate(box.price2);
             if (y1 === null || y2 === null) continue;
 
-            const x1 = rawX1;
-            const x2 = rawX2;
-            const left = Math.min(x1, x2);
+            const left = Math.min(rawX1, rawX2);
             const top = Math.min(y1, y2);
-            const width = Math.max(1, Math.abs(x2 - x1));
+            const width = Math.max(1, Math.abs(rawX2 - rawX1));
             const height = Math.max(1, Math.abs(y2 - y1));
 
             ctx.save();
-            ctx.fillStyle = box.fillColor || 'rgba(59, 130, 246, 0.12)';
+            ctx.fillStyle = box.fillColor || 'rgba(59, 130, 246, 0.10)';
             ctx.fillRect(left, top, width, height);
 
             ctx.strokeStyle = box.borderColor || '#3b82f6';
@@ -255,23 +311,50 @@ class AnnotationOverlayPrimitive implements ISeriesPrimitive<any> {
 
             if (box.label) {
               ctx.fillStyle = box.borderColor || '#3b82f6';
-              ctx.font = '11px sans-serif';
-              ctx.fillText(box.label, left + 4, top + 13);
+              ctx.font = '10px -apple-system, sans-serif';
+              ctx.fillText(box.label, left + 4, top + 12);
             }
             ctx.restore();
           }
 
-          // 2. 绘制动态价格通道 (Channel Lines: 上轨 / 中轴 / 下轨)
+          // 2. 价格失衡带 / 跳空缺口 (右延共振带，右侧延伸至图表右边界)
+          for (const gb of self._gapBoxes) {
+            const startX = getTimeCoordinate(timeScale, gb.startTime);
+            const y1 = series.priceToCoordinate(gb.price1);
+            const y2 = series.priceToCoordinate(gb.price2);
+            if (y1 === null || y2 === null) continue;
+
+            const left = startX !== null ? Math.max(0, startX) : 0;
+            const right = mediaW;
+            const top = Math.min(y1, y2);
+            const height = Math.max(2, Math.abs(y2 - y1));
+
+            ctx.save();
+            ctx.fillStyle = gb.fillColor || 'rgba(244, 63, 94, 0.12)';
+            ctx.fillRect(left, top, right - left, height);
+
+            ctx.strokeStyle = gb.borderColor || '#f43f5e';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([3, 3]);
+            ctx.strokeRect(left, top, right - left, height);
+
+            if (gb.label) {
+              ctx.setLineDash([]);
+              ctx.font = '9px -apple-system, monospace';
+              ctx.fillStyle = gb.borderColor || '#f43f5e';
+              ctx.fillText(gb.label, left + 6, top + Math.min(11, height - 2));
+            }
+            ctx.restore();
+          }
+
+          // 3. 绘制动态价格通道 (Channel Lines: 上轨 / 中轴 / 下轨)
           for (const chan of self._channelLines) {
             const rawX1 = getTimeCoordinate(timeScale, chan.time1);
             const rawX2 = getTimeCoordinate(timeScale, chan.time2);
-
-            // 通道线两端时间与价格坐标必须均在当前图表上有效定位，严禁回退至 0 或 width 绘制畸变贯穿线
             if (rawX1 === null || rawX2 === null) continue;
             const y1 = series.priceToCoordinate(chan.price1);
             const y2 = series.priceToCoordinate(chan.price2);
             if (y1 === null || y2 === null) continue;
-            if (!Number.isFinite(rawX1) || !Number.isFinite(rawX2) || !Number.isFinite(y1) || !Number.isFinite(y2)) continue;
 
             const x1 = rawX1;
             const x2 = rawX2;
@@ -292,39 +375,85 @@ class AnnotationOverlayPrimitive implements ISeriesPrimitive<any> {
             ctx.lineTo(x2, y2);
             ctx.stroke();
 
+            // 标签增加半透明底色与 11px 加粗字体，避免压在 K 线实体上
             if (chan.title) {
               ctx.setLineDash([]);
-              ctx.font = 'bold 10px sans-serif';
-              ctx.fillStyle = chan.color || '#f59e0b';
+              ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, "JetBrains Mono", monospace';
+              const textMetrics = ctx.measureText(chan.title);
+              const padX = 6;
+              const boxW = textMetrics.width + padX * 2;
+              const boxH = 18;
               const labelX = x2 >= x1 ? x2 + 4 : x1 + 4;
               const labelY = x2 >= x1 ? y2 : y1;
+
+              // 半透明深色底色防遮挡
+              ctx.fillStyle = 'rgba(15, 23, 42, 0.82)';
+              ctx.beginPath();
+              if (typeof ctx.roundRect === 'function') {
+                ctx.roundRect(labelX, labelY - boxH / 2, boxW, boxH, 4);
+              } else {
+                ctx.rect(labelX, labelY - boxH / 2, boxW, boxH);
+              }
+              ctx.fill();
+
+              ctx.strokeStyle = chan.color || '#f59e0b';
+              ctx.lineWidth = 1;
+              ctx.stroke();
+
+              ctx.fillStyle = '#ffffff';
               ctx.textAlign = 'left';
               ctx.textBaseline = 'middle';
-              ctx.fillText(chan.title, labelX, labelY);
+              ctx.fillText(chan.title, labelX + padX, labelY);
             }
             ctx.restore();
           }
 
-          // 3. 绘制波浪折线结构 (Wave Structure Polyline & Extension)
+          // 4. 绘制次级摆动线 (Subtle Swings: 淡灰虚线，弱化背景噪音)
+          if (self._waveLines?.subtle_swings && self._waveLines.subtle_swings.length > 1) {
+            ctx.save();
+            ctx.strokeStyle = 'rgba(148, 163, 184, 0.45)';
+            ctx.lineWidth = 1.0;
+            ctx.setLineDash([3, 3]);
+            ctx.beginPath();
+            let swStarted = false;
+            for (const s of self._waveLines.subtle_swings) {
+              const x = getTimeCoordinate(timeScale, s.time);
+              const y = series.priceToCoordinate(s.price);
+              if (x !== null && y !== null) {
+                if (!swStarted) {
+                  ctx.moveTo(x, y);
+                  swStarted = true;
+                } else {
+                  ctx.lineTo(x, y);
+                }
+              }
+            }
+            if (swStarted) {
+              ctx.stroke();
+            }
+            ctx.restore();
+          }
+
+          // 5. 绘制波浪结构主折线 & 结构锚点白底细边框卡片
           if (self._waveLines && self._waveLines.points && self._waveLines.points.length > 0) {
             const points = self._waveLines.points;
             const baseColor = self._waveLines.color || '#8b5cf6';
-            const coords: { x: number; y: number; label?: string; price: number; color?: string }[] = [];
+            const coords: { x: number; y: number; label?: string; price: number; color?: string; type?: string }[] = [];
 
             for (const pt of points) {
               const x = getTimeCoordinate(timeScale, pt.time);
               const y = series.priceToCoordinate(pt.price);
               if (x !== null && y !== null && Number.isFinite(x) && Number.isFinite(y)) {
-                coords.push({ x, y, label: pt.label, price: pt.price, color: pt.color });
+                coords.push({ x, y, label: pt.label, price: pt.price, color: pt.color, type: pt.type });
               }
             }
 
             if (coords.length > 0) {
               ctx.save();
 
-              // (A) 浪形折线连接
+              // (A) 核心浪形粗折线连接
               if (coords.length > 1) {
-                ctx.strokeStyle = baseColor;
+                ctx.strokeStyle = '#334155';
                 ctx.lineWidth = self._waveLines.lineWidth || 2.2;
                 ctx.setLineDash([]);
                 ctx.lineJoin = 'round';
@@ -337,72 +466,67 @@ class AnnotationOverlayPrimitive implements ISeriesPrimitive<any> {
                 ctx.stroke();
               }
 
-              // (B) 当前价格虚线延伸连接
+              // (B) 延伸至现价虚线
               if (self._waveLines.extension && self._waveLines.extension.time) {
                 const extX = getTimeCoordinate(timeScale, self._waveLines.extension.time);
                 const extY = series.priceToCoordinate(self._waveLines.extension.price);
                 if (extX !== null && extY !== null && coords.length > 0) {
                   const lastPt = coords[coords.length - 1];
-                  ctx.strokeStyle = baseColor;
-                  ctx.lineWidth = 1.5;
-                  ctx.setLineDash([5, 4]);
+                  ctx.strokeStyle = '#64748b';
+                  ctx.lineWidth = 1.4;
+                  ctx.setLineDash([4, 3]);
                   ctx.beginPath();
                   ctx.moveTo(lastPt.x, lastPt.y);
                   ctx.lineTo(extX, extY);
                   ctx.stroke();
-
-                  ctx.beginPath();
-                  ctx.arc(extX, extY, 3.5, 0, Math.PI * 2);
-                  ctx.fillStyle = baseColor;
-                  ctx.fill();
                 }
               }
 
-              // (C) 浪形节点圆圈与 Badge 气泡标签
+              // (C) 核心结构锚点白底细边框卡片（白底 + 细灰边框 + 完整“波浪序号+极值价格+日期”）
               for (const c of coords) {
-                // 节点外环
+                // 锚点小圆点
                 ctx.beginPath();
-                ctx.arc(c.x, c.y, 4.5, 0, Math.PI * 2);
+                ctx.arc(c.x, c.y, 3.5, 0, Math.PI * 2);
                 ctx.fillStyle = c.color || baseColor;
                 ctx.fill();
-                ctx.lineWidth = 1.5;
+                ctx.lineWidth = 1.2;
                 ctx.strokeStyle = '#ffffff';
                 ctx.setLineDash([]);
                 ctx.stroke();
 
-                // 节点标签气泡
                 if (c.label) {
-                  ctx.font = 'bold 10px sans-serif';
+                  ctx.font = 'bold 9.5px -apple-system, BlinkMacSystemFont, "JetBrains Mono", monospace';
                   const txt = c.label;
                   const textMetrics = ctx.measureText(txt);
-                  const textWidth = textMetrics.width;
-                  const textHeight = 15;
-                  const isHigh = c.y < (scope.mediaSize.height / 2);
-                  const badgeY = isHigh ? c.y - 14 : c.y + 14;
-
-                  ctx.fillStyle = 'rgba(15, 23, 42, 0.90)';
                   const padX = 5;
-                  const pillLeft = c.x - textWidth / 2 - padX;
-                  const pillTop = badgeY - textHeight / 2;
-                  const pillW = textWidth + padX * 2;
-                  const pillH = textHeight;
+                  const cardW = textMetrics.width + padX * 2;
+                  const cardH = 17;
+                  const isHigh = c.type === 'High' || c.y < (mediaH / 2);
+                  const cardY = isHigh ? c.y - 18 : c.y + 18;
 
+                  const cardLeft = c.x - cardW / 2;
+                  const cardTop = cardY - cardH / 2;
+
+                  // 白底 (深色模式下半透深灰)
+                  ctx.fillStyle = 'rgba(255, 255, 255, 0.96)';
                   ctx.beginPath();
                   if (typeof ctx.roundRect === 'function') {
-                    ctx.roundRect(pillLeft, pillTop, pillW, pillH, 4);
+                    ctx.roundRect(cardLeft, cardTop, cardW, cardH, 4);
                   } else {
-                    ctx.rect(pillLeft, pillTop, pillW, pillH);
+                    ctx.rect(cardLeft, cardTop, cardW, cardH);
                   }
                   ctx.fill();
 
-                  ctx.strokeStyle = c.color || baseColor;
-                  ctx.lineWidth = 1;
+                  // 细边框
+                  ctx.strokeStyle = c.color || '#94a3b8';
+                  ctx.lineWidth = 1.0;
                   ctx.stroke();
 
-                  ctx.fillStyle = '#ffffff';
+                  // 文字
+                  ctx.fillStyle = '#0f172a';
                   ctx.textAlign = 'center';
                   ctx.textBaseline = 'middle';
-                  ctx.fillText(txt, c.x, badgeY);
+                  ctx.fillText(txt, c.x, cardY);
                 }
               }
 
@@ -410,47 +534,112 @@ class AnnotationOverlayPrimitive implements ISeriesPrimitive<any> {
             }
           }
 
-          // 4. 绘制艾略特变盘时间窗垂直线 (Turn Date Vertical Lines)
-          const width = scope.mediaSize.width;
-          const height = scope.mediaSize.height;
-          for (const tl of self._timeLines || []) {
-            const x = getTimeCoordinate(timeScale, tl.time);
-            if (x === null || x < 0 || x > width) continue;
+          // 6. 局部右延的 Fibonacci 扩展目标位 (仅从最后一个波浪拐点向右延伸，绝不向左贯穿)
+          for (const fib of self._fibLines) {
+            const startX = getTimeCoordinate(timeScale, fib.startTime);
+            const y = series.priceToCoordinate(fib.price);
+            if (y === null) continue;
+
+            // 精简非必要的中间斐波那契刻度文字，仅保留核心支撑/阻力与延展位
+            const r = String(fib.ratio || '');
+            const isKeyRatio = !r || ['0.382', '0.500', '0.5', '0.618', '1.000', '1.0', '1.618', '2.618'].includes(r);
+            if (!isKeyRatio) continue;
+
+            const fromX = startX !== null ? Math.max(0, startX) : mediaW * 0.7;
+            const toX = mediaW;
 
             ctx.save();
-            const isHighlighted = self._highlightedTime === String(tl.time);
-            const strokeColor = tl.color || (tl.isResonance ? '#f59e0b' : '#6366f1');
-
-            if (tl.isResonance || isHighlighted) {
-              const bandWidth = isHighlighted ? 14 : 8;
-              const grad = ctx.createLinearGradient(0, 0, 0, height);
-              grad.addColorStop(0, tl.isResonance ? 'rgba(245, 158, 11, 0.22)' : 'rgba(99, 102, 241, 0.20)');
-              grad.addColorStop(1, 'rgba(245, 158, 11, 0.01)');
-              ctx.fillStyle = grad;
-              ctx.fillRect(x - bandWidth / 2, 0, bandWidth, height);
-            }
-
+            ctx.strokeStyle = fib.color || '#ea580c';
+            ctx.lineWidth = 1.2;
+            ctx.setLineDash([5, 4]);
             ctx.beginPath();
-            ctx.strokeStyle = strokeColor;
-            ctx.lineWidth = isHighlighted ? 2.5 : (tl.lineWidth || 1.5);
-            if (tl.lineStyle === 'dashed' && !isHighlighted) {
-              ctx.setLineDash([5, 5]);
-            }
-            ctx.moveTo(x, 24);
-            ctx.lineTo(x, height);
+            ctx.moveTo(fromX, y);
+            ctx.lineTo(toX, y);
             ctx.stroke();
 
-            if (tl.label) {
+            // 标注在右端，字号 11px 并增加半透明底色防遮挡
+            if (fib.label) {
+              ctx.setLineDash([]);
+              ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, "JetBrains Mono", monospace';
+              const textMetrics = ctx.measureText(fib.label);
+              const padX = 6;
+              const boxW = textMetrics.width + padX * 2;
+              const boxH = 18;
+              const boxX = toX - boxW - 6;
+              const boxY = y - boxH - 2;
+
+              ctx.fillStyle = 'rgba(15, 23, 42, 0.82)';
+              ctx.beginPath();
+              if (typeof ctx.roundRect === 'function') {
+                ctx.roundRect(boxX, boxY, boxW, boxH, 4);
+              } else {
+                ctx.rect(boxX, boxY, boxW, boxH);
+              }
+              ctx.fill();
+
+              ctx.strokeStyle = fib.color || '#ea580c';
+              ctx.lineWidth = 0.8;
+              ctx.stroke();
+
+              ctx.fillStyle = '#ffffff';
+              ctx.textAlign = 'left';
+              ctx.textBaseline = 'middle';
+              ctx.fillText(fib.label, boxX + padX, boxY + boxH / 2);
+            }
+            ctx.restore();
+          }
+
+          // 7. 变盘时间窗克制化：细虚线垂直贯通，顶部错落阶梯排布（Staggered Layout）
+          // 彻底解决右下角多标签层层叠压成一团的问题
+          const validTimeLines: { tl: TimeLineItem; x: number; label: string; isHighlighted: boolean; strokeColor: string }[] = [];
+          for (const tl of self._timeLines || []) {
+            const x = getTimeCoordinate(timeScale, tl.time);
+            if (x === null || x < 0 || x > mediaW) continue;
+            validTimeLines.push({
+              tl,
+              x,
+              label: tl.label || '',
+              isHighlighted: self._highlightedTime === String(tl.time),
+              strokeColor: tl.color || (tl.isResonance ? '#f59e0b' : '#6366f1'),
+            });
+          }
+
+          validTimeLines.sort((a, b) => a.x - b.x);
+
+          let lastRight = -999;
+          let tierIndex = 0;
+
+          for (const item of validTimeLines) {
+            ctx.save();
+            // 细虚线垂直贯通
+            ctx.beginPath();
+            ctx.strokeStyle = item.strokeColor;
+            ctx.lineWidth = item.isHighlighted ? 2.0 : 1.0;
+            ctx.setLineDash([4, 4]);
+            ctx.moveTo(item.x, 8);
+            ctx.lineTo(item.x, mediaH - 8);
+            ctx.stroke();
+
+            if (item.label) {
               ctx.setLineDash([]);
               ctx.font = 'bold 10px -apple-system, BlinkMacSystemFont, "JetBrains Mono", monospace';
-              const textMetrics = ctx.measureText(tl.label);
+              const textMetrics = ctx.measureText(item.label);
               const padX = 6;
               const badgeW = textMetrics.width + padX * 2;
               const badgeH = 18;
-              const badgeX = Math.max(4, Math.min(width - badgeW - 4, x - badgeW / 2));
-              const badgeY = 6;
 
-              ctx.fillStyle = tl.isResonance ? '#f59e0b' : '#4f46e5';
+              let badgeX = item.x - badgeW / 2;
+              badgeX = Math.max(4, Math.min(mediaW - badgeW - 4, badgeX));
+
+              if (badgeX < lastRight + 6) {
+                tierIndex = (tierIndex + 1) % 3;
+              } else {
+                tierIndex = 0;
+              }
+              const badgeY = 10 + tierIndex * 22;
+              lastRight = badgeX + badgeW;
+
+              ctx.fillStyle = item.tl.isResonance ? 'rgba(245, 158, 11, 0.92)' : 'rgba(79, 70, 229, 0.90)';
               ctx.beginPath();
               if (typeof ctx.roundRect === 'function') {
                 ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 4);
@@ -459,10 +648,16 @@ class AnnotationOverlayPrimitive implements ISeriesPrimitive<any> {
               }
               ctx.fill();
 
+              if (item.isHighlighted) {
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+              }
+
               ctx.fillStyle = '#ffffff';
               ctx.textAlign = 'center';
               ctx.textBaseline = 'middle';
-              ctx.fillText(tl.label, badgeX + badgeW / 2, badgeY + badgeH / 2);
+              ctx.fillText(item.label, badgeX + badgeW / 2, badgeY + badgeH / 2);
             }
             ctx.restore();
           }
@@ -502,6 +697,21 @@ class AnnotationOverlayPrimitive implements ISeriesPrimitive<any> {
     this.requestUpdate();
   }
 
+  public setFibLines(fibLines: FibLineItem[]) {
+    this._fibLines = fibLines || [];
+    this.requestUpdate();
+  }
+
+  public setGapBoxes(gapBoxes: GapBoxItem[]) {
+    this._gapBoxes = gapBoxes || [];
+    this.requestUpdate();
+  }
+
+  public setEma200Data(data: EmaPointItem[]) {
+    this._ema200Data = data || [];
+    this.requestUpdate();
+  }
+
   public setHighlightedTime(timeStr: string | null) {
     this._highlightedTime = timeStr;
     this.requestUpdate();
@@ -512,6 +722,9 @@ class AnnotationOverlayPrimitive implements ISeriesPrimitive<any> {
     this._channelLines = [];
     this._waveLines = null;
     this._timeLines = [];
+    this._fibLines = [];
+    this._gapBoxes = [];
+    this._ema200Data = [];
     this._highlightedTime = null;
     this.requestUpdate();
   }
@@ -550,13 +763,14 @@ export function useChartAnnotations() {
   const channelLinesCount = ref(0);
   const waveLinesCount = ref(0);
   const timeLinesCount = ref(0);
+  const fibLinesCount = ref(0);
+  const gapBoxesCount = ref(0);
 
   function init(chart: IChartApi, series: ISeriesApi<any>, existingMarkersPlugin?: any) {
     _chartApi = chart;
     void _chartApi;
     seriesApi = series;
 
-    // 初始化/复用 Markers 插件
     if (existingMarkersPlugin) {
       markersPlugin = existingMarkersPlugin;
     } else {
@@ -567,7 +781,6 @@ export function useChartAnnotations() {
       }
     }
 
-    // 初始化 AnnotationOverlayPrimitive 插件
     overlayPrimitive = new AnnotationOverlayPrimitive();
     try {
       seriesApi.attachPrimitive(overlayPrimitive);
@@ -587,7 +800,6 @@ export function useChartAnnotations() {
       id: m.id,
     }));
 
-    // 按时间严格排序 (lightweight-charts 要求 markers 必须单调递增)
     formatted.sort((a, b) => {
       const ta = typeof a.time === 'number' ? a.time : new Date(String(a.time)).getTime();
       const tb = typeof b.time === 'number' ? b.time : new Date(String(b.time)).getTime();
@@ -597,7 +809,6 @@ export function useChartAnnotations() {
     if (markersPlugin && markersPlugin.setMarkers) {
       markersPlugin.setMarkers(formatted);
     } else {
-      // 备用 fallback
       try {
         (seriesApi as any).setMarkers(formatted);
       } catch (e) {
@@ -609,7 +820,6 @@ export function useChartAnnotations() {
 
   function setPriceLines(lines: ChartPriceLineItem[]) {
     if (!seriesApi) return;
-    // 清空现有 priceLines
     for (const pl of activePriceLines) {
       try {
         seriesApi.removePriceLine(pl);
@@ -619,14 +829,55 @@ export function useChartAnnotations() {
     }
     activePriceLines = [];
 
+    // Y 轴价格标签智能防重叠 (Anti-Overlap) 算法：
+    // 当两条参考线价格距离过近 (<0.9%) 时，优先保留核心风控（止损 > 入场 > TP1 > TP2）在 Y 轴的显式价格标签，
+    // 次要线仅在图表绘制虚线，避免 Y 轴刻度标签层叠遮挡。
+    function getLinePriority(item: ChartPriceLineItem): number {
+      const id = String(item.id || '').toLowerCase();
+      const title = String(item.title || '');
+      if (id.includes('sl') || title.includes('止损')) return 100;
+      if (id.includes('entry') || title.includes('入场')) return 90;
+      if (id.includes('tp1') || title.includes('TP1')) return 80;
+      if (id.includes('tp2') || title.includes('TP2')) return 70;
+      if (id.includes('inv') || title.includes('证伪')) return 60;
+      return 50;
+    }
+
+    // 复制并按价格降序排列
+    const sorted = [...lines].sort((a, b) => b.price - a.price);
+    const visibleAxisLabels = new Set<string>();
+
+    for (let i = 0; i < sorted.length; i++) {
+      const cur = sorted[i];
+      let canShowAxis = true;
+
+      // 检查与已有已显示标签的间距
+      for (let j = 0; j < i; j++) {
+        const prev = sorted[j];
+        const distRatio = Math.abs(cur.price - prev.price) / Math.max(1, cur.price);
+        if (distRatio < 0.009) {
+          // 距离过近，比较优先级
+          if (getLinePriority(cur) <= getLinePriority(prev)) {
+            canShowAxis = false;
+            break;
+          }
+        }
+      }
+
+      if (canShowAxis) {
+        visibleAxisLabels.add(`${cur.id || ''}_${cur.price}`);
+      }
+    }
+
     for (const l of lines) {
       try {
+        const isAxisVisible = visibleAxisLabels.has(`${l.id || ''}_${l.price}`);
         const pl = seriesApi.createPriceLine({
           price: l.price,
           color: l.color,
           lineWidth: (l.lineWidth || 1) as any,
           lineStyle: (l.lineStyle ?? LineStyle.Dashed) as LineStyle,
-          axisLabelVisible: true,
+          axisLabelVisible: isAxisVisible,
           title: l.title || '',
         });
         activePriceLines.push(pl);
@@ -661,6 +912,23 @@ export function useChartAnnotations() {
     timeLinesCount.value = (lines || []).length;
   }
 
+  function setFibLines(fibLines: FibLineItem[]) {
+    if (!overlayPrimitive) return;
+    overlayPrimitive.setFibLines(fibLines || []);
+    fibLinesCount.value = (fibLines || []).length;
+  }
+
+  function setGapBoxes(gapBoxes: GapBoxItem[]) {
+    if (!overlayPrimitive) return;
+    overlayPrimitive.setGapBoxes(gapBoxes || []);
+    gapBoxesCount.value = (gapBoxes || []).length;
+  }
+
+  function setEma200Data(data: EmaPointItem[]) {
+    if (!overlayPrimitive) return;
+    overlayPrimitive.setEma200Data(data || []);
+  }
+
   function highlightTimeLine(dateStr: string | null) {
     if (!overlayPrimitive) return;
     overlayPrimitive.setHighlightedTime(dateStr);
@@ -676,6 +944,12 @@ export function useChartAnnotations() {
     waveLines?: ChartWaveLinesItem | null;
     time_lines?: TimeLineItem[];
     timeLines?: TimeLineItem[];
+    fib_lines?: FibLineItem[];
+    fibLines?: FibLineItem[];
+    gap_boxes?: GapBoxItem[];
+    gapBoxes?: GapBoxItem[];
+    ema200_data?: EmaPointItem[];
+    ema200Data?: EmaPointItem[];
   }) {
     setMarkers(anno.markers || []);
     setPriceLines(anno.lines || []);
@@ -686,6 +960,12 @@ export function useChartAnnotations() {
     setWaveLines(waves);
     const times = anno.time_lines ?? anno.timeLines ?? [];
     setTimeLines(times);
+    const fibs = anno.fib_lines ?? anno.fibLines ?? [];
+    setFibLines(fibs);
+    const gaps = anno.gap_boxes ?? anno.gapBoxes ?? [];
+    setGapBoxes(gaps);
+    const emaData = anno.ema200_data ?? anno.ema200Data ?? [];
+    setEma200Data(emaData);
   }
 
   function clearAnnotations() {
@@ -695,6 +975,9 @@ export function useChartAnnotations() {
     setChannelLines([]);
     setWaveLines(null);
     setTimeLines([]);
+    setFibLines([]);
+    setGapBoxes([]);
+    setEma200Data([]);
     highlightTimeLine(null);
   }
 
@@ -706,6 +989,9 @@ export function useChartAnnotations() {
     setChannelLines,
     setWaveLines,
     setTimeLines,
+    setFibLines,
+    setGapBoxes,
+    setEma200Data,
     highlightTimeLine,
     setAllAnnotations,
     clearAnnotations,
@@ -715,5 +1001,7 @@ export function useChartAnnotations() {
     channelLinesCount,
     waveLinesCount,
     timeLinesCount,
+    fibLinesCount,
+    gapBoxesCount,
   };
 }

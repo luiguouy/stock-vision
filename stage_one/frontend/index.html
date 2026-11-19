@@ -5,6 +5,13 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>StockVision 智能股票技术分析平台</title>
+    <script>
+      (function () {
+        if (localStorage.getItem('darkMode') === 'true') {
+          document.documentElement.classList.add('dark');
+        }
+      })();
+    </script>
     <!-- 引入 Google Fonts (Inter + JetBrains Mono 瑞士国际主义排版与金融数字规范) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,12 +21,25 @@
         --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
         --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       }
+      html {
+        background-color: #FAF8F3;
+      }
+      html.dark {
+        background-color: #090d16;
+      }
       body {
         font-family: var(--font-sans);
         font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
         text-rendering: optimizeLegibility;
+      }
+      #app {
+        animation: app-enter 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+      }
+      @keyframes app-enter {
+        from { opacity: 0; }
+        to { opacity: 1; }
       }
       .font-mono {
         font-family: var(--font-mono);
@@ -50,6 +70,79 @@
     </style>
   </head>
   <body class="bg-slate-50 dark:bg-[#090d16] text-slate-800 dark:text-slate-200 antialiased min-h-screen selection:bg-indigo-500/20 selection:text-indigo-600 dark:selection:text-indigo-400">
+    <style>
+      #app-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        background: #f8fafc;
+        color: #0f172a;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        transition: opacity 0.3s ease;
+      }
+      #app-splash.dark {
+        background: #090d16;
+        color: #f8fafc;
+      }
+      #app-splash .sv-title {
+        font-size: 22px;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+      }
+      #app-splash .sv-track {
+        width: 148px;
+        height: 3px;
+        border-radius: 999px;
+        overflow: hidden;
+        background: rgba(99, 102, 241, 0.18);
+      }
+      #app-splash .sv-bar {
+        width: 45%;
+        height: 100%;
+        border-radius: 999px;
+        background: #6366f1;
+        animation: sv-slide 1.1s ease-in-out infinite;
+      }
+      @keyframes sv-slide {
+        0%   { transform: translateX(-100%); }
+        100% { transform: translateX(260%); }
+      }
+    </style>
+
+    <div id="app-splash">
+      <div class="sv-title">StockVision</div>
+      <div class="sv-track"><div class="sv-bar"></div></div>
+    </div>
+
+    <script>
+      (function () {
+        var el = document.getElementById('app-splash');
+        if (!el) return;
+        if (localStorage.getItem('darkMode') === 'true') el.classList.add('dark');
+
+        var start = performance.now();
+        var dismissed = false;
+
+        window.__dismissSplash = function () {
+          if (dismissed) return;
+          dismissed = true;
+          var remain = Math.max(0, 1200 - (performance.now() - start));
+          setTimeout(function () {
+            el.style.opacity = '0';
+            setTimeout(function () { el.remove(); }, 300);
+          }, remain);
+        };
+
+        // 3.5s 强制兜底关闭，防止断网或异常阻塞主界面
+        setTimeout(window.__dismissSplash, 3500);
+      })();
+    </script>
+
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>

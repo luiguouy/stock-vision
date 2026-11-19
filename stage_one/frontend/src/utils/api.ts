@@ -2,7 +2,6 @@
 import {
   calculateSRLevels,
   calculateRangeStats,
-  generateMockKLines,
   type KLinePoint,
   type SRLevel,
   type RangeStatPoint,
@@ -13,7 +12,6 @@ export * from './symbols';
 export {
   calculateSRLevels,
   calculateRangeStats,
-  generateMockKLines,
   type KLinePoint,
   type SRLevel,
   type RangeStatPoint,

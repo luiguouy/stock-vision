@@ -2,17 +2,17 @@
 
 > 本文件由 graft 结构层自动导出，是对代码库的**索引**，不是实现说明。
 > 每条记录都带 `文件:行号`，用于精确定位；这里**不含函数体**，需要实现细节时应另行取源码。
-> 生成时间：2026-11-14 21:03
+> 生成时间：2026-11-19 17:03
 
 ## 1. 概览
 
 | 指标 | 数值 |
 |---|---|
-| 源文件 | 42 |
+| 源文件 | 52 |
 | 语言 | javascript, python, typescript, vue |
-| 符号总数 | 504（不含 42 个文件节点） |
-| 符号构成 | function 304 / method 133 / file 42 / class 35 / interface 24 / type 8 |
-| 依赖边 | 199（跨文件调用、导入、继承） |
+| 符号总数 | 658（不含 52 个文件节点） |
+| 符号构成 | function 410 / method 171 / file 52 / class 40 / interface 28 / type 9 |
+| 依赖边 | 227（跨文件调用、导入、继承） |
 
 后端为 FastAPI + WebSockets（Python），前端为 Vue 3 + Vite + Tailwind（TypeScript/Vue）。
 
@@ -20,12 +20,14 @@
 
 | 目录 | 文件数 | 符号数 | 被依赖 | 依赖外部 |
 |---|---|---|---|---|
-| `stage_one/backend/` | 21 | 265 | 103 | 103 |
+| `stage_one/backend/` | 24 | 308 | 131 | 132 |
+| `stage_one/backend/assets/` | 1 | 1 | 0 | 0 |
+| `stage_one/backend/strategy_core/` | 6 | 88 | 1 | 0 |
 | `stage_one/frontend/` | 3 | 0 | 0 | 0 |
-| `stage_one/frontend/src/` | 2 | 44 | 1 | 54 |
-| `stage_one/frontend/src/components/` | 4 | 40 | 3 | 5 |
-| `stage_one/frontend/src/composables/` | 7 | 103 | 36 | 32 |
-| `stage_one/frontend/src/utils/` | 5 | 52 | 56 | 5 |
+| `stage_one/frontend/src/` | 2 | 45 | 1 | 56 |
+| `stage_one/frontend/src/components/` | 4 | 41 | 3 | 5 |
+| `stage_one/frontend/src/composables/` | 7 | 119 | 41 | 27 |
+| `stage_one/frontend/src/utils/` | 5 | 56 | 50 | 7 |
 
 ## 3. 核心枢纽
 
@@ -33,21 +35,21 @@
 
 | 符号 | 位置 | 被调用 | 签名 |
 |---|---|---|---|
+| `run_strategy_analysis` | `stage_one/backend/strategy_adapter.py:L1902-L2024` | 27 | `def run_strategy_analysis( symbol: str, period: str = "1d", mode: str = "swing", df: Op...` |
+| `canonSym` | `stage_one/frontend/src/composables/useWatchlist.ts:L52-L56` | 14 | `canonSym = (s: string): string` |
 | `normalize_symbol` | `stage_one/backend/symbols.py:L42-L85` | 13 | `def normalize_symbol(raw: str, market: Optional[str] = None) -> Optional[str]` |
-| `canonSym` | `stage_one/frontend/src/composables/useWatchlist.ts:L51-L55` | 11 | `canonSym = (s: string): string` |
 | `normalizeSymbol` | `stage_one/frontend/src/utils/symbols.ts:L87-L136` | 10 | `function normalizeSymbol(raw: string, market?: Market): string` |
+| `requestUpdate` | `stage_one/frontend/src/composables/useChartAnnotations.ts:L732-L736` | 9 | `private requestUpdate()` |
 | `validate_klines` | `stage_one/backend/data_provider.py:L86-L116` | 8 | `def validate_klines(df: "pd.DataFrame", period: str) -> bool` |
 | `_get_connection` | `stage_one/backend/db_cache.py:L68-L80` | 8 | `def _get_connection() -> sqlite3.Connection` |
-| `broadcast` | `stage_one/backend/main.py:L752-L757` | 8 | `async def broadcast(self, data: dict)` |
+| `broadcast` | `stage_one/backend/main.py:L768-L773` | 8 | `async def broadcast(self, data: dict)` |
 | `_post` | `stage_one/backend/control_client.py:L58-L64` | 7 | `def _post(path: str, payload: Optional[Dict[str, Any]] = None, err_prefix: str = "请求失败"...` |
 | `resample_to_period` | `stage_one/backend/data_provider.py:L193-L218` | 7 | `def resample_to_period(df: pd.DataFrame, rule: str) -> pd.DataFrame` |
-| `get_market_cfg` | `stage_one/backend/quote_config.py:L65-L67` | 6 | `def get_market_cfg(market: Optional[str]) -> dict` |
-| `loadKlineData` | `stage_one/frontend/src/composables/useChartViewport.ts:L267-L402` | 6 | `loadKlineData = async (targetSymbol: string, targetPeriod: Period)` |
-| `marketOf` | `stage_one/frontend/src/utils/symbols.ts:L43-L70` | 6 | `function marketOf(sym: string): Market \| null` |
-| `requestUpdate` | `stage_one/frontend/src/composables/useChartAnnotations.ts:L519-L523` | 6 | `private requestUpdate()` |
-| `persistWatchlist` | `stage_one/frontend/src/composables/useWatchlist.ts:L256-L259` | 6 | `persistWatchlist = ()` |
-| `ensure_app_running` | `stage_one/backend/control_client.py:L25-L49` | 5 | `def ensure_app_running() -> bool` |
-| `strip_prefix` | `stage_one/backend/symbols.py:L123-L129` | 5 | `def strip_prefix(symbol: str) -> str` |
+| `get_market_cfg` | `stage_one/backend/quote_config.py:L65-L67` | 7 | `def get_market_cfg(market: Optional[str]) -> dict` |
+| `marketOf` | `stage_one/frontend/src/utils/symbols.ts:L43-L70` | 7 | `function marketOf(sym: string): Market \| null` |
+| `strip_prefix` | `stage_one/backend/symbols.py:L123-L129` | 6 | `def strip_prefix(symbol: str) -> str` |
+| `loadKlineData` | `stage_one/frontend/src/composables/useChartViewport.ts:L654-L754` | 6 | `loadKlineData = async (targetSymbol: string, targetPeriod: Period)` |
+| `persistWatchlist` | `stage_one/frontend/src/composables/useWatchlist.ts:L266-L269` | 6 | `persistWatchlist = ()` |
 
 ## 4. 文件级依赖
 
@@ -58,49 +60,62 @@
 - **stage_one/backend/db_cache.py** → `stage_one/backend/data_provider.py` (calls, imports)
 - **stage_one/backend/main.py** → `stage_one/backend/analysis.py` (calls ×2, imports), `stage_one/backend/data_provider.py` (imports), `stage_one/backend/db_cache.py` (calls ×10, imports), `stage_one/backend/quote_config.py` (imports), `stage_one/backend/quote_provider.py` (imports), `stage_one/backend/strategy_adapter.py` (calls ×2, imports), `stage_one/backend/symbols.py` (calls ×16, imports)
 - **stage_one/backend/quote_config.py** → `stage_one/backend/symbols.py` (imports)
-- **stage_one/backend/quote_provider.py** → `stage_one/backend/data_provider.py` (imports), `stage_one/backend/quote_config.py` (calls ×5, imports)
-- **stage_one/backend/strategy_adapter.py** → `stage_one/backend/symbols.py` (calls ×2, imports), `stage_one/backend/time_window.py` (calls, imports)
+- **stage_one/backend/quote_provider.py** → `stage_one/backend/data_provider.py` (imports), `stage_one/backend/quote_config.py` (calls ×6, imports)
+- **stage_one/backend/strategy_adapter.py** → `stage_one/backend/strategy_core/plot_wave_chart.py` (calls), `stage_one/backend/symbols.py` (calls ×3, imports), `stage_one/backend/time_window.py` (calls, imports)
 - **stage_one/backend/test_adjustment.py** → `stage_one/backend/data_provider.py` (calls, imports)
-- **stage_one/backend/test_crypto_features.py** → `stage_one/backend/data_provider.py` (calls ×5, imports), `stage_one/backend/main.py` (imports), `stage_one/backend/quote_config.py` (calls, imports), `stage_one/backend/quote_provider.py` (calls ×4, imports)
+- **stage_one/backend/test_crypto_features.py** → `stage_one/backend/data_provider.py` (calls ×5, imports), `stage_one/backend/main.py` (imports), `stage_one/backend/quote_config.py` (calls, imports), `stage_one/backend/quote_provider.py` (calls ×4, imports), `stage_one/backend/strategy_adapter.py` (calls ×5, imports)
+- **stage_one/backend/test_dow_elliott_refactor.py** → `stage_one/backend/strategy_adapter.py` (calls ×5, imports)
+- **stage_one/backend/test_dow_elliott_us_strategy.py** → `stage_one/backend/strategy_adapter.py` (calls ×10, imports)
 - **stage_one/backend/test_endpoints.py** → `stage_one/backend/analysis.py` (calls ×2, imports), `stage_one/backend/data_provider.py` (calls ×3, imports), `stage_one/backend/main.py` (imports), `stage_one/backend/mcp_server.py` (imports), `stage_one/backend/quote_config.py` (imports), `stage_one/backend/quote_provider.py` (imports), `stage_one/backend/symbols.py` (calls)
 - **stage_one/backend/test_resample.py** → `stage_one/backend/data_provider.py` (calls ×6, imports)
 - **stage_one/backend/test_strategy_wave_channel.py** → `stage_one/backend/main.py` (imports), `stage_one/backend/strategy_adapter.py` (calls ×3, imports)
 - **stage_one/backend/test_transformation_new.py** → `stage_one/backend/main.py` (imports), `stage_one/backend/mcp_server.py` (imports), `stage_one/backend/strategy_adapter.py` (calls, imports)
+- **stage_one/backend/test_triggers_and_turning_dates.py** → `stage_one/backend/strategy_adapter.py` (calls ×2, imports)
 - **stage_one/backend/test_validate.py** → `stage_one/backend/data_provider.py` (calls, imports)
-- **stage_one/frontend/src/App.vue** → `stage_one/frontend/src/components/GlobalSecuritySearch.vue` (imports), `stage_one/frontend/src/components/StrategyPanel.vue` (imports), `stage_one/frontend/src/components/ThemeToggle.vue` (imports), `stage_one/frontend/src/composables/useChartAnnotations.ts` (calls, imports), `stage_one/frontend/src/composables/useChartIndicators.ts` (calls ×3, imports), `stage_one/frontend/src/composables/useChartViewport.ts` (calls ×7, imports), `stage_one/frontend/src/composables/useLiveQuoteSync.ts` (calls ×3, imports), `stage_one/frontend/src/composables/useSmartThrottling.ts` (calls, imports), `stage_one/frontend/src/composables/useWatchlist.ts` (calls ×6, imports), `stage_one/frontend/src/composables/useWebSocketControl.ts` (calls, imports), `stage_one/frontend/src/utils/api.ts` (calls ×3, imports), `stage_one/frontend/src/utils/chartUtils.ts` (calls ×2, imports), `stage_one/frontend/src/utils/mockEngine.ts` (calls, imports), `stage_one/frontend/src/utils/symbols.ts` (calls ×12)
+- **stage_one/frontend/src/App.vue** → `stage_one/frontend/src/components/GlobalSecuritySearch.vue` (imports), `stage_one/frontend/src/components/StrategyPanel.vue` (imports), `stage_one/frontend/src/components/ThemeToggle.vue` (imports), `stage_one/frontend/src/composables/useChartAnnotations.ts` (calls, imports), `stage_one/frontend/src/composables/useChartIndicators.ts` (calls ×3, imports), `stage_one/frontend/src/composables/useChartViewport.ts` (calls ×9, imports), `stage_one/frontend/src/composables/useLiveQuoteSync.ts` (calls ×5, imports), `stage_one/frontend/src/composables/useSmartThrottling.ts` (calls, imports), `stage_one/frontend/src/composables/useWatchlist.ts` (calls ×6, imports), `stage_one/frontend/src/composables/useWebSocketControl.ts` (calls, imports), `stage_one/frontend/src/utils/api.ts` (calls ×3, imports), `stage_one/frontend/src/utils/chartUtils.ts` (calls ×2, imports), `stage_one/frontend/src/utils/symbols.ts` (calls ×12)
 - **stage_one/frontend/src/components/GlobalSecuritySearch.vue** → `stage_one/frontend/src/utils/api.ts` (calls ×2, imports), `stage_one/frontend/src/utils/symbols.ts` (calls)
 - **stage_one/frontend/src/components/StrategyPanel.vue** → `stage_one/frontend/src/utils/api.ts` (imports)
 - **stage_one/frontend/src/composables/useChartIndicators.ts** → `stage_one/frontend/src/composables/useChartAnnotations.ts` (imports), `stage_one/frontend/src/utils/api.ts` (imports)
-- **stage_one/frontend/src/composables/useChartViewport.ts** → `stage_one/frontend/src/composables/useChartAnnotations.ts` (imports), `stage_one/frontend/src/composables/useChartIndicators.ts` (calls), `stage_one/frontend/src/utils/api.ts` (calls, imports), `stage_one/frontend/src/utils/mockEngine.ts` (calls ×3, imports), `stage_one/frontend/src/utils/symbols.ts` (calls ×2)
-- **stage_one/frontend/src/composables/useLiveQuoteSync.ts** → `stage_one/frontend/src/composables/useChartAnnotations.ts` (imports), `stage_one/frontend/src/composables/useChartViewport.ts` (calls), `stage_one/frontend/src/composables/useWatchlist.ts` (calls, imports), `stage_one/frontend/src/utils/api.ts` (calls, imports), `stage_one/frontend/src/utils/quote.ts` (imports), `stage_one/frontend/src/utils/symbols.ts` (calls)
-- **stage_one/frontend/src/composables/useWatchlist.ts** → `stage_one/frontend/src/utils/api.ts` (calls ×3, imports), `stage_one/frontend/src/utils/mockEngine.ts` (calls), `stage_one/frontend/src/utils/quote.ts` (imports), `stage_one/frontend/src/utils/symbols.ts` (calls ×6)
+- **stage_one/frontend/src/composables/useChartViewport.ts** → `stage_one/frontend/src/composables/useChartAnnotations.ts` (imports), `stage_one/frontend/src/composables/useChartIndicators.ts` (calls), `stage_one/frontend/src/utils/api.ts` (calls, imports), `stage_one/frontend/src/utils/mockEngine.ts` (calls, imports), `stage_one/frontend/src/utils/symbols.ts` (calls)
+- **stage_one/frontend/src/composables/useLiveQuoteSync.ts** → `stage_one/frontend/src/composables/useChartAnnotations.ts` (imports), `stage_one/frontend/src/composables/useChartViewport.ts` (calls), `stage_one/frontend/src/composables/useWatchlist.ts` (calls ×2, imports), `stage_one/frontend/src/utils/api.ts` (calls, imports), `stage_one/frontend/src/utils/quote.ts` (imports), `stage_one/frontend/src/utils/symbols.ts` (calls)
+- **stage_one/frontend/src/composables/useWatchlist.ts** → `stage_one/frontend/src/utils/api.ts` (calls ×2, imports), `stage_one/frontend/src/utils/quote.ts` (imports), `stage_one/frontend/src/utils/symbols.ts` (calls ×5)
 - **stage_one/frontend/src/main.ts** → `stage_one/frontend/src/App.vue` (imports)
 - **stage_one/frontend/src/utils/api.ts** → `stage_one/frontend/src/utils/mockEngine.ts` (calls ×2, imports)
-- **stage_one/frontend/src/utils/quote.ts** → `stage_one/frontend/src/utils/api.ts` (imports), `stage_one/frontend/src/utils/symbols.ts` (calls)
+- **stage_one/frontend/src/utils/quote.ts** → `stage_one/frontend/src/utils/api.ts` (imports), `stage_one/frontend/src/utils/symbols.ts` (calls ×3)
 
 ### 外部依赖
 
 项目外部模块（标准库 / 第三方包），仅列被导入者：
 
 - **stage_one/backend/analysis.py**：typing
+- **stage_one/backend/assets/make_icons.py**：PIL, cv2, os, struct
 - **stage_one/backend/cli.py**：argparse, sys
 - **stage_one/backend/control_client.py**：httpx, os, subprocess, sys, time, typing, uuid
 - **stage_one/backend/data_provider.py**：asyncio, datetime, fastapi, httpx, json, re, typing, zoneinfo
 - **stage_one/backend/db_cache.py**：datetime, json, os, sqlite3, typing
-- **stage_one/backend/desktop_main.py**：ctypes, os, sys, threading, time, urllib.request, uvicorn, webview
+- **stage_one/backend/desktop_main.py**：ctypes, os, socket, sys, threading, time, urllib.request, uvicorn, webview
 - **stage_one/backend/main.py**：asyncio, base64, contextlib, datetime, difflib, fastapi, fastapi.middleware.cors, fastapi.responses, fastapi.staticfiles, httpx, json, os, pydantic, re, typing, uuid, uvicorn
 - **stage_one/backend/mcp_server.py**：mcp.server.fastmcp, mcp.server.mcpserver, typing
 - **stage_one/backend/quote_config.py**：typing
 - **stage_one/backend/quote_provider.py**：asyncio, datetime, httpx, time, typing
-- **stage_one/backend/strategy_adapter.py**：os, pa_engine, pathlib, plot_wave_chart, strategy_crypto, strategy_day, strategy_layer, sys, typing
+- **stage_one/backend/strategy_adapter.py**：os, pathlib, re, strategy_core, strategy_core.plot_wave_chart, sys, typing
+- **stage_one/backend/strategy_core/__init__.py**：.
+- **stage_one/backend/strategy_core/pa_engine.py**：argparse, datetime, json, os, scipy.signal, sys, time
+- **stage_one/backend/strategy_core/plot_wave_chart.py**：., argparse, pathlib, plotly.subplots, re, sys
+- **stage_one/backend/strategy_core/strategy_crypto.py**：., os, sys
+- **stage_one/backend/strategy_core/strategy_day.py**：., datetime, json, os, sys
+- **stage_one/backend/strategy_core/strategy_layer.py**：.
 - **stage_one/backend/symbols.py**：re, typing
 - **stage_one/backend/test_adjustment.py**：os, sys
 - **stage_one/backend/test_crypto_features.py**：asyncio, fastapi.testclient, httpx, unittest, unittest.mock
+- **stage_one/backend/test_dow_elliott_refactor.py**：strategy_core, unittest
+- **stage_one/backend/test_dow_elliott_us_strategy.py**：unittest
 - **stage_one/backend/test_endpoints.py**：asyncio, fastapi, fastapi.testclient, math, os, sys, unittest
 - **stage_one/backend/test_pagination.py**：datetime, httpx, json
 - **stage_one/backend/test_resample.py**：os, sys
 - **stage_one/backend/test_strategy_wave_channel.py**：fastapi.testclient, unittest
 - **stage_one/backend/test_transformation_new.py**：fastapi.testclient, os, sys, unittest
+- **stage_one/backend/test_triggers_and_turning_dates.py**：unittest
 - **stage_one/backend/test_validate.py**：datetime
 - **stage_one/backend/time_window.py**：datetime, typing
 - **stage_one/frontend/src/App.vue**：lightweight-charts, vue
@@ -130,6 +145,12 @@
 -   `_extract_ohlc` · function · L25-L31 — `def _extract_ohlc(df: pd.DataFrame) -> pd.DataFrame`
 - + `calculate_sr_levels` · function · L34-L139 — `def calculate_sr_levels( df: pd.DataFrame, window: int = 5, distance_pct: float = 0.015, period: str = "1d", ) -> List[Dict[str, Any]]`
 - + `calculate_range_stats` · function · L142-L244 — `def calculate_range_stats( df: pd.DataFrame, start_date: str, end_date: str ) -> Dict[str, Any]`
+
+### stage_one/backend/assets/make_icons.py
+
+共 1 个符号 · 被依赖 0 · 依赖外部 0
+
+- + `generate_icons` · function · L22-L102 — `def generate_icons()`
 
 ### stage_one/backend/cli.py
 
@@ -225,11 +246,17 @@
 
 ### stage_one/backend/desktop_main.py
 
-共 3 个符号 · 被依赖 0 · 依赖外部 0
+共 9 个符号 · 被依赖 0 · 依赖外部 0
 
-- + `check_single_instance` · function · L28-L41 — `def check_single_instance() -> bool`
-- + `start_backend_server` · function · L44-L55 — `def start_backend_server(port: int = 8000)`
-- + `main` · function · L58-L94 — `def main()`
+-   `_console_available` · function · L30-L38 — `def _console_available() -> bool`
+- + `setup_logging` · function · L41-L52 — `def setup_logging()`
+- + `check_single_instance` · function · L55-L67 — `def check_single_instance() -> bool`
+- + `start_backend_server` · function · L70-L79 — `def start_backend_server(port: int = 8000)`
+- + `wait_for_backend` · function · L82-L91 — `def wait_for_backend(port: int, timeout: float = 30.0) -> bool`
+- + `main` · function · L686-L798 — `def main()`
+-   `_boot` · function · L717-L765 — `def _boot()`
+-   `_on_restored` · function · L767-L771 — `def _on_restored()`
+-   `_on_minimized` · function · L773-L777 — `def _on_minimized()`
 
 ### stage_one/backend/main.py
 
@@ -243,53 +270,53 @@
 -   `_patch_latest_bar_with_quote` · function · L247-L284 — `async def _patch_latest_bar_with_quote(symbol: str, period: str, df: pd.DataFrame) -> pd.DataFrame`
 - + `get_klines_df` · function · L287-L324 — `async def get_klines_df(symbol: str, period: str, full: bool = True, bypass_cache: bool = False)`
 -   `_load_local_csv_fallback` · function · L327-L336 — `def _load_local_csv_fallback(norm_sym: str) -> Optional[pd.DataFrame]`
-- + `prewarm_cache` · function · L339-L349 — `async def prewarm_cache()`
-- + `KLinePoint` · class · L356-L362 — `class KLinePoint(BaseModel)`
-- + `AnalysisRequest` · class · L365-L369 — `class AnalysisRequest(BaseModel)`
-- + `WatchGroupModel` · class · L372-L375 — `class WatchGroupModel(BaseModel)`
-- + `WatchlistGroupsRequest` · class · L378-L379 — `class WatchlistGroupsRequest(BaseModel)`
-- + `SRLevel` · class · L382-L387 — `class SRLevel(BaseModel)`
-- + `RangeStat` · class · L390-L393 — `class RangeStat(BaseModel)`
-- + `AnalysisResponse` · class · L396-L400 — `class AnalysisResponse(BaseModel)`
--   `_score_stock` · function · L407-L461 — `def _score_stock(kw: str, stock: dict) -> int`
-- + `search_stocks` · function · L465-L526 — `async def search_stocks( keyword: Optional[str] = Query(None, description="搜索股票名称、英文名称、代码或拼音缩写（全市场范围内）"), )`
--   `_tencent_security_search` · function · L529-L600 — `async def _tencent_security_search(kw: str) -> list`
--   `_parse_search_code` · function · L531-L541 — `def _parse_search_code(code: str) -> Optional[str]`
--   `_pool_item` · function · L543-L563 — `def _pool_item(code: str, name: str, pinyin: str = "", type_: str = "") -> Optional[dict]`
-- + `get_klines` · function · L604-L627 — `async def get_klines( symbol: str = Query(..., description="股票代码，如 usAAPL"), period: str = Query("1d", description="K线周期"), full: bool = Query(True, description="是否拉取上市以来全部历史"), fresh: bool = Query(False, description="是否跳过缓存强制拉取最新数据"), )`
-- + `analyze_stock` · function · L631-L647 — `async def analyze_stock(request: AnalysisRequest)`
-- + `get_supported_periods` · function · L651-L667 — `async def get_supported_periods()`
--   `_default_groups` · function · L678-L679 — `def _default_groups() -> List[dict]`
--   `_load_groups` · function · L682-L698 — `def _load_groups() -> List[dict]`
--   `_save_groups` · function · L701-L717 — `def _save_groups(groups: List[dict]) -> List[dict]`
-- + `get_watchlist` · function · L721-L722 — `async def get_watchlist()`
-- + `save_watchlist` · function · L726-L732 — `async def save_watchlist(req: WatchlistGroupsRequest)`
-- + `WSManager` · class · L739-L761 — `class WSManager`
--   `__init__` · method · L740-L742 — `def __init__(self)`
-- + `connect` · method · L744-L746 — `async def connect(self, ws: WebSocket)`
-- + `disconnect` · method · L748-L750 — `def disconnect(self, ws: WebSocket)`
-- + `broadcast` · method · L752-L757 — `async def broadcast(self, data: dict)`
-- + `resolve_capture` · method · L759-L761 — `def resolve_capture(self, request_id: str, image_base64: str)`
-- + `websocket_control` · function · L775-L799 — `async def websocket_control(websocket: WebSocket)`
-- + `OpenChartRequest` · class · L802-L804 — `class OpenChartRequest(BaseModel)`
-- + `MarkerItem` · class · L807-L813 — `class MarkerItem(BaseModel)`
-- + `AddMarkersRequest` · class · L816-L819 — `class AddMarkersRequest(BaseModel)`
-- + `LineItem` · class · L822-L828 — `class LineItem(BaseModel)`
-- + `DrawLinesRequest` · class · L831-L834 — `class DrawLinesRequest(BaseModel)`
-- + `BoxItem` · class · L837-L845 — `class BoxItem(BaseModel)`
-- + `DrawBoxesRequest` · class · L848-L851 — `class DrawBoxesRequest(BaseModel)`
-- + `RunStrategyRequest` · class · L854-L859 — `class RunStrategyRequest(BaseModel)`
-- + `ClearAnnotationsRequest` · class · L862-L865 — `class ClearAnnotationsRequest(BaseModel)`
-- + `control_open` · function · L869-L881 — `async def control_open(req: OpenChartRequest)`
-- + `control_get_state` · function · L885-L893 — `async def control_get_state()`
-- + `control_add_markers` · function · L897-L906 — `async def control_add_markers(req: AddMarkersRequest)`
-- + `control_draw_lines` · function · L910-L919 — `async def control_draw_lines(req: DrawLinesRequest)`
-- + `control_draw_boxes` · function · L923-L932 — `async def control_draw_boxes(req: DrawBoxesRequest)`
-- + `control_run_strategy` · function · L936-L993 — `async def control_run_strategy(req: RunStrategyRequest)`
-- + `get_strategy_chart_html` · function · L997-L1012 — `async def get_strategy_chart_html(symbol: str, period: str = "1d")`
-- + `control_clear_annotations` · function · L1016-L1024 — `async def control_clear_annotations(req: ClearAnnotationsRequest)`
-- + `control_get_annotations` · function · L1028-L1033 — `async def control_get_annotations( symbol: str = Query(..., description="股票代码"), kind: Optional[str] = Query(None, description="标注类型: marker / line / box"), )`
-- + `control_capture_chart` · function · L1037-L1079 — `async def control_capture_chart()`
+- + `prewarm_cache` · function · L339-L365 — `async def prewarm_cache()`
+- + `KLinePoint` · class · L372-L378 — `class KLinePoint(BaseModel)`
+- + `AnalysisRequest` · class · L381-L385 — `class AnalysisRequest(BaseModel)`
+- + `WatchGroupModel` · class · L388-L391 — `class WatchGroupModel(BaseModel)`
+- + `WatchlistGroupsRequest` · class · L394-L395 — `class WatchlistGroupsRequest(BaseModel)`
+- + `SRLevel` · class · L398-L403 — `class SRLevel(BaseModel)`
+- + `RangeStat` · class · L406-L409 — `class RangeStat(BaseModel)`
+- + `AnalysisResponse` · class · L412-L416 — `class AnalysisResponse(BaseModel)`
+-   `_score_stock` · function · L423-L477 — `def _score_stock(kw: str, stock: dict) -> int`
+- + `search_stocks` · function · L481-L542 — `async def search_stocks( keyword: Optional[str] = Query(None, description="搜索股票名称、英文名称、代码或拼音缩写（全市场范围内）"), )`
+-   `_tencent_security_search` · function · L545-L616 — `async def _tencent_security_search(kw: str) -> list`
+-   `_parse_search_code` · function · L547-L557 — `def _parse_search_code(code: str) -> Optional[str]`
+-   `_pool_item` · function · L559-L579 — `def _pool_item(code: str, name: str, pinyin: str = "", type_: str = "") -> Optional[dict]`
+- + `get_klines` · function · L620-L643 — `async def get_klines( symbol: str = Query(..., description="股票代码，如 usAAPL"), period: str = Query("1d", description="K线周期"), full: bool = Query(True, description="是否拉取上市以来全部历史"), fresh: bool = Query(False, description="是否跳过缓存强制拉取最新数据"), )`
+- + `analyze_stock` · function · L647-L663 — `async def analyze_stock(request: AnalysisRequest)`
+- + `get_supported_periods` · function · L667-L683 — `async def get_supported_periods()`
+-   `_default_groups` · function · L694-L695 — `def _default_groups() -> List[dict]`
+-   `_load_groups` · function · L698-L714 — `def _load_groups() -> List[dict]`
+-   `_save_groups` · function · L717-L733 — `def _save_groups(groups: List[dict]) -> List[dict]`
+- + `get_watchlist` · function · L737-L738 — `async def get_watchlist()`
+- + `save_watchlist` · function · L742-L748 — `async def save_watchlist(req: WatchlistGroupsRequest)`
+- + `WSManager` · class · L755-L777 — `class WSManager`
+-   `__init__` · method · L756-L758 — `def __init__(self)`
+- + `connect` · method · L760-L762 — `async def connect(self, ws: WebSocket)`
+- + `disconnect` · method · L764-L766 — `def disconnect(self, ws: WebSocket)`
+- + `broadcast` · method · L768-L773 — `async def broadcast(self, data: dict)`
+- + `resolve_capture` · method · L775-L777 — `def resolve_capture(self, request_id: str, image_base64: str)`
+- + `websocket_control` · function · L791-L815 — `async def websocket_control(websocket: WebSocket)`
+- + `OpenChartRequest` · class · L818-L820 — `class OpenChartRequest(BaseModel)`
+- + `MarkerItem` · class · L823-L829 — `class MarkerItem(BaseModel)`
+- + `AddMarkersRequest` · class · L832-L835 — `class AddMarkersRequest(BaseModel)`
+- + `LineItem` · class · L838-L844 — `class LineItem(BaseModel)`
+- + `DrawLinesRequest` · class · L847-L850 — `class DrawLinesRequest(BaseModel)`
+- + `BoxItem` · class · L853-L861 — `class BoxItem(BaseModel)`
+- + `DrawBoxesRequest` · class · L864-L867 — `class DrawBoxesRequest(BaseModel)`
+- + `RunStrategyRequest` · class · L870-L875 — `class RunStrategyRequest(BaseModel)`
+- + `ClearAnnotationsRequest` · class · L878-L881 — `class ClearAnnotationsRequest(BaseModel)`
+- + `control_open` · function · L885-L897 — `async def control_open(req: OpenChartRequest)`
+- + `control_get_state` · function · L901-L909 — `async def control_get_state()`
+- + `control_add_markers` · function · L913-L922 — `async def control_add_markers(req: AddMarkersRequest)`
+- + `control_draw_lines` · function · L926-L935 — `async def control_draw_lines(req: DrawLinesRequest)`
+- + `control_draw_boxes` · function · L939-L948 — `async def control_draw_boxes(req: DrawBoxesRequest)`
+- + `control_run_strategy` · function · L952-L1009 — `async def control_run_strategy(req: RunStrategyRequest)`
+- + `get_strategy_chart_html` · function · L1013-L1028 — `async def get_strategy_chart_html(symbol: str, period: str = "1d")`
+- + `control_clear_annotations` · function · L1032-L1040 — `async def control_clear_annotations(req: ClearAnnotationsRequest)`
+- + `control_get_annotations` · function · L1044-L1049 — `async def control_get_annotations( symbol: str = Query(..., description="股票代码"), kind: Optional[str] = Query(None, description="标注类型: marker / line / box"), )`
+- + `control_capture_chart` · function · L1053-L1095 — `async def control_capture_chart()`
 
 ### stage_one/backend/mcp_server.py
 
@@ -320,14 +347,14 @@
 
 ### stage_one/backend/quote_config.py
 
-共 2 个符号 · 被依赖 10 · 依赖外部 1
+共 2 个符号 · 被依赖 11 · 依赖外部 1
 
 - + `market_of` · function · L60-L62 — `def market_of(symbol: str) -> Optional[str]`
 - + `get_market_cfg` · function · L65-L67 — `def get_market_cfg(market: Optional[str]) -> dict`
 
 ### stage_one/backend/quote_provider.py
 
-共 27 个符号 · 被依赖 7 · 依赖外部 7
+共 27 个符号 · 被依赖 7 · 依赖外部 8
 
 - + `QuoteRateLimiter` · class · L38-L98 — `class QuoteRateLimiter`
 -   `__init__` · method · L41-L48 — `def __init__(self) -> None`
@@ -342,39 +369,162 @@
 - + `YahooCryptoQuoteProvider` · class · L145-L222 — `class YahooCryptoQuoteProvider`
 -   `__init__` · method · L148-L149 — `def __init__(self) -> None`
 - + `get_quotes` · method · L151-L222 — `async def get_quotes(self, symbols: List[str]) -> List[dict]`
-- + `TencentQuoteProvider` · class · L224-L353 — `class TencentQuoteProvider`
+- + `TencentQuoteProvider` · class · L224-L367 — `class TencentQuoteProvider`
 -   `__init__` · method · L227-L231 — `def __init__(self) -> None`
-- + `get_quotes` · method · L233-L248 — `async def get_quotes(self, symbols: List[str]) -> List[dict]`
--   `_get_tencent_quotes` · method · L250-L286 — `async def _get_tencent_quotes(self, symbols: List[str]) -> List[dict]`
--   `_fetch_raw` · method · L288-L302 — `async def _fetch_raw(self, symbols: List[str]) -> str`
--   `_parse` · method · L304-L353 — `def _parse(self, text: str, symbols: List[str]) -> Dict[str, Optional[dict]]`
--   `_to_float` · function · L355-L366 — `def _to_float(s) -> Optional[float]`
--   `_format_update_time` · function · L368-L372 — `def _format_update_time(raw: str) -> str`
--   `_error_item` · function · L374-L393 — `def _error_item(symbol: str, status: str, msg: str) -> dict`
-- + `SinaFuturesQuoteProvider` · class · L403-L519 — `class SinaFuturesQuoteProvider`
--   `__init__` · method · L406-L408 — `def __init__(self) -> None`
-- + `get_quotes` · method · L410-L442 — `async def get_quotes(self, symbols: List[str]) -> List[dict]`
--   `_fetch` · method · L444-L478 — `async def _fetch(self, symbols: List[str]) -> Dict[str, Optional[dict]]`
--   `_parse_line` · method · L481-L519 — `def _parse_line(line: str) -> Optional[dict]`
+- + `get_quotes` · method · L233-L259 — `async def get_quotes(self, symbols: List[str]) -> List[dict]`
+-   `_get_tencent_quotes` · method · L261-L300 — `async def _get_tencent_quotes(self, symbols: List[str]) -> List[dict]`
+-   `_fetch_raw` · method · L302-L316 — `async def _fetch_raw(self, symbols: List[str]) -> str`
+-   `_parse` · method · L318-L367 — `def _parse(self, text: str, symbols: List[str]) -> Dict[str, Optional[dict]]`
+-   `_to_float` · function · L369-L380 — `def _to_float(s) -> Optional[float]`
+-   `_format_update_time` · function · L382-L386 — `def _format_update_time(raw: str) -> str`
+-   `_error_item` · function · L388-L407 — `def _error_item(symbol: str, status: str, msg: str) -> dict`
+- + `SinaFuturesQuoteProvider` · class · L417-L547 — `class SinaFuturesQuoteProvider`
+-   `__init__` · method · L420-L423 — `def __init__(self) -> None`
+- + `get_quotes` · method · L425-L470 — `async def get_quotes(self, symbols: List[str]) -> List[dict]`
+-   `_fetch` · method · L472-L506 — `async def _fetch(self, symbols: List[str]) -> Dict[str, Optional[dict]]`
+-   `_parse_line` · method · L509-L547 — `def _parse_line(line: str) -> Optional[dict]`
 
 ### stage_one/backend/strategy_adapter.py
 
-共 10 个符号 · 被依赖 9 · 依赖外部 5
+共 14 个符号 · 被依赖 35 · 依赖外部 7
 
--   `_get_modules` · function · L27-L52 — `def _get_modules() -> Dict[str, Any]`
--   `_normalize_df` · function · L55-L104 — `def _normalize_df(df: Any) -> Any`
--   `_prepare_strategy_df` · function · L107-L119 — `def _prepare_strategy_df(symbol: str, df: Optional[Any]) -> Any`
--   `_evaluate_market_structure` · function · L122-L216 — `def _evaluate_market_structure( pa: Any, df_clean: Any, current_price: float, is_intraday: bool ) -> Dict[str, Any]`
--   `_build_trade_plan` · function · L219-L327 — `def _build_trade_plan( pa: Any, df_clean: Any, current_price: float, struct: Dict[str, Any], turn_windows_res: Dict[str, Any], ) -> Dict[str, Any]`
--   `_build_chart_annotations` · function · L330-L639 — `def _build_chart_annotations( pa: Any, df_clean: Any, current_price: float, is_intraday: bool, struct: Dict[str, Any], trade_plan: Dict[str, Any], turn_windows_res: Dict[str, Any], ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]`
--   `_format_time_str` · function · L349-L361 — `def _format_time_str(val: Any) -> str`
--   `_resolve_pt_time` · function · L363-L367 — `def _resolve_pt_time(pt: Dict[str, Any], idx: int) -> str`
-- + `run_strategy_analysis` · function · L642-L703 — `def run_strategy_analysis( symbol: str, period: str = "1d", mode: str = "swing", df: Optional[Any] = None, ) -> Dict[str, Any]`
-- + `generate_wave_chart_html` · function · L706-L748 — `def generate_wave_chart_html(symbol: str, period: str = "1d", df: Optional[Any] = None) -> str`
+-   `_get_modules` · function · L21-L41 — `def _get_modules() -> Dict[str, Any]`
+-   `_normalize_df` · function · L44-L93 — `def _normalize_df(df: Any) -> Any`
+-   `_prepare_strategy_df` · function · L96-L108 — `def _prepare_strategy_df(symbol: str, df: Optional[Any]) -> Any`
+-   `_evaluate_market_structure` · function · L111-L247 — `def _evaluate_market_structure( pa: Any, df_clean: Any, current_price: float, is_intraday: bool, is_crypto: bool = False ) -> Dict[str, Any]`
+-   `_verify_us_market_dow` · function · L253-L342 — `def _verify_us_market_dow( pa: Any, spy_df: Optional[Any] = None, qqq_df: Optional[Any] = None, force_refresh: bool = False, ) -> Dict[str, Any]`
+-   `_eval_index` · function · L284-L310 — `def _eval_index(df: Any) -> Tuple[str, bool, bool, float, float]`
+-   `_build_trade_plan` · function · L345-L1385 — `def _build_trade_plan( pa: Any, df_clean: Any, current_price: float, struct: Dict[str, Any], turn_windows_res: Dict[str, Any], is_crypto: bool = False, is_us: bool = True, dow_market_ver: Optional[Dict[str, Any]] = None, ) -> Dict[str, Any]`
+-   `_get_pt_p` · function · L422-L427 — `def _get_pt_p(key: Any) -> Optional[float]`
+-   `_build_chart_annotations` · function · L1388-L1832 — `def _build_chart_annotations( pa: Any, df_clean: Any, current_price: float, is_intraday: bool, struct: Dict[str, Any], trade_plan: Dict[str, Any], turn_windows_res: Dict[str, Any], ) -> Tuple[Dict[str, Any], List[Dict[str, Any]], Dict[str, Any]]`
+-   `_format_time_str` · function · L1408-L1420 — `def _format_time_str(val: Any) -> str`
+-   `_resolve_pt_time` · function · L1422-L1426 — `def _resolve_pt_time(pt: Dict[str, Any], idx: int) -> str`
+-   `_generate_depth_diagnosis` · function · L1835-L1899 — `def _generate_depth_diagnosis( struct: Dict[str, Any], trade_plan: Dict[str, Any], turn_windows_res: Dict[str, Any], current_price: float, dow_market_ver: Optional[Dict[str, Any]] = None, ) -> str`
+- + `run_strategy_analysis` · function · L1902-L2024 — `def run_strategy_analysis( symbol: str, period: str = "1d", mode: str = "swing", df: Optional[Any] = None, market: Optional[str] = None, spy_df: Optional[Any] = None, qqq_df: Optional[Any] = None, ) -> Dict[str, Any]`
+- + `generate_wave_chart_html` · function · L2027-L2070 — `def generate_wave_chart_html(symbol: str, period: str = "1d", df: Optional[Any] = None) -> str`
+
+### stage_one/backend/strategy_core/__init__.py
+
+共 0 个符号 · 被依赖 0 · 依赖外部 0
+
+- （该文件无可提取符号）
+
+### stage_one/backend/strategy_core/pa_engine.py
+
+共 47 个符号 · 被依赖 0 · 依赖外部 0
+
+- + `DataUnavailable` · class · L67-L68 — `class DataUnavailable(RuntimeError)`
+- + `reset_fetch_state` · function · L76-L81 — `def reset_fetch_state() -> None`
+- + `median_bar_range` · function · L84-L93 — `def median_bar_range(df: pd.DataFrame, n: int = 14) -> float`
+- + `fetch_klines` · function · L114-L170 — `def fetch_klines(ticker: str, interval: str, period: str, prepost: bool = False, retries: int = FETCH_RETRIES) -> pd.DataFrame`
+- + `extract_swings` · function · L177-L261 — `def extract_swings(df: pd.DataFrame, order: int = 5, confirmed_only: bool = True) -> list`
+-   `_split_swings` · function · L264-L270 — `def _split_swings(df: pd.DataFrame, order: int)`
+-   `_fmt_pending` · function · L273-L279 — `def _fmt_pending(pend: list) -> str`
+-   `_determine_dow_phase` · function · L282-L299 — `def _determine_dow_phase(swings: list) -> str`
+- + `detect_mss` · function · L306-L406 — `def detect_mss(swings: list, df: pd.DataFrame = None, buffer_k: float = 0.0) -> list`
+- + `detect_consolidation_box` · function · L413-L557 — `def detect_consolidation_box(df: pd.DataFrame, swings: list = None, lookback_bars: int = 40, min_bars: int = 15, height_pct_min: float = 0.03, height_pct_max: float = 0.35, containment_pct: float = 0.70, buffer_k: float = 0.0) -> dict`
+- + `detect_price_channel` · function · L560-L699 — `def detect_price_channel(df: pd.DataFrame, swings: list = None, lookback_bars: int = 30, std_mult: float = 2.0) -> dict`
+-   `_fmt_price` · function · L706-L708 — `def _fmt_price(value) -> str`
+- + `check_dow_indices` · function · L711-L741 — `def check_dow_indices(mode: str, indices: list = None) -> dict`
+-   `_to_exchange_tz` · function · L748-L760 — `def _to_exchange_tz(df: pd.DataFrame)`
+-   `_infer_bar_minutes` · function · L763-L771 — `def _infer_bar_minutes(df: pd.DataFrame) -> int`
+-   `_prev_session_bar` · function · L774-L785 — `def _prev_session_bar(df_daily: pd.DataFrame, df_intraday: pd.DataFrame)`
+- + `calc_fibonacci_and_levels` · function · L788-L872 — `def calc_fibonacci_and_levels(swings: list, df_daily: pd.DataFrame = None, df_intraday: pd.DataFrame = None) -> dict`
+-   `_match_fib_ratio` · function · L879-L895 — `def _match_fib_ratio(ratio: float) -> str`
+- + `calc_multi_leg_fib` · function · L898-L978 — `def calc_multi_leg_fib(swings: list, tolerance_pct: float = 0.01) -> dict`
+-   `_flush` · function · L945-L959 — `def _flush(group)`
+-   `_resolve_swing_idx` · function · L989-L1005 — `def _resolve_swing_idx(swing: dict, df: pd.DataFrame = None) -> int | None`
+- + `classify_wave_pattern` · function · L1008-L1445 — `def classify_wave_pattern(swings: list, df: pd.DataFrame = None, allow_shallow_w4: bool = False) -> dict`
+-   `_check_impulse_5` · function · L1030-L1238 — `def _check_impulse_5(cand)`
+- + `evaluate_wave_position` · function · L1448-L1620 — `def evaluate_wave_position(swings: list, df: pd.DataFrame = None, current_price: float = None, allow_shallow_w4: bool = False) -> dict`
+- + `classify_corrective_subtypes` · function · L1623-L1767 — `def classify_corrective_subtypes(swings: list) -> dict`
+- + `calc_time_windows` · function · L1770-L1835 — `def calc_time_windows(swings: list, df: pd.DataFrame) -> dict`
+-   `_match_seq` · function · L1790-L1795 — `def _match_seq(val: int, seq: tuple) -> int | None`
+- + `calc_elliott_channel` · function · L1838-L1926 — `def calc_elliott_channel(swings: list, df: pd.DataFrame, wp: dict = None) -> dict`
+-   `_project_line` · function · L1857-L1861 — `def _project_line(i1: int, p1: float, i2: int, p2: float, target_i: int) -> float | None`
+- + `generate_wave_counts` · function · L1929-L1988 — `def generate_wave_counts(swings: list, df: pd.DataFrame = None, wp: dict = None) -> dict`
+- + `detect_gaps` · function · L1995-L2037 — `def detect_gaps(df: pd.DataFrame, min_gap_pct: float = 0.008) -> list`
+- + `scan_price_action` · function · L2044-L2187 — `def scan_price_action(df: pd.DataFrame, key_levels: list = None, bar_rng: float = None, require_location: bool = True, sweep_min_tier: int = TIER_MIN_FOR_SWEEP) -> list`
+- + `gate_ok` · function · L2112-L2118 — `def gate_ok(price_probe)`
+- + `analyze_volume` · function · L2194-L2240 — `def analyze_volume(df: pd.DataFrame, lookback: int = 20, recent: int = 5) -> dict`
+- + `analyze_dow_volume` · function · L2243-L2354 — `def analyze_dow_volume(df: pd.DataFrame, dow_bias: int = 0, lookback: int = 20) -> dict`
+- + `dow_bias_count` · function · L2361-L2373 — `def dow_bias_count(swings: list) -> int`
+- + `dow_bias` · function · L2376-L2448 — `def dow_bias(swings: list, df: pd.DataFrame = None, buffer_k: float = 0.0) -> int`
+- + `build_key_levels` · function · L2452-L2507 — `def build_key_levels(levels: dict, swings_mtf: list, swings_ltf: list, gaps: list, clusters: list, bar_rng: float) -> list`
+- + `add` · function · L2463-L2469 — `def add(price, kind, src)`
+-   `_is_last_bar_open` · function · L2510-L2524 — `def _is_last_bar_open(df: pd.DataFrame, now=None) -> bool`
+- + `build_trade_plan` · function · L2527-L2815 — `def build_trade_plan(mode: str, price: float, swings_mtf: list, swings_ltf: list, key_levels: list, levels: dict, bar_rng: float, bias_htf: int, bias_mtf: int, equity: float = None, risk_pct: float = DEFAULT_RISK_PCT, min_rr: float = MIN_RR, market_dow: dict = None, df_mtf: pd.DataFrame = None, target_symbol: str = None, target_sector: str = None, allow_decoupling: bool = False, micro_conviction: str = None, use_trend_gate: bool = False) -> dict`
+-   `_print_trade_plan` · function · L2818-L2892 — `def _print_trade_plan(plan: dict) -> None`
+- + `side_cn` · function · L2820-L2821 — `def side_cn(s)`
+-   `_write_json` · function · L2895-L2904 — `def _write_json(path: str, payload: dict) -> bool`
+- + `analyze_single_ticker` · function · L2911-L3210 — `def analyze_single_ticker(ticker: str, mode: str, market_dow: dict = None, is_watchlist: bool = False, json_out: str = None, equity: float = None, risk_pct: float = DEFAULT_RISK_PCT)`
+-   `_print_run_summary` · function · L3213-L3237 — `def _print_run_summary(results: dict) -> int`
+- + `main` · function · L3240-L3318 — `def main() -> int`
+
+### stage_one/backend/strategy_core/plot_wave_chart.py
+
+共 7 个符号 · 被依赖 1 · 依赖外部 0
+
+- + `load_ohlcv` · function · L36-L48 — `def load_ohlcv(csv_path: Path) -> pd.DataFrame`
+-   `_resolve_wave_annotations` · function · L51-L113 — `def _resolve_wave_annotations( sub: pd.DataFrame, swings: list[dict], wave_pattern: dict, ) -> list[dict]`
+-   `_future_bar_timestamp` · function · L116-L120 — `def _future_bar_timestamp(last_dt: pd.Timestamp, offset_bars: int, has_weekends: bool) -> pd.Timestamp`
+-   `_add_structure_and_sr_overlays` · function · L123-L252 — `def _add_structure_and_sr_overlays( fig: go.Figure, sub: pd.DataFrame, swings: list[dict], x_end: pd.Timestamp, ) -> tuple[dict, dict, list[dict], list[dict]]`
+-   `_build_summary_lines` · function · L255-L319 — `def _build_summary_lines( wave_pattern: dict, result: dict, ema_last: float, current_price: float, bars_since: int, next_lucas: int | None, next_fib: int | None, chan: dict | None = None, gaps: list[dict] | None = None, fib_levels: dict | None = None, ) -> list[str]`
+- + `plot_wave_chart` · function · L322-L676 — `def plot_wave_chart( ticker: str = "GOOGL", csv_path: Path | None = None, output_path: Path | None = None, lookback_bars: int = 120, include_plotlyjs: str | bool = "cdn", ) -> Path`
+- + `main` · function · L679-L696 — `def main() -> None`
+
+### stage_one/backend/strategy_core/strategy_crypto.py
+
+共 10 个符号 · 被依赖 0 · 依赖外部 0
+
+- + `is_crypto_black_swan` · function · L72-L87 — `def is_crypto_black_swan(date_val) -> bool`
+- + `trade_overlaps_black_swan` · function · L90-L104 — `def trade_overlaps_black_swan(entry_date, exit_date) -> bool`
+- + `is_crypto_asset` · function · L107-L139 — `def is_crypto_asset(ticker: str) -> bool`
+- + `extract_crypto_levels` · function · L146-L249 — `def extract_crypto_levels(df: pd.DataFrame, t: int, side: int, swings: list, buffer_k: float = CRYPTO_STOP_BUFFER_K) -> dict`
+- + `detect_crypto_trigger_on_bar` · function · L256-L352 — `def detect_crypto_trigger_on_bar(df: pd.DataFrame, k: int, side: int, key_level: float, bar_rng: float, tol_k: float = 0.6) -> dict`
+- + `check_recent_crypto_2b_sweep` · function · L355-L415 — `def check_recent_crypto_2b_sweep(df: pd.DataFrame, side: int, swings: list, bar_rng: float = None, lookback: int = 5) -> dict`
+-   `_weekly_prefix` · function · L422-L429 — `def _weekly_prefix(df: pd.DataFrame, t: int) -> pd.DataFrame`
+- + `check_crypto_primary_trend` · function · L432-L465 — `def check_crypto_primary_trend(df: pd.DataFrame, t: int, side: int) -> dict`
+- + `simulate_crypto_trigger_entry` · function · L468-L534 — `def simulate_crypto_trigger_entry(df: pd.DataFrame, t: int, side: int, key_level: float, bar_rng: float, structural_stop: float, max_wait_bars: int = CRYPTO_MAX_WAIT_BARS, use_trend_gate: bool = True, disallow_short_engulfing: bool = True) -> dict`
+- + `simulate_crypto_trade` · function · L541-L838 — `def simulate_crypto_trade(df: pd.DataFrame, entry_t: int, entry_price: float, side: int, stop_price: float, tp1_price: float = None, tp2_price: float = None, impulse_leg: float = None, max_hold_bars: int = CRYPTO_MAX_HOLD_BARS, min_rr: float = CRYPTO_MIN_RR) -> dict`
+
+### stage_one/backend/strategy_core/strategy_day.py
+
+共 11 个符号 · 被依赖 0 · 依赖外部 0
+
+- + `normalize_intraday_tz` · function · L53-L71 — `def normalize_intraday_tz(df: pd.DataFrame) -> pd.DataFrame`
+- + `split_intraday_sessions` · function · L74-L86 — `def split_intraday_sessions(df: pd.DataFrame) -> dict`
+- + `extract_session_key_levels` · function · L93-L142 — `def extract_session_key_levels(df_session: pd.DataFrame, prev_session_df: pd.DataFrame = None) -> dict`
+- + `detect_intraday_2b_sweep` · function · L149-L228 — `def detect_intraday_2b_sweep(df: pd.DataFrame, k: int, level: float, level_name: str, bar_rng: float, buffer_k: float = DEFAULT_DAY_STOP_BUFFER_K, level_type: str = "auto") -> dict`
+- + `detect_orb_breakout_retest` · function · L231-L280 — `def detect_orb_breakout_retest(df: pd.DataFrame, k: int, orh: float, orl: float, bar_rng: float, buffer_k: float = DEFAULT_DAY_STOP_BUFFER_K) -> dict`
+- + `simulate_day_trade` · function · L287-L545 — `def simulate_day_trade(df: pd.DataFrame, entry_t: int, entry_price: float, side: int, stop_price: float, tp_price: float, tp2_price: float = None, min_rr: float = DEFAULT_DAY_MIN_RR, slippage_bps: float = DEFAULT_SLIPPAGE_BPS, commission_bps: float = DEFAULT_COMMISSION_BPS, use_be_at_1_5r: bool = True, eod_exit_time: dtime = DAY_EOD_EXIT_TIME, max_hold_bars: int = 78, pattern: str = None, htf_bias: int = None, market_dow: dict = None, **kwargs) -> dict`
+- + `extract_intraday_htf_bias` · function · L548-L580 — `def extract_intraday_htf_bias(df_5m: pd.DataFrame, cutoff_ts: pd.Timestamp = None) -> int`
+- + `enumerate_day_events` · function · L587-L802 — `def enumerate_day_events(df: pd.DataFrame, strategy_type: str = "day_combined", min_rr: float = DEFAULT_DAY_MIN_RR, buffer_k: float = DEFAULT_DAY_STOP_BUFFER_K, avoid_overlap: bool = True, use_htf_filter: bool = True, slippage_bps: float = DEFAULT_SLIPPAGE_BPS, commission_bps: float = DEFAULT_COMMISSION_BPS, market_data: dict = None, df_1h: pd.DataFrame = None, **kwargs) -> list`
+- + `synthetic_intraday_days` · function · L809-L865 — `def synthetic_intraday_days(n_days: int = 15, seed: int = 42, base_price: float = 150.0) -> pd.DataFrame`
+- + `summarize_day_trades` · function · L872-L949 — `def summarize_day_trades(trades: list, label: str = "") -> dict`
+- + `sub_stats` · function · L913-L925 — `def sub_stats(sub_df)`
+
+### stage_one/backend/strategy_core/strategy_layer.py
+
+共 13 个符号 · 被依赖 0 · 依赖外部 0
+
+- + `is_stock_black_swan` · function · L71-L87 — `def is_stock_black_swan(date_val) -> bool`
+- + `trade_overlaps_stock_black_swan` · function · L90-L106 — `def trade_overlaps_stock_black_swan(entry_date, exit_date) -> bool`
+- + `extract_breakout_levels` · function · L113-L190 — `def extract_breakout_levels(df: pd.DataFrame, t: int, side: int, swings: list, buffer_k: float = 0.0) -> dict`
+- + `verify_primary_trend_gate` · function · L226-L321 — `def verify_primary_trend_gate(df: pd.DataFrame, side: int, ema_period: int = 200, t: int = None) -> dict`
+- + `verify_market_dow_gate` · function · L324-L627 — `def verify_market_dow_gate(market_dow: dict = None, target_symbol_or_side = None, target_sector: str = None, side: int = None, allow_decoupling: bool = False, micro_conviction: str = None, target_symbol: str = None, market_data: dict = None, **kwargs) -> dict`
+- + `verify_macro_short_gate` · function · L630-L696 — `def verify_macro_short_gate(market_dow: dict = None, df: pd.DataFrame = None, t: int = None, micro_conviction: str = None, allow_decoupling: bool = False, target_symbol: str = None, **kwargs) -> dict`
+- + `verify_box_gate` · function · L699-L742 — `def verify_box_gate(df: pd.DataFrame, t: int, side: int, swings: list = None) -> dict`
+- + `verify_channel_gate` · function · L745-L788 — `def verify_channel_gate(df: pd.DataFrame, t: int, side: int, swings: list = None) -> dict`
+- + `simulate_limit_order` · function · L795-L935 — `def simulate_limit_order(df: pd.DataFrame, t: int, side: int, limit_price: float, stop_price: float, max_wait_bars: int = DEFAULT_MAX_WAIT_BARS, volume_filter: bool = False) -> dict`
+- + `detect_trigger_on_bar` · function · L942-L1023 — `def detect_trigger_on_bar(df: pd.DataFrame, k: int, side: int, key_level: float, bar_rng: float, tol_k: float = 0.5) -> dict`
+- + `simulate_trigger_entry` · function · L1026-L1074 — `def simulate_trigger_entry(df: pd.DataFrame, t: int, side: int, key_level: float, bar_rng: float, structural_stop: float, max_wait_bars: int = DEFAULT_MAX_WAIT_BARS) -> dict`
+- + `simulate_strategy_trade` · function · L1081-L1519 — `def simulate_strategy_trade(df: pd.DataFrame, entry_t: int, entry_price: float, side: int, stop_price: float, tp_price: float, max_hold_bars: int = DEFAULT_MAX_HOLD_BARS, min_rr: float = DEFAULT_MIN_RR, market_dow: dict = None, wave_status: str = None, box_gate: dict = None, channel_gate: dict = None, use_channel_tp: bool = False, channel_info: dict = None, use_tiered_tp: bool = False, tp2_price: float = None, impulse_leg: float = None, trend_gate: dict = None, use_trend_gate: bool = False, target_symbol: str = None, target_sector: str = None, allow_decoupling: bool = False, micro_conviction: str = None) -> dict`
+- + `calc_entry_horizon_stats` · function · L1526-L1551 — `def calc_entry_horizon_stats(df: pd.DataFrame, entry_t: int, entry_price: float, side: int, h: int) -> dict`
 
 ### stage_one/backend/symbols.py
 
-共 5 个符号 · 被依赖 27 · 依赖外部 0
+共 5 个符号 · 被依赖 28 · 依赖外部 0
 
 - + `norm_market_prefix` · function · L23-L29 — `def norm_market_prefix(sym: str) -> str`
 -   `_strip_crypto_us_prefix` · function · L32-L39 — `def _strip_crypto_us_prefix(clean: str) -> str`
@@ -390,7 +540,7 @@
 
 ### stage_one/backend/test_crypto_features.py
 
-共 15 个符号 · 被依赖 0 · 依赖外部 14
+共 22 个符号 · 被依赖 0 · 依赖外部 20
 
 - + `TestCryptoFeatures` · class · L23-L345 — `class TestCryptoFeatures(unittest.TestCase)`
 - + `setUp` · method · L25-L26 — `def setUp(self)`
@@ -407,6 +557,44 @@
 - + `test_tencent_quote_provider_routes_crypto` · method · L274-L291 — `def test_tencent_quote_provider_routes_crypto(self)`
 - + `test_yahoo_crypto_daily_uses_10y_range` · method · L296-L332 — `def test_yahoo_crypto_daily_uses_10y_range(self)`
 - + `test_live_get_klines_btc_usdt_daily` · method · L334-L345 — `def test_live_get_klines_btc_usdt_daily(self)`
+- + `TestCryptoDowntrendAndRRGates` · class · L348-L548 — `class TestCryptoDowntrendAndRRGates(unittest.TestCase)`
+- + `setUp` · method · L360-L380 — `def setUp(self)`
+- + `test_btc_downtrend_stop_loss_not_taking_ancient_high` · method · L382-L404 — `def test_btc_downtrend_stop_loss_not_taking_ancient_high(self)`
+- + `test_btc_downtrend_tp1_uses_forward_fibonacci_projection` · method · L406-L426 — `def test_btc_downtrend_tp1_uses_forward_fibonacci_projection(self)`
+- + `test_btc_downtrend_rr_calculation_accuracy` · method · L428-L454 — `def test_btc_downtrend_rr_calculation_accuracy(self)`
+- + `test_rr_gate_consistency_no_poor_playbook_exposed` · method · L456-L515 — `def test_rr_gate_consistency_no_poor_playbook_exposed(self)`
+- + `test_anti_chase_and_honest_structural_targets` · method · L517-L548 — `def test_anti_chase_and_honest_structural_targets(self)`
+
+### stage_one/backend/test_dow_elliott_refactor.py
+
+共 9 个符号 · 被依赖 0 · 依赖外部 6
+
+- + `TestDowElliottStrategyRefactor` · class · L19-L172 — `class TestDowElliottStrategyRefactor(unittest.TestCase)`
+- + `setUp` · method · L20-L45 — `def setUp(self): # 构造标准的 60 根多头波浪走势数据`
+- + `test_structured_fields_presence` · method · L47-L60 — `def test_structured_fields_presence(self)`
+- + `test_multi_tier_stop_loss_anchor_pool` · method · L62-L77 — `def test_multi_tier_stop_loss_anchor_pool(self)`
+- + `test_take_profit_separates_unconfirmed_realtime_extremes` · method · L79-L96 — `def test_take_profit_separates_unconfirmed_realtime_extremes(self)`
+- + `test_condition_playbook_tight_retracement_and_rr_gate` · method · L98-L113 — `def test_condition_playbook_tight_retracement_and_rr_gate(self)`
+- + `test_crypto_routing_and_atr_anti_wick_buffer` · method · L115-L133 — `def test_crypto_routing_and_atr_anti_wick_buffer(self)`
+- + `test_crypto_shallow_wave4_piercing_tolerance` · method · L135-L154 — `def test_crypto_shallow_wave4_piercing_tolerance(self)`
+- + `test_dow_volume_status_analysis` · method · L156-L172 — `def test_dow_volume_status_analysis(self)`
+
+### stage_one/backend/test_dow_elliott_us_strategy.py
+
+共 12 个符号 · 被依赖 0 · 依赖外部 11
+
+- + `TestDowElliottUSStrategy` · class · L18-L345 — `class TestDowElliottUSStrategy(unittest.TestCase)`
+- + `setUp` · method · L19-L82 — `def setUp(self): # 基础测试日期序列`
+- + `test_dow_macro_filter_mutual_verification_pass` · method · L84-L100 — `def test_dow_macro_filter_mutual_verification_pass(self)`
+- + `test_dow_macro_filter_divergence_blocks_long` · method · L102-L123 — `def test_dow_macro_filter_divergence_blocks_long(self)`
+- + `test_wave2_buy_point_setup_and_iron_rule` · method · L125-L154 — `def test_wave2_buy_point_setup_and_iron_rule(self)`
+- + `test_wave4_buy_point_setup_and_rule` · method · L156-L181 — `def test_wave4_buy_point_setup_and_rule(self)`
+- + `test_sell_stages_high_selling_ladder` · method · L183-L211 — `def test_sell_stages_high_selling_ladder(self)`
+- + `test_condition_playbook_wave_setups` · method · L213-L234 — `def test_condition_playbook_wave_setups(self)`
+- + `test_us_bear_market_defense` · method · L236-L259 — `def test_us_bear_market_defense(self)`
+- + `test_cn_stock_skips_us_dow_macro_filter` · method · L261-L274 — `def test_cn_stock_skips_us_dow_macro_filter(self)`
+- + `test_channel_2_4_breakdown_triggers_escape_and_blocks_long` · method · L276-L306 — `def test_channel_2_4_breakdown_triggers_escape_and_blocks_long(self)`
+- + `test_wave4_conditional_playbook_fib_levels` · method · L308-L345 — `def test_wave4_conditional_playbook_fib_levels(self)`
 
 ### stage_one/backend/test_endpoints.py
 
@@ -471,6 +659,15 @@
 - + `test_control_endpoints_crud` · method · L125-L176 — `def test_control_endpoints_crud(self)`
 - + `test_mcp_server_tools_registered` · method · L178-L192 — `def test_mcp_server_tools_registered(self)`
 
+### stage_one/backend/test_triggers_and_turning_dates.py
+
+共 4 个符号 · 被依赖 0 · 依赖外部 3
+
+- + `TestTriggersAndTurningDates` · class · L13-L104 — `class TestTriggersAndTurningDates(unittest.TestCase)`
+- + `setUp` · method · L14-L43 — `def setUp(self)`
+- + `test_bear_market_triggers_and_direction` · method · L45-L88 — `def test_bear_market_triggers_and_direction(self)`
+- + `test_bull_market_triggers` · method · L90-L104 — `def test_bull_market_triggers(self)`
+
 ### stage_one/backend/test_validate.py
 
 共 8 个符号 · 被依赖 0 · 依赖外部 2
@@ -486,12 +683,13 @@
 
 ### stage_one/backend/time_window.py
 
-共 4 个符号 · 被依赖 2 · 依赖外部 0
+共 5 个符号 · 被依赖 2 · 依赖外部 0
 
 - + `add_period_offset` · function · L16-L36 — `def add_period_offset(start_date_str: str, bars_offset: int, period: str = "1d") -> str`
-- + `trading_days_between` · function · L39-L52 — `def trading_days_between(d1_str: str, d2_str: str) -> int`
-- + `predict_turn_windows` · function · L55-L248 — `def predict_turn_windows( df: pd.DataFrame, swings: List[Dict[str, Any]], wave_points: Optional[Dict[str, Any]] = None, period: str = "1d", lookahead_bars: int = 25, lookback_bars: int = 3, ) -> Dict[str, Any]`
--   `_get_bar_date` · function · L76-L82 — `def _get_bar_date(idx: int) -> str`
+- + `add_calendar_offset` · function · L39-L49 — `def add_calendar_offset(start_date_str: str, days_offset: int) -> str`
+- + `trading_days_between` · function · L52-L65 — `def trading_days_between(d1_str: str, d2_str: str) -> int`
+- + `predict_turn_windows` · function · L68-L325 — `def predict_turn_windows( df: pd.DataFrame, swings: List[Dict[str, Any]], wave_points: Optional[Dict[str, Any]] = None, period: str = "1d", lookahead_bars: int = 45, lookback_bars: int = 3, ) -> Dict[str, Any]`
+-   `_get_bar_date` · function · L90-L96 — `def _get_bar_date(idx: int) -> str`
 
 ### stage_one/frontend/postcss.config.js
 
@@ -501,52 +699,53 @@
 
 ### stage_one/frontend/src/App.vue
 
-共 44 个符号 · 被依赖 1 · 依赖外部 53
+共 45 个符号 · 被依赖 1 · 依赖外部 55
 
--   `timeRangeLabel` · function · L772-L772 — `timeRangeLabel = (v: string): string`
--   `value` · method · L782-L782 — `get value()`
--   `selectWatchlist` · function · L803-L811 — `selectWatchlist = (sym: string)`
--   `navBack` · function · L850-L856 — `navBack = ()`
--   `navForward` · function · L858-L864 — `navForward = ()`
--   `refreshCurrent` · function · L866-L870 — `refreshCurrent = ()`
--   `selectSuggestion` · function · L872-L875 — `selectSuggestion = (symbol: string)`
--   `resolveSymbol` · function · L877-L886 — `async function resolveSymbol(raw: string): Promise<string>`
--   `handleSearch` · function · L888-L894 — `handleSearch = async ()`
--   `changePeriod` · function · L896-L905 — `changePeriod = (period: Period)`
--   `detectBackend` · function · L908-L925 — `async function detectBackend(): Promise<boolean>`
--   `retryConnection` · function · L927-L936 — `async function retryConnection()`
--   `handleRunStrategy` · function · L939-L971 — `handleRunStrategy = async (mode: string = 'swing', isManual: boolean = false)`
--   `handleClearStrategy` · function · L973-L977 — `handleClearStrategy = ()`
--   `onOpenChart` · method · L981-L988 — `onOpenChart(symbol, period)`
--   `onAddMarkers` · method · L989-L992 — `onAddMarkers(markers, sym)`
--   `onDrawLines` · method · L993-L996 — `onDrawLines(lines, sym)`
--   `onDrawBoxes` · method · L997-L1000 — `onDrawBoxes(boxes, sym)`
--   `onDrawChannelLines` · method · L1001-L1004 — `onDrawChannelLines(channelLines, sym)`
--   `onDrawWaveLines` · method · L1005-L1008 — `onDrawWaveLines(waveLines, sym)`
--   `onDrawTimeLines` · method · L1009-L1012 — `onDrawTimeLines(timeLines, sym)`
--   `onClearAnnotations` · method · L1013-L1022 — `onClearAnnotations(kind, sym)`
--   `onCaptureChart` · method · L1024-L1033 — `onCaptureChart()`
--   `toChartTime` · function · L1037-L1037 — `toChartTime = (timeStr: any): any`
--   `applyChartTheme` · function · L1039-L1058 — `applyChartTheme = (isDark: boolean)`
--   `toggleDarkMode` · function · L1060-L1065 — `toggleDarkMode = ()`
--   `initDarkMode` · function · L1067-L1072 — `initDarkMode = ()`
--   `triggerCreateGroup` · function · L1087-L1091 — `triggerCreateGroup = ()`
--   `triggerManageGroups` · function · L1093-L1096 — `triggerManageGroups = ()`
--   `handleCreateGroupSubmit` · function · L1098-L1102 — `handleCreateGroupSubmit = ()`
--   `confirmRename` · function · L1104-L1108 — `confirmRename = (id: string)`
--   `handleModalSearchInput` · function · L1111-L1129 — `handleModalSearchInput = ()`
--   `handleModalSearchSelect` · function · L1131-L1137 — `handleModalSearchSelect = (sym: string)`
--   `syncChartSize` · function · L1144-L1153 — `syncChartSize = ()`
--   `createColumnResizer` · function · L1155-L1192 — `createColumnResizer = (getStartWidth: () => number, setWidth: (w: number) => void, sign: 1 | -1)`
--   `handleMouseMove` · function · L1165-L1176 — `handleMouseMove = (moveEvent: MouseEvent)`
--   `cleanup` · function · L1178-L1187 — `cleanup = ()`
--   `formatVolumeNum` · function · L1215-L1220 — `formatVolumeNum = (vol: number): string`
--   `findPrevClose` · function · L1222-L1227 — `findPrevClose = (time: string): number | null`
--   `formatDate` · function · L1229-L1238 — `formatDate = (input: Date | string): string`
--   `updateTooltipPosition` · function · L1240-L1247 — `updateTooltipPosition = (relX: number)`
--   `initChart` · function · L1250-L1312 — `initChart = ()`
--   `handleClickOutside` · function · L1340-L1344 — `handleClickOutside = (e: MouseEvent)`
--   `handleGlobalKeydown` · function · L1357-L1392 — `handleGlobalKeydown = (e: KeyboardEvent)`
+-   `value` · method · L809-L809 — `get value()`
+-   `selectWatchlist` · function · L829-L837 — `selectWatchlist = (sym: string)`
+-   `navBack` · function · L874-L880 — `navBack = ()`
+-   `navForward` · function · L882-L888 — `navForward = ()`
+-   `refreshCurrent` · function · L890-L894 — `refreshCurrent = ()`
+-   `selectSuggestion` · function · L896-L899 — `selectSuggestion = (symbol: string)`
+-   `resolveSymbol` · function · L901-L910 — `async function resolveSymbol(raw: string): Promise<string>`
+-   `handleSearch` · function · L912-L918 — `handleSearch = async ()`
+-   `changePeriod` · function · L920-L929 — `changePeriod = (period: Period)`
+-   `detectBackend` · function · L934-L955 — `async function detectBackend(): Promise<boolean>`
+-   `retryConnection` · function · L957-L966 — `async function retryConnection()`
+-   `handleRunStrategy` · function · L969-L1002 — `handleRunStrategy = async (mode: string = 'swing', isManual: boolean = false)`
+-   `handleClearStrategy` · function · L1004-L1012 — `handleClearStrategy = ()`
+-   `onOpenChart` · method · L1016-L1023 — `onOpenChart(symbol, period)`
+-   `onAddMarkers` · method · L1024-L1027 — `onAddMarkers(markers, sym)`
+-   `onDrawLines` · method · L1028-L1031 — `onDrawLines(lines, sym)`
+-   `onDrawBoxes` · method · L1032-L1035 — `onDrawBoxes(boxes, sym)`
+-   `onDrawChannelLines` · method · L1036-L1039 — `onDrawChannelLines(channelLines, sym)`
+-   `onDrawWaveLines` · method · L1040-L1043 — `onDrawWaveLines(waveLines, sym)`
+-   `onDrawTimeLines` · method · L1044-L1047 — `onDrawTimeLines(timeLines, sym)`
+-   `onClearAnnotations` · method · L1048-L1057 — `onClearAnnotations(kind, sym)`
+-   `onCaptureChart` · method · L1059-L1068 — `onCaptureChart()`
+-   `toChartTime` · function · L1072-L1072 — `toChartTime = (timeStr: any): any`
+-   `applyChartTheme` · function · L1074-L1093 — `applyChartTheme = (isDark: boolean)`
+-   `toggleDarkMode` · function · L1095-L1100 — `toggleDarkMode = ()`
+-   `initDarkMode` · function · L1102-L1107 — `initDarkMode = ()`
+-   `triggerCreateGroup` · function · L1122-L1126 — `triggerCreateGroup = ()`
+-   `triggerManageGroups` · function · L1128-L1131 — `triggerManageGroups = ()`
+-   `handleCreateGroupSubmit` · function · L1133-L1137 — `handleCreateGroupSubmit = ()`
+-   `confirmRename` · function · L1139-L1143 — `confirmRename = (id: string)`
+-   `handleModalSearchInput` · function · L1146-L1164 — `handleModalSearchInput = ()`
+-   `handleModalSearchSelect` · function · L1166-L1172 — `handleModalSearchSelect = (sym: string)`
+-   `toggleLeftSidebar` · function · L1178-L1186 — `toggleLeftSidebar = ()`
+-   `toggleRightSidebar` · function · L1188-L1196 — `toggleRightSidebar = ()`
+-   `syncChartSize` · function · L1204-L1213 — `syncChartSize = ()`
+-   `createColumnResizer` · function · L1215-L1252 — `createColumnResizer = (getStartWidth: () => number, setWidth: (w: number) => void, sign: 1 | -1)`
+-   `handleMouseMove` · function · L1225-L1236 — `handleMouseMove = (moveEvent: MouseEvent)`
+-   `cleanup` · function · L1238-L1247 — `cleanup = ()`
+-   `formatVolumeNum` · function · L1275-L1280 — `formatVolumeNum = (vol: number): string`
+-   `findPrevClose` · function · L1282-L1287 — `findPrevClose = (time: string): number | null`
+-   `formatDate` · function · L1289-L1298 — `formatDate = (input: Date | string): string`
+-   `updateTooltipPosition` · function · L1300-L1307 — `updateTooltipPosition = (relX: number)`
+-   `initChart` · function · L1310-L1372 — `initChart = ()`
+-   `handleClickOutside` · function · L1396-L1399 — `handleClickOutside = (e: MouseEvent)`
+-   `handleGlobalKeydown` · function · L1412-L1467 — `handleGlobalKeydown = (e: KeyboardEvent)`
 
 ### stage_one/frontend/src/components/DateRangePicker.vue
 
@@ -566,26 +765,27 @@
 
 共 14 个符号 · 被依赖 1 · 依赖外部 4
 
--   `openPanel` · function · L201-L204 — `function openPanel()`
--   `focusInput` · function · L206-L211 — `function focusInput()`
--   `onInput` · function · L217-L238 — `function onInput()`
--   `choose` · function · L240-L246 — `function choose(r: StockInfo)`
--   `close` · function · L248-L250 — `function close()`
--   `addToRecent` · function · L253-L264 — `function addToRecent(r: StockInfo)`
--   `removeFromRecent` · function · L266-L273 — `function removeFromRecent(symbol: string)`
--   `clearAllRecent` · function · L275-L279 — `function clearAllRecent()`
--   `isFavored` · function · L282-L286 — `function isFavored(symbol: string): boolean`
--   `toggleFav` · function · L289-L291 — `function toggleFav(symbol: string)`
--   `fetchDefaultRecommend` · function · L294-L302 — `async function fetchDefaultRecommend()`
--   `onKeydown` · function · L305-L323 — `function onKeydown(e: KeyboardEvent)`
--   `onGlobalKey` · function · L326-L332 — `function onGlobalKey(e: KeyboardEvent)`
--   `badge` · function · L334-L337 — `function badge(symbol: string): string`
+-   `openPanel` · function · L197-L200 — `function openPanel()`
+-   `focusInput` · function · L202-L207 — `function focusInput()`
+-   `onInput` · function · L213-L234 — `function onInput()`
+-   `choose` · function · L236-L242 — `function choose(r: StockInfo)`
+-   `close` · function · L244-L246 — `function close()`
+-   `addToRecent` · function · L249-L260 — `function addToRecent(r: StockInfo)`
+-   `removeFromRecent` · function · L262-L269 — `function removeFromRecent(symbol: string)`
+-   `clearAllRecent` · function · L271-L275 — `function clearAllRecent()`
+-   `isFavored` · function · L278-L282 — `function isFavored(symbol: string): boolean`
+-   `toggleFav` · function · L285-L287 — `function toggleFav(symbol: string)`
+-   `fetchDefaultRecommend` · function · L290-L298 — `async function fetchDefaultRecommend()`
+-   `onKeydown` · function · L301-L319 — `function onKeydown(e: KeyboardEvent)`
+-   `onGlobalKey` · function · L322-L328 — `function onGlobalKey(e: KeyboardEvent)`
+-   `badge` · function · L330-L333 — `function badge(symbol: string): string`
 
 ### stage_one/frontend/src/components/StrategyPanel.vue
 
-共 1 个符号 · 被依赖 1 · 依赖外部 1
+共 2 个符号 · 被依赖 1 · 依赖外部 1
 
--   `copyReviewMarkdown` · function · L327-L356 — `function copyReviewMarkdown()`
+-   `formatWavePattern` · function · L529-L532 — `function formatWavePattern(pattern?: string): string`
+-   `copyReviewMarkdown` · function · L796-L835 — `function copyReviewMarkdown()`
 
 ### stage_one/frontend/src/components/ThemeToggle.vue
 
@@ -610,84 +810,99 @@
 
 ### stage_one/frontend/src/composables/useChartAnnotations.ts
 
-共 36 个符号 · 被依赖 5 · 依赖外部 0
+共 46 个符号 · 被依赖 5 · 依赖外部 0
 
 - + `ChartMarkerItem` · interface · L15-L22 — `interface ChartMarkerItem`
 - + `ChartPriceLineItem` · interface · L24-L31 — `interface ChartPriceLineItem`
 - + `ChartBoxItem` · interface · L33-L42 — `interface ChartBoxItem`
 - + `ChartChannelLineItem` · interface · L44-L54 — `interface ChartChannelLineItem`
-- + `WavePointItem` · interface · L56-L62 — `interface WavePointItem`
-- + `ChartWaveLinesItem` · interface · L64-L74 — `interface ChartWaveLinesItem`
-- + `TimeLineItem` · interface · L76-L87 — `interface TimeLineItem`
-- + `toChartTime` · function · L93-L125 — `function toChartTime(t: string | number): any`
-- + `getTimeCoordinate` · function · L130-L193 — `function getTimeCoordinate(timeScale: any, rawTime: string | number): number | null`
--   `AnnotationOverlayPrimitive` · class · L199-L538 — `class AnnotationOverlayPrimitive implements ISeriesPrimitive<any>`
--   `constructor` · method · L209-L483 — `constructor()`
--   `draw` · method · L218-L470 — `draw(target: any)`
--   `zOrder` · method · L475-L477 — `zOrder()`
--   `renderer` · method · L478-L480 — `renderer()`
--   `setBoxes` · method · L485-L488 — `public setBoxes(boxes: ChartBoxItem[])`
--   `setChannelLines` · method · L490-L493 — `public setChannelLines(channelLines: ChartChannelLineItem[])`
--   `setWaveLines` · method · L495-L498 — `public setWaveLines(waveLines: ChartWaveLinesItem | null)`
--   `setTimeLines` · method · L500-L503 — `public setTimeLines(timeLines: TimeLineItem[])`
--   `setHighlightedTime` · method · L505-L508 — `public setHighlightedTime(timeStr: string | null)`
--   `clear` · method · L510-L517 — `public clear()`
--   `requestUpdate` · method · L519-L523 — `private requestUpdate()`
--   `attached` · method · L525-L527 — `public attached(param: any)`
--   `detached` · method · L529-L531 — `public detached()`
--   `updateAllViews` · method · L533-L533 — `public updateAllViews()`
--   `paneViews` · method · L535-L537 — `public paneViews(): readonly IPrimitivePaneView[]`
-- + `useChartAnnotations` · function · L540-L719 — `function useChartAnnotations()`
-- + `init` · function · L554-L577 — `function init(chart: IChartApi, series: ISeriesApi<any>, existingMarkersPlugin?: any)`
-- + `setMarkers` · function · L579-L608 — `function setMarkers(markers: ChartMarkerItem[])`
-- + `setPriceLines` · function · L610-L638 — `function setPriceLines(lines: ChartPriceLineItem[])`
-- + `setBoxes` · function · L640-L644 — `function setBoxes(boxes: ChartBoxItem[])`
-- + `setChannelLines` · function · L646-L650 — `function setChannelLines(channelLines: ChartChannelLineItem[])`
-- + `setWaveLines` · function · L652-L656 — `function setWaveLines(waveLines: ChartWaveLinesItem | null)`
-- + `setTimeLines` · function · L658-L662 — `function setTimeLines(lines: TimeLineItem[])`
-- + `highlightTimeLine` · function · L664-L667 — `function highlightTimeLine(dateStr: string | null)`
-- + `setAllAnnotations` · function · L669-L689 — `function setAllAnnotations(anno: { markers?: ChartMarkerItem[]; lines?: ChartPriceLineItem[]; boxes?: ChartBoxItem[]; channel_lines?: ChartChannelLineItem[]; channelLines?: ChartChannelLineItem[]; wave_lines?: ChartWaveLinesItem | null; waveLines?: ChartWaveLinesItem | null; time_lines?: TimeLineItem[]; timeLines?: TimeLineItem[]; })`
-- + `clearAnnotations` · function · L691-L699 — `function clearAnnotations()`
+- + `WavePointItem` · interface · L56-L64 — `interface WavePointItem`
+- + `ChartWaveLinesItem` · interface · L66-L77 — `interface ChartWaveLinesItem`
+- + `FibLineItem` · interface · L79-L87 — `interface FibLineItem`
+- + `GapBoxItem` · interface · L89-L97 — `interface GapBoxItem`
+- + `EmaPointItem` · interface · L99-L102 — `interface EmaPointItem`
+- + `TimeLineItem` · interface · L104-L115 — `interface TimeLineItem`
+- + `toChartTime` · function · L120-L152 — `function toChartTime(t: string | number): any`
+- + `getTimeCoordinate` · function · L157-L219 — `function getTimeCoordinate(timeScale: any, rawTime: string | number): number | null`
+-   `AnnotationOverlayPrimitive` · class · L225-L751 — `class AnnotationOverlayPrimitive implements ISeriesPrimitive<any>`
+-   `constructor` · method · L238-L678 — `constructor()`
+-   `draw` · method · L250-L665 — `draw(target: any)`
+-   `zOrder` · method · L670-L672 — `zOrder()`
+-   `renderer` · method · L673-L675 — `renderer()`
+-   `setBoxes` · method · L680-L683 — `public setBoxes(boxes: ChartBoxItem[])`
+-   `setChannelLines` · method · L685-L688 — `public setChannelLines(channelLines: ChartChannelLineItem[])`
+-   `setWaveLines` · method · L690-L693 — `public setWaveLines(waveLines: ChartWaveLinesItem | null)`
+-   `setTimeLines` · method · L695-L698 — `public setTimeLines(timeLines: TimeLineItem[])`
+-   `setFibLines` · method · L700-L703 — `public setFibLines(fibLines: FibLineItem[])`
+-   `setGapBoxes` · method · L705-L708 — `public setGapBoxes(gapBoxes: GapBoxItem[])`
+-   `setEma200Data` · method · L710-L713 — `public setEma200Data(data: EmaPointItem[])`
+-   `setHighlightedTime` · method · L715-L718 — `public setHighlightedTime(timeStr: string | null)`
+-   `clear` · method · L720-L730 — `public clear()`
+-   `requestUpdate` · method · L732-L736 — `private requestUpdate()`
+-   `attached` · method · L738-L740 — `public attached(param: any)`
+-   `detached` · method · L742-L744 — `public detached()`
+-   `updateAllViews` · method · L746-L746 — `public updateAllViews()`
+-   `paneViews` · method · L748-L750 — `public paneViews(): readonly IPrimitivePaneView[]`
+- + `useChartAnnotations` · function · L753-L1007 — `function useChartAnnotations()`
+- + `init` · function · L769-L790 — `function init(chart: IChartApi, series: ISeriesApi<any>, existingMarkersPlugin?: any)`
+- + `setMarkers` · function · L792-L819 — `function setMarkers(markers: ChartMarkerItem[])`
+- + `setPriceLines` · function · L821-L889 — `function setPriceLines(lines: ChartPriceLineItem[])`
+- + `getLinePriority` · function · L835-L844 — `function getLinePriority(item: ChartPriceLineItem): number`
+- + `setBoxes` · function · L891-L895 — `function setBoxes(boxes: ChartBoxItem[])`
+- + `setChannelLines` · function · L897-L901 — `function setChannelLines(channelLines: ChartChannelLineItem[])`
+- + `setWaveLines` · function · L903-L907 — `function setWaveLines(waveLines: ChartWaveLinesItem | null)`
+- + `setTimeLines` · function · L909-L913 — `function setTimeLines(lines: TimeLineItem[])`
+- + `setFibLines` · function · L915-L919 — `function setFibLines(fibLines: FibLineItem[])`
+- + `setGapBoxes` · function · L921-L925 — `function setGapBoxes(gapBoxes: GapBoxItem[])`
+- + `setEma200Data` · function · L927-L930 — `function setEma200Data(data: EmaPointItem[])`
+- + `highlightTimeLine` · function · L932-L935 — `function highlightTimeLine(dateStr: string | null)`
+- + `setAllAnnotations` · function · L937-L969 — `function setAllAnnotations(anno: { markers?: ChartMarkerItem[]; lines?: ChartPriceLineItem[]; boxes?: ChartBoxItem[]; channel_lines?: ChartChannelLineItem[]; channelLines?: ChartChannelLineItem[]; wave_lines?: ChartWaveLinesItem | null; waveLines?: ChartWaveLinesItem | null; time_lines?: TimeLineItem[]; timeLines?: TimeLineItem[]; fib_lines?: FibLineItem[]; fibLines?: FibLineItem[]; gap_boxes?: GapBoxItem[]; gapBoxes?: GapBoxItem[]; ema200_data?: EmaPointItem[]; ema200Data?: EmaPointItem[]; })`
+- + `clearAnnotations` · function · L971-L982 — `function clearAnnotations()`
 
 ### stage_one/frontend/src/composables/useChartIndicators.ts
 
 共 5 个符号 · 被依赖 5 · 依赖外部 2
 
-- + `useChartIndicators` · function · L6-L100 — `function useChartIndicators()`
-- + `calcEMA` · function · L15-L23 — `function calcEMA(data: KLinePoint[], span: number)`
-- + `calcVWAP` · function · L25-L42 — `function calcVWAP(data: KLinePoint[])`
-- + `initIndicators` · function · L44-L74 — `function initIndicators(chart: IChartApi)`
-- + `updateIndicators` · function · L76-L97 — `function updateIndicators(data: KLinePoint[])`
+- + `useChartIndicators` · function · L6-L149 — `function useChartIndicators()`
+- + `calcEMA` · function · L19-L27 — `function calcEMA(data: KLinePoint[], span: number)`
+- + `calcVWAP` · function · L29-L46 — `function calcVWAP(data: KLinePoint[])`
+- + `initIndicators` · function · L48-L78 — `function initIndicators(chart: IChartApi)`
+- + `updateIndicators` · function · L80-L146 — `function updateIndicators(data: KLinePoint[], force = false)`
 
 ### stage_one/frontend/src/composables/useChartViewport.ts
 
-共 13 个符号 · 被依赖 9 · 依赖外部 10
+共 16 个符号 · 被依赖 11 · 依赖外部 7
 
 - + `generateFutureWhitespace` · function · L17-L82 — `function generateFutureWhitespace( lastTimeStr: string, period: Period, symbol: string, count: number = 24 ): { time: any }[]`
 -   `toLocalDateStr` · function · L84-L89 — `toLocalDateStr = (d: Date): string`
-- + `useChartViewport` · function · L91-L509 — `function useChartViewport(options: { useMockData: Ref<boolean>; isDarkMode: Ref<boolean>; currentSymbol: Ref<string>; currentPeriod: Ref<Period>; getChartInstance: () => IChartApi | null; getCandlestickSeries: () => any; getVolumeSeries: () => any; getMarkersPlugin: () => any; clearChartAnnotations: () => void; updateIndicators: (data: KLinePoint[]) => void; onBeforeLoad: () => void; onLoadSuccess: () => void; onLoadError: () => void; })`
-- + `cacheKey` · function · L124-L124 — `cacheKey = (symbol: string, period: Period)`
-- + `setSuppressRangeEvents` · function · L152-L154 — `setSuppressRangeEvents = (v: boolean)`
-- + `updateCache` · function · L156-L158 — `updateCache = (sym: string, period: Period, data: KLinePoint[])`
-- + `clearOverlays` · function · L160-L166 — `clearOverlays = ()`
-- + `onVisibleLogicalRangeChanged` · function · L168-L177 — `onVisibleLogicalRangeChanged = (range: any)`
-- + `setTimeRange` · function · L179-L235 — `setTimeRange = (range: string)`
-- + `selectTimeRange` · function · L237-L240 — `selectTimeRange = (range: string)`
-- + `highlightSRLevel` · function · L242-L250 — `highlightSRLevel = (idx: number, isHover: boolean)`
-- + `scrollToSRLevel` · function · L252-L265 — `scrollToSRLevel = (level: SRLevel)`
-- + `loadKlineData` · function · L267-L402 — `loadKlineData = async (targetSymbol: string, targetPeriod: Period)`
+- + `useChartViewport` · function · L91-L862 — `function useChartViewport(options: { isDarkMode: Ref<boolean>; currentSymbol: Ref<string>; currentPeriod: Ref<Period>; getChartInstance: () => IChartApi | null; getCandlestickSeries: () => any; getVolumeSeries: () => any; getMarkersPlugin: () => any; clearChartAnnotations: () => void; updateIndicators: (data: KLinePoint[]) => void; onBeforeLoad: () => void; onLoadSuccess: () => void; onLoadError: () => void; })`
+- + `cacheKey` · function · L122-L122 — `cacheKey = (symbol: string, period: Period)`
+- + `SRPriceLineItem` · interface · L134-L139 — `interface SRPriceLineItem`
+- + `setSuppressRangeEvents` · function · L161-L163 — `setSuppressRangeEvents = (v: boolean)`
+- + `updateCache` · function · L165-L167 — `updateCache = (sym: string, period: Period, data: KLinePoint[])`
+- + `stopFlashing` · function · L169-L185 — `stopFlashing = ()`
+- + `clearOverlays` · function · L187-L213 — `clearOverlays = ()`
+- + `onVisibleLogicalRangeChanged` · function · L215-L224 — `onVisibleLogicalRangeChanged = (range: any)`
+- + `setTimeRange` · function · L226-L286 — `setTimeRange = (range: string)`
+- + `selectTimeRange` · function · L288-L291 — `selectTimeRange = (range: string)`
+- + `highlightSRLevel` · function · L293-L338 — `highlightSRLevel = (idx: number, isHover: boolean, level?: SRLevel)`
+- + `scrollToSRLevel` · function · L340-L579 — `scrollToSRLevel = (level: SRLevel, idx?: number)`
+- + `renderSRLevels` · function · L581-L652 — `renderSRLevels = (levels?: SRLevel[], summary?: any)`
+- + `loadKlineData` · function · L654-L754 — `loadKlineData = async (targetSymbol: string, targetPeriod: Period)`
 
 ### stage_one/frontend/src/composables/useLiveQuoteSync.ts
 
-共 7 个符号 · 被依赖 4 · 依赖外部 8
+共 9 个符号 · 被依赖 6 · 依赖外部 9
 
 - + `resolveBarBucketTime` · function · L8-L33 — `function resolveBarBucketTime(updateTime: string, period: Period, lastBarTime: string): string`
-- + `useLiveQuoteSync` · function · L35-L241 — `function useLiveQuoteSync(options: { useMockData: Ref<boolean>; currentSymbol: Ref<string>; currentPeriod: Ref<Period>; klineData: Ref<KLinePoint[]>; latestPrice: Ref<number | null>; latestChange: Ref<number>; watchlist: Ref<string[]>; getChartInstance: () => IChartApi | null; getCandlestickSeries: () => any; setSuppressRangeEvents: (v: boolean) => void; onCacheUpdate: (sym: string, period: Period, data: KLinePoint[]) => void; onIndicatorsUpdate: (data: KLinePoint[]) => void; })`
-- + `refreshEngineSymbols` · function · L109-L115 — `function refreshEngineSymbols()`
-- + `syncLatestBarsSilently` · function · L117-L141 — `async function syncLatestBarsSilently(sym: string, period: Period)`
-- + `applyLiveQuoteToChart` · function · L143-L198 — `function applyLiveQuoteToChart(q: Quote)`
-- + `startQuoteEngine` · function · L200-L218 — `async function startQuoteEngine()`
-- + `stopQuoteEngine` · function · L220-L225 — `function stopQuoteEngine()`
+- + `useLiveQuoteSync` · function · L35-L279 — `function useLiveQuoteSync(options: { currentSymbol: Ref<string>; currentPeriod: Ref<Period>; klineData: Ref<KLinePoint[]>; latestPrice: Ref<number | null>; latestChange: Ref<number>; watchlist: Ref<string[]>; getChartInstance: () => IChartApi | null; getCandlestickSeries: () => any; setSuppressRangeEvents: (v: boolean) => void; onCacheUpdate: (sym: string, period: Period, data: KLinePoint[]) => void; onIndicatorsUpdate: (data: KLinePoint[]) => void; })`
+- + `refreshEngineSymbols` · function · L113-L119 — `function refreshEngineSymbols()`
+- + `syncLatestBarsSilently` · function · L121-L145 — `async function syncLatestBarsSilently(sym: string, period: Period)`
+- + `applyLiveQuoteToChart` · function · L147-L202 — `function applyLiveQuoteToChart(q: Quote)`
+- + `startQuoteEngine` · function · L204-L228 — `async function startQuoteEngine()`
+- + `pauseQuoteEngine` · function · L230-L232 — `function pauseQuoteEngine()`
+- + `resumeQuoteEngine` · function · L235-L247 — `function resumeQuoteEngine()`
+- + `stopQuoteEngine` · function · L258-L261 — `function stopQuoteEngine()`
 
 ### stage_one/frontend/src/composables/useSmartThrottling.ts
 
@@ -703,39 +918,40 @@
 
 ### stage_one/frontend/src/composables/useWatchlist.ts
 
-共 31 个符号 · 被依赖 9 · 依赖外部 12
+共 32 个符号 · 被依赖 10 · 依赖外部 9
 
-- + `MarketTabKey` · type · L17-L17 — `type MarketTabKey = 'all' | 'us' | 'futures';`
-- + `SortKey` · type · L18-L18 — `type SortKey = 'name' | 'price' | 'change';`
-- + `WatchlistPriceInfo` · interface · L20-L24 — `interface WatchlistPriceInfo`
-- + `canonSym` · function · L51-L55 — `canonSym = (s: string): string`
-- + `currencyOf` · function · L57-L57 — `currencyOf = (_sym: string): string`
--   `calcLatestPrice` · function · L59-L70 — `function calcLatestPrice(klines: KLinePoint[]): { price: number | null; change: number | null }`
-- + `useWatchlist` · function · L72-L500 — `function useWatchlist(options: { useMockData: Ref<boolean>; liveQuoteMap: Ref<Record<string, Quote>>; quoteConfig: Ref<QuoteConfig | null>; currentSymbol: Ref<string>; onSelectSymbol: (sym: string) => void; onSymbolsChanged: () => void; })`
-- + `genGroupId` · function · L93-L96 — `genGroupId = (): string`
-- + `defaultGroups` · function · L98-L100 — `defaultGroups = (): WatchGroup[]`
-- + `getStockName` · function · L125-L128 — `getStockName = (sym: string): string`
-- + `delayFullOf` · function · L130-L133 — `delayFullOf = (sym: string): string`
-- + `loadStockNameMap` · function · L135-L153 — `async function loadStockNameMap()`
-- + `watchPriceInfo` · function · L155-L186 — `function watchPriceInfo(item: string): { price: number | null; change: number | null; loading: boolean; extendedPrice: number | null; extendedLabel: string; prevClose: number | null; }`
-- + `secondaryLineInfo` · function · L188-L207 — `function secondaryLineInfo(item: string): { price: number | null; changePct: number | null; label: string; } | null`
-- + `updateWatchlistPrices` · function · L209-L250 — `async function updateWatchlistPrices()`
-- + `persistWatchlistLocal` · function · L252-L254 — `persistWatchlistLocal = ()`
-- + `persistWatchlist` · function · L256-L259 — `persistWatchlist = ()`
-- + `loadWatchlist` · function · L261-L310 — `loadWatchlist = async ()`
-- + `isWatchlisted` · function · L312-L315 — `isWatchlisted = (sym: string): boolean`
-- + `removeFromWatchlist` · function · L317-L328 — `removeFromWatchlist = (sym: string, groupId?: string)`
-- + `toggleWatchlist` · function · L330-L348 — `toggleWatchlist = (sym: string)`
-- + `addToActiveGroup` · function · L350-L366 — `addToActiveGroup = (sym: string)`
-- + `createGroup` · function · L368-L375 — `createGroup = (rawName: string)`
-- + `renameGroup` · function · L377-L383 — `renameGroup = (id: string, name: string)`
-- + `deleteGroup` · function · L385-L395 — `deleteGroup = (id: string)`
-- + `selectGroup` · function · L397-L400 — `selectGroup = (id: string)`
-- + `toggleGroupDropdown` · function · L402-L404 — `toggleGroupDropdown = ()`
-- + `setSort` · function · L406-L413 — `setSort = (key: SortKey)`
-- + `matchMarketTab` · function · L415-L423 — `matchMarketTab = (sym: string, tab: MarketTabKey): boolean`
-- + `clearWatchlistCache` · function · L457-L460 — `clearWatchlistCache = ()`
-- + `markAllLoadingFailed` · function · L462-L466 — `markAllLoadingFailed = ()`
+- + `MarketTabKey` · type · L14-L14 — `type MarketTabKey = 'all' | 'us' | 'futures';`
+- + `SortKey` · type · L15-L15 — `type SortKey = 'name' | 'price' | 'change';`
+- + `WatchlistPriceInfo` · interface · L17-L21 — `interface WatchlistPriceInfo`
+- + `WatchlistRowInfo` · interface · L23-L38 — `interface WatchlistRowInfo`
+- + `canonSym` · function · L52-L56 — `canonSym = (s: string): string`
+- + `currencyOf` · function · L58-L58 — `currencyOf = (_sym: string): string`
+- + `useWatchlist` · function · L60-L511 — `function useWatchlist(options: { liveQuoteMap: Ref<Record<string, Quote>>; quoteConfig: Ref<QuoteConfig | null>; currentSymbol: Ref<string>; onSelectSymbol: (sym: string) => void; onSymbolsChanged: () => void; })`
+- + `genGroupId` · function · L69-L72 — `genGroupId = (): string`
+- + `defaultGroups` · function · L74-L76 — `defaultGroups = (): WatchGroup[]`
+- + `getInitialGroups` · function · L78-L95 — `function getInitialGroups(): WatchGroup[]`
+- + `getStockName` · function · L130-L133 — `getStockName = (sym: string): string`
+- + `delayFullOf` · function · L135-L138 — `delayFullOf = (sym: string): string`
+- + `loadStockNameMap` · function · L140-L158 — `async function loadStockNameMap()`
+- + `watchPriceInfo` · function · L160-L209 — `function watchPriceInfo(item: string): { price: number | null; change: number | null; loading: boolean; extendedPrice: number | null; extendedLabel: string; prevClose: number | null; status?: string; reason?: string; }`
+- + `secondaryLineInfo` · function · L211-L230 — `function secondaryLineInfo(item: string): { price: number | null; changePct: number | null; label: string; } | null`
+- + `updateWatchlistPrices` · function · L258-L260 — `async function updateWatchlistPrices()`
+- + `persistWatchlistLocal` · function · L262-L264 — `persistWatchlistLocal = ()`
+- + `persistWatchlist` · function · L266-L269 — `persistWatchlist = ()`
+- + `loadWatchlist` · function · L271-L321 — `loadWatchlist = async ()`
+- + `isWatchlisted` · function · L323-L326 — `isWatchlisted = (sym: string): boolean`
+- + `removeFromWatchlist` · function · L328-L339 — `removeFromWatchlist = (sym: string, groupId?: string)`
+- + `toggleWatchlist` · function · L341-L359 — `toggleWatchlist = (sym: string)`
+- + `addToActiveGroup` · function · L361-L377 — `addToActiveGroup = (sym: string)`
+- + `createGroup` · function · L379-L386 — `createGroup = (rawName: string)`
+- + `renameGroup` · function · L388-L394 — `renameGroup = (id: string, name: string)`
+- + `deleteGroup` · function · L396-L406 — `deleteGroup = (id: string)`
+- + `selectGroup` · function · L408-L411 — `selectGroup = (id: string)`
+- + `toggleGroupDropdown` · function · L413-L415 — `toggleGroupDropdown = ()`
+- + `setSort` · function · L417-L424 — `setSort = (key: SortKey)`
+- + `matchMarketTab` · function · L426-L434 — `matchMarketTab = (sym: string, tab: MarketTabKey): boolean`
+- + `clearWatchlistCache` · function · L468-L470 — `clearWatchlistCache = ()`
+- + `markAllLoadingFailed` · function · L472-L476 — `markAllLoadingFailed = ()`
 
 ### stage_one/frontend/src/composables/useWebSocketControl.ts
 
@@ -754,19 +970,19 @@
 
 ### stage_one/frontend/src/utils/api.ts
 
-共 11 个符号 · 被依赖 18 · 依赖外部 3
+共 11 个符号 · 被依赖 17 · 依赖外部 3
 
-- + `Period` · type · L26-L26 — `type Period = (typeof SUPPORTED_PERIODS)[number];`
-- + `StockInfo` · interface · L41-L45 — `interface StockInfo`
-- + `WatchGroup` · interface · L47-L51 — `interface WatchGroup`
-- + `AnalysisResponse` · interface · L53-L56 — `interface AnalysisResponse`
-- + `LeveragePairInfo` · interface · L58-L62 — `interface LeveragePairInfo`
-- + `searchStocks` · function · L75-L87 — `async function searchStocks(keyword: string): Promise<StockInfo[]>`
-- + `getKLines` · function · L90-L110 — `async function getKLines( symbol: string, period: Period = '1d', full: boolean = false, fresh: boolean = false, signal?: AbortSignal ): Promise<KLinePoint[]>`
-- + `getStockAnalysis` · function · L113-L149 — `async function getStockAnalysis( symbol: string, startDate: string, endDate: string, klineCache?: KLinePoint[], period: Period = '1d' ): Promise<AnalysisResponse | null>`
-- + `getWatchlist` · function · L152-L162 — `async function getWatchlist(): Promise<WatchGroup[]>`
-- + `saveWatchlist` · function · L164-L172 — `async function saveWatchlist(groups: WatchGroup[]): Promise<void>`
-- + `runPAStrategy` · function · L175-L195 — `async function runPAStrategy( symbol: string, period: string = '1d', mode: string = 'swing', klines?: KLinePoint[] ): Promise<any>`
+- + `Period` · type · L24-L24 — `type Period = (typeof SUPPORTED_PERIODS)[number];`
+- + `StockInfo` · interface · L39-L43 — `interface StockInfo`
+- + `WatchGroup` · interface · L45-L49 — `interface WatchGroup`
+- + `AnalysisResponse` · interface · L51-L54 — `interface AnalysisResponse`
+- + `LeveragePairInfo` · interface · L56-L60 — `interface LeveragePairInfo`
+- + `searchStocks` · function · L73-L85 — `async function searchStocks(keyword: string): Promise<StockInfo[]>`
+- + `getKLines` · function · L88-L108 — `async function getKLines( symbol: string, period: Period = '1d', full: boolean = false, fresh: boolean = false, signal?: AbortSignal ): Promise<KLinePoint[]>`
+- + `getStockAnalysis` · function · L111-L147 — `async function getStockAnalysis( symbol: string, startDate: string, endDate: string, klineCache?: KLinePoint[], period: Period = '1d' ): Promise<AnalysisResponse | null>`
+- + `getWatchlist` · function · L150-L160 — `async function getWatchlist(): Promise<WatchGroup[]>`
+- + `saveWatchlist` · function · L162-L170 — `async function saveWatchlist(groups: WatchGroup[]): Promise<void>`
+- + `runPAStrategy` · function · L173-L193 — `async function runPAStrategy( symbol: string, period: string = '1d', mode: string = 'swing', klines?: KLinePoint[] ): Promise<any>`
 
 ### stage_one/frontend/src/utils/chartUtils.ts
 
@@ -776,47 +992,51 @@
 
 ### stage_one/frontend/src/utils/mockEngine.ts
 
-共 11 个符号 · 被依赖 10 · 依赖外部 0
+共 7 个符号 · 被依赖 5 · 依赖外部 0
 
 - + `KLinePoint` · interface · L3-L10 — `interface KLinePoint`
 - + `SRLevel` · interface · L12-L18 — `interface SRLevel`
 - + `RangeStatPoint` · interface · L20-L24 — `interface RangeStatPoint`
 - + `RangeStats` · interface · L26-L34 — `interface RangeStats`
-- + `generateMockKLines` · function · L53-L99 — `function generateMockKLines(symbol: string, days: number = 320, basePrice: number = 150): KLinePoint[]`
--   `parseYMD` · function · L101-L104 — `function parseYMD(t: string): [number, number, number]`
--   `bucketKey` · function · L106-L120 — `function bucketKey(t: string, period: string): string`
-- + `resampleMockKLines` · function · L125-L146 — `function resampleMockKLines(daily: KLinePoint[], period: string): KLinePoint[]`
--   `findExtrema` · function · L148-L161 — `function findExtrema(data: KLinePoint[], windowSize: number = 5)`
-- + `calculateSRLevels` · function · L166-L253 — `function calculateSRLevels(data: KLinePoint[], windowSize: number = 5, period: string = '1d'): SRLevel[]`
-- + `calculateRangeStats` · function · L258-L321 — `function calculateRangeStats(data: KLinePoint[], sDate: string, eDate: string): RangeStats | null`
+-   `findExtrema` · function · L50-L63 — `function findExtrema(data: KLinePoint[], windowSize: number = 5)`
+- + `calculateSRLevels` · function · L68-L155 — `function calculateSRLevels(data: KLinePoint[], windowSize: number = 5, period: string = '1d'): SRLevel[]`
+- + `calculateRangeStats` · function · L160-L223 — `function calculateRangeStats(data: KLinePoint[], sDate: string, eDate: string): RangeStats | null`
 
 ### stage_one/frontend/src/utils/quote.ts
 
-共 23 个符号 · 被依赖 2 · 依赖外部 2
+共 31 个符号 · 被依赖 2 · 依赖外部 4
 
-- + `QuoteStatus` · type · L19-L26 — `type QuoteStatus = | 'ok' | 'cooling' // 后端全局冷却中 | 'rate_limited' // 触发限流(403/429) | 'ip_overload' // 单 IP 窗口请求过多 | 'empty' // 接口返回但无行情 | 'error' // 网络/解析异常 | 'loading';`
-- + `Quote` · interface · L29-L46 — `interface Quote`
-- + `MarketCfg` · interface · L49-L57 — `interface MarketCfg`
-- + `QuoteConfig` · interface · L58-L66 — `interface QuoteConfig`
-- + `USSession` · type · L67-L67 — `type USSession = 'pre' | 'regular' | 'post';`
-- + `EngineStatus` · interface · L70-L76 — `interface EngineStatus`
-- + `SymbolMeta` · interface · L79-L86 — `interface SymbolMeta`
--   `Listener` · type · L90-L90 — `type Listener = (symbol: string, quote: Quote) => void;`
--   `QuoteEngine` · class · L92-L374 — `class QuoteEngine`
--   `setActiveSymbol` · method · L116-L125 — `setActiveSymbol(sym: string): void`
--   `loadConfig` · method · L128-L135 — `async loadConfig(): Promise<void>`
--   `setSymbols` · method · L138-L157 — `setSymbols(syms: string[]): void`
--   `subscribe` · method · L160-L163 — `subscribe(cb: Listener): () => void`
--   `onTick` · method · L166-L169 — `onTick(cb: () => void): () => void`
--   `snapshotMetas` · method · L172-L176 — `snapshotMetas(): Record<string, SymbolMeta>`
--   `start` · method · L179-L183 — `start(): void`
--   `stop` · method · L186-L195 — `stop(): void`
--   `getQuote` · method · L198-L200 — `getQuote(symbol: string): Quote | null`
--   `getMeta` · method · L203-L205 — `getMeta(symbol: string): SymbolMeta | null`
--   `getEngineStatus` · method · L208-L213 — `getEngineStatus(): { cooling: boolean; reason: string }`
--   `getMinInterval` · method · L218-L226 — `private getMinInterval(market: Market | null): number`
--   `detectUSSession` · method · L229-L240 — `private detectUSSession(): USSession`
--   `tick` · method · L243-L373 — `private async tick(): Promise<void>`
+- + `QuoteStatus` · type · L4-L11 — `type QuoteStatus = | 'ok' | 'cooling' | 'rate_limited' | 'ip_overload' | 'empty' | 'error' | 'loading';`
+- + `toCanonSym` · function · L13-L17 — `function toCanonSym(s: string): string`
+- + `Quote` · interface · L19-L36 — `interface Quote`
+- + `MarketCfg` · interface · L38-L46 — `interface MarketCfg`
+- + `QuoteConfig` · interface · L48-L56 — `interface QuoteConfig`
+- + `USSession` · type · L98-L98 — `type USSession = 'pre' | 'regular' | 'post';`
+- + `SymbolMeta` · interface · L100-L107 — `interface SymbolMeta`
+-   `Listener` · type · L109-L109 — `type Listener = (symbol: string, quote: Quote) => void;`
+-   `BatchListener` · type · L110-L110 — `type BatchListener = (batch: Record<string, Quote>) => void;`
+-   `QuoteEngine` · class · L114-L637 — `class QuoteEngine`
+-   `constructor` · method · L131-L133 — `constructor()`
+-   `loadQuotesCache` · method · L137-L154 — `private loadQuotesCache(): void`
+-   `saveQuotesCache` · method · L156-L166 — `private saveQuotesCache(): void`
+-   `setActiveSymbol` · method · L168-L177 — `setActiveSymbol(sym: string): void`
+-   `loadConfig` · method · L179-L186 — `async loadConfig(): Promise<void>`
+-   `setSymbols` · method · L188-L212 — `setSymbols(syms: string[]): void`
+-   `subscribe` · method · L214-L225 — `subscribe(cb: Listener): () => void`
+-   `subscribeBatch` · method · L227-L238 — `subscribeBatch(cb: BatchListener): () => void`
+-   `onTick` · method · L240-L243 — `onTick(cb: () => void): () => void`
+-   `snapshotMetas` · method · L245-L249 — `snapshotMetas(): Record<string, SymbolMeta>`
+-   `start` · method · L252-L257 — `start(): void`
+-   `resume` · method · L260-L287 — `resume(): void`
+-   `stop` · method · L290-L296 — `stop(): void`
+-   `getQuote` · method · L298-L308 — `getQuote(symbol: string): Quote | null`
+-   `getAllQuotes` · method · L310-L316 — `getAllQuotes(): Record<string, Quote>`
+-   `getMeta` · method · L318-L320 — `getMeta(symbol: string): SymbolMeta | null`
+-   `getEngineStatus` · method · L322-L327 — `getEngineStatus(): { cooling: boolean; reason: string }`
+-   `getMinInterval` · method · L329-L337 — `private getMinInterval(market: Market | null): number`
+-   `detectUSSession` · method · L339-L349 — `private detectUSSession(): USSession`
+-   `tick` · method · L351-L408 — `private async tick(): Promise<void>`
+-   `fetchMarketBatch` · method · L410-L636 — `private async fetchMarketBatch(market: string, due: string[], now: number): Promise<void>`
 
 ### stage_one/frontend/src/utils/symbols.ts
 

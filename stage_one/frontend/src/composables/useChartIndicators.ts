@@ -11,6 +11,10 @@ export function useChartIndicators() {
   let ema50Series: ISeriesApi<'Line'> | null = null;
   let ema200Series: ISeriesApi<'Line'> | null = null;
   let vwapSeries: ISeriesApi<'Line'> | null = null;
+  let hasEmaData = false;
+  let hasVwapData = false;
+  let lastIndicatorUpdate = 0;
+  let indicatorTimer: ReturnType<typeof setTimeout> | null = null;
 
   function calcEMA(data: KLinePoint[], span: number) {
     if (!data.length) return [];
@@ -73,13 +77,43 @@ export function useChartIndicators() {
     });
   }
 
-  function updateIndicators(data: KLinePoint[]) {
+  function updateIndicators(data: KLinePoint[], force = false) {
     if (!ema20Series || !ema50Series || !ema200Series || !vwapSeries) return;
+    // 关键优化：若 EMA 与 VWAP 均未开启，且图表序列已清空，零耗时直接返回，杜绝实时行情推流时主线程重算 4500 根数据与 setData 严重掉帧卡顿
+    if (!showEMA.value && !showVWAP.value) {
+      if (hasEmaData) {
+        ema20Series.setData([]);
+        ema50Series.setData([]);
+        ema200Series.setData([]);
+        hasEmaData = false;
+      }
+      if (hasVwapData) {
+        vwapSeries.setData([]);
+        hasVwapData = false;
+      }
+      return;
+    }
+
+    // 节流保护：实时推流时最多每 800ms 重算全量指标一次，杜绝 1s 多次 setData(4500点) 造成界面严重掉帧
+    const now = Date.now();
+    if (!force && now - lastIndicatorUpdate < 800) {
+      if (!indicatorTimer) {
+        indicatorTimer = setTimeout(() => {
+          indicatorTimer = null;
+          updateIndicators(data, true);
+        }, 800);
+      }
+      return;
+    }
+    lastIndicatorUpdate = now;
+
     if (!data || !data.length) {
       ema20Series.setData([]);
       ema50Series.setData([]);
       ema200Series.setData([]);
       vwapSeries.setData([]);
+      hasEmaData = false;
+      hasVwapData = false;
       return;
     }
     const sorted = [...data].sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0));
@@ -90,10 +124,25 @@ export function useChartIndicators() {
       return true;
     });
 
-    ema20Series.setData(showEMA.value ? calcEMA(clean, 20) : []);
-    ema50Series.setData(showEMA.value ? calcEMA(clean, 50) : []);
-    ema200Series.setData(showEMA.value ? calcEMA(clean, 200) : []);
-    vwapSeries.setData(showVWAP.value ? calcVWAP(clean) : []);
+    if (showEMA.value) {
+      ema20Series.setData(calcEMA(clean, 20));
+      ema50Series.setData(calcEMA(clean, 50));
+      ema200Series.setData(calcEMA(clean, 200));
+      hasEmaData = true;
+    } else if (hasEmaData) {
+      ema20Series.setData([]);
+      ema50Series.setData([]);
+      ema200Series.setData([]);
+      hasEmaData = false;
+    }
+
+    if (showVWAP.value) {
+      vwapSeries.setData(calcVWAP(clean));
+      hasVwapData = true;
+    } else if (hasVwapData) {
+      vwapSeries.setData([]);
+      hasVwapData = false;
+    }
   }
 
   return { showEMA, showVWAP, initIndicators, updateIndicators };

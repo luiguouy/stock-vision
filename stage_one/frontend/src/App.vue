@@ -18,10 +18,21 @@
           class="btn-tactile p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer" title="刷新行情">
           <svg class="w-4 h-4 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
         </button>
+        <div class="h-4 w-px bg-slate-200 dark:bg-slate-800 mx-0.5"></div>
+        <!-- 切换左侧边栏 (自选列表) -->
+        <button @click="toggleLeftSidebar()"
+          class="btn-tactile p-1.5 rounded-lg transition-colors cursor-pointer"
+          :class="showLeftSidebar ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50/80 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/50' : 'text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'"
+          :title="showLeftSidebar ? '收起左侧自选栏 (快捷键 [ )' : '展开左侧自选栏 (快捷键 [ )'">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <path d="M9 3v18" />
+          </svg>
+        </button>
       </div>
 
       <!-- 中：全局证券搜索（系统入口） -->
-      <div class="flex-1 min-w-0 max-w-md">
+      <div class="w-60 shrink-0">
         <GlobalSecuritySearch
           ref="searchComponentRef"
           :watchlist="watchlist"
@@ -32,7 +43,7 @@
       </div>
 
       <!-- 右：当前标的摘要 + 控制 -->
-      <div class="flex items-center gap-2.5 shrink-0">
+      <div class="flex items-center gap-2.5 shrink-0 ml-auto">
         <template v-if="currentSymbol">
           <div class="flex items-center gap-1.5">
             <span class="text-sm font-bold text-slate-900 dark:text-slate-100 font-sans tracking-tight">{{ formatSymbol(currentSymbol) }}</span>
@@ -69,18 +80,31 @@
             </svg>
           </button>
         </template>
-        <!-- 数据模式 -->
-        <span class="flex items-center gap-1.5 text-[10px] font-semibold cursor-help px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800"
-          :class="useMockData ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'"
-          :title="useMockData ? '演示数据' : delayFullOf(currentSymbol)">
+        <!-- 数据连接状态 -->
+        <button
+          @click="!backendOnline && retryConnection()"
+          class="flex items-center gap-1.5 text-[10px] font-semibold px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800 transition-colors"
+          :class="backendOnline ? 'text-emerald-600 dark:text-emerald-400 cursor-default' : 'text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-950/40 cursor-pointer'"
+          :title="backendOnline ? delayFullOf(currentSymbol) : '后端未连接 (点击重新尝试连接)'">
           <span class="relative flex h-2 w-2">
-            <span v-if="!useMockData" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span class="relative inline-flex rounded-full h-2 w-2" :class="useMockData ? 'bg-amber-400' : 'bg-emerald-500'"></span>
+            <span v-if="backendOnline" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2 w-2" :class="backendOnline ? 'bg-emerald-500' : 'bg-rose-500'"></span>
           </span>
-          <span>{{ useMockData ? 'MOCK' : 'LIVE' }}</span>
-        </span>
+          <span>{{ backendOnline ? 'LIVE' : 'OFFLINE' }}</span>
+        </button>
         <!-- 拟物微质感跑道流光主题切换开关 -->
         <ThemeToggle :model-value="isDarkMode" @toggle="toggleDarkMode()" />
+        <div class="h-4 w-px bg-slate-200 dark:bg-slate-800 mx-0.5"></div>
+        <!-- 切换右侧边栏 (策略面板) -->
+        <button @click="toggleRightSidebar()"
+          class="btn-tactile p-1.5 rounded-lg transition-colors cursor-pointer"
+          :class="showRightSidebar ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50/80 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/50' : 'text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'"
+          :title="showRightSidebar ? '收起右侧策略面板 (快捷键 ] )' : '展开右侧策略面板 (快捷键 ] )'">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <path d="M15 3v18" />
+          </svg>
+        </button>
       </div>
     </header>
 
@@ -104,6 +128,7 @@
 
       <!-- 左侧边栏：自选股列表 (Swiss Modular 8pt Grid) -->
       <aside
+        v-show="showLeftSidebar"
         :style="{ width: leftSidebarWidth + 'px' }"
         class="bg-white dark:bg-[#0f172a] border-r border-slate-200/80 dark:border-slate-800 flex flex-col shrink-0 overflow-y-auto scrollbar-thin">
 
@@ -117,6 +142,14 @@
                 <span>自选标的</span>
                 <span class="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-semibold">{{ filteredWatchlist.length }}/{{ watchlist.length }}</span>
               </h3>
+              <!-- 收起左侧栏按钮 -->
+              <button @click="toggleLeftSidebar()"
+                class="btn-tactile p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                title="收起左侧栏 (快捷键 [ )">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+                </svg>
+              </button>
             </div>
 
             <!-- 分组切换 Tab 栏 (平铺核心 + 下拉分组) -->
@@ -221,15 +254,16 @@
             </div>
           </div>
 
-          <!-- 测试模式警告条 -->
-          <div v-if="useMockData && watchlist.length"
-            class="px-3.5 py-1.5 bg-amber-500/10 border-b border-amber-500/20">
-            <p class="text-[10px] text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1.5">
+          <!-- 后端离线警告条 -->
+          <div v-if="!backendOnline"
+            class="px-3.5 py-1.5 bg-rose-500/10 border-b border-rose-500/20 flex items-center justify-between">
+            <p class="text-[10px] text-rose-600 dark:text-rose-400 font-medium flex items-center gap-1.5">
               <svg class="w-3 h-3 shrink-0" fill="currentColor" viewBox="0 0 20 20">
                 <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
               </svg>
-              模拟数据环境，非真实交易所撮合行情
+              后端服务未连接 (127.0.0.1:8000)
             </p>
+            <button @click="retryConnection()" class="text-[10px] text-rose-600 dark:text-rose-400 underline font-semibold hover:opacity-80 cursor-pointer">重试</button>
           </div>
 
           <!-- 空状态 -->
@@ -261,7 +295,7 @@
           </div>
 
           <!-- 过滤后的自选列表（扁平 + 市场Tab/分组交集筛选 + 表头排序） -->
-          <transition-group v-if="sortedFilteredWatchlist.length" name="list" tag="div" class="divide-y divide-slate-100 dark:divide-slate-800/70">
+          <div v-if="sortedFilteredWatchlist.length" class="divide-y divide-slate-100 dark:divide-slate-800/70">
             <div v-for="item in sortedFilteredWatchlist" :key="item" @click="selectWatchlist(item)"
               class="group px-3.5 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer transition-all"
               :class="currentSymbol === item ? 'bg-indigo-50/70 dark:bg-indigo-950/30 border-l-2 border-indigo-600 dark:border-indigo-400' : 'border-l-2 border-transparent'">
@@ -286,46 +320,45 @@
                 <!-- 右侧：最新价（涨绿跌红）+ 辅助行情信息（盘后/昨收）+ 涨跌百分比色块 -->
                 <div class="flex items-center gap-2 shrink-0">
                   <div class="text-right">
-                    <div v-if="watchPriceInfo(item).loading" class="h-4 w-14 skeleton"></div>
-                    <template v-else-if="watchPriceInfo(item).price != null">
+                    <template v-if="rowInfoMap[item]?.price != null">
                       <!-- 第一行：当前价格（主信息） -->
                       <div class="text-xs font-bold font-mono tabular-nums leading-tight tracking-tight"
-                        :class="watchPriceInfo(item).change! >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'">
-                        {{ currencyOf(item) }}{{ watchPriceInfo(item).price!.toFixed(2) }}
+                        :class="rowInfoMap[item].isUp ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'">
+                        {{ currencyOf(item) }}{{ rowInfoMap[item].formattedPrice }}
                       </div>
                       <!-- 第二行：辅助行情信息（扩展交易时段 / 昨收） -->
-                      <div v-if="secondaryLineInfo(item)"
+                      <div v-if="rowInfoMap[item].secondary"
                         class="flex items-center justify-end gap-1 text-[10px] font-mono tabular-nums leading-tight text-slate-400 dark:text-slate-500">
-                        <span :class="secondaryLineInfo(item)!.changePct != null
-                          ? (secondaryLineInfo(item)!.changePct! >= 0 ? 'text-emerald-500/80 dark:text-emerald-400/80' : 'text-rose-500/80 dark:text-rose-400/80')
+                        <span :class="rowInfoMap[item].secondary!.formattedChange != null
+                          ? (rowInfoMap[item].secondary!.isUp ? 'text-emerald-500/80 dark:text-emerald-400/80' : 'text-rose-500/80 dark:text-rose-400/80')
                           : ''">
-                          {{ secondaryLineInfo(item)!.price!.toFixed(2) }}
-                          <template v-if="secondaryLineInfo(item)!.changePct != null">
-                            {{ secondaryLineInfo(item)!.changePct! >= 0 ? '+' : '' }}{{ secondaryLineInfo(item)!.changePct!.toFixed(2) }}%
+                          {{ rowInfoMap[item].secondary!.price }}
+                          <template v-if="rowInfoMap[item].secondary!.formattedChange != null">
+                            {{ rowInfoMap[item].secondary!.formattedChange }}
                           </template>
                         </span>
                         <span class="text-[9px] px-1 rounded bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 leading-tight">
-                          {{ secondaryLineInfo(item)!.label }}
+                          {{ rowInfoMap[item].secondary!.label }}
                         </span>
                       </div>
                     </template>
-                    <span v-else class="text-xs text-slate-400 font-mono">--</span>
+                    <span v-else class="text-xs text-slate-400 font-mono" :title="rowInfoMap[item]?.reason || rowInfoMap[item]?.status || ''">--</span>
                   </div>
                   <!-- 右侧涨跌百分比色块（涨绿跌红，白底白字） -->
-                  <div v-if="watchPriceInfo(item).change != null && !watchPriceInfo(item).loading"
+                  <div v-if="rowInfoMap[item]?.change != null"
                     class="text-[11px] font-bold font-mono tabular-nums px-1.5 py-0.5 rounded leading-tight text-white min-w-[46px] text-center shadow-2xs"
-                    :class="watchPriceInfo(item).change! >= 0 ? 'bg-emerald-500' : 'bg-rose-500'">
-                    {{ watchPriceInfo(item).change! >= 0 ? '+' : '' }}{{ watchPriceInfo(item).change!.toFixed(2) }}%
+                    :class="rowInfoMap[item].isUp ? 'bg-emerald-500' : 'bg-rose-500'">
+                    {{ rowInfoMap[item].formattedChange }}
                   </div>
                 </div>
               </div>
             </div>
-          </transition-group>
+          </div>
         </div>
       </aside>
 
       <!-- 比例调节拖拽条 (Left Resizer) -->
-      <div @mousedown="startResizeLeft"
+      <div v-if="showLeftSidebar" @mousedown="startResizeLeft"
         class="w-1 bg-slate-200/60 dark:bg-slate-800 hover:bg-indigo-500 active:bg-indigo-600 cursor-col-resize transition-colors shrink-0 z-50 group relative">
         <div class="absolute inset-y-0 -left-4 -right-4"></div>
         <!-- 拖拽指示器 -->
@@ -348,7 +381,7 @@
                 :key="p"
                 @click="changePeriod(p)"
                 class="btn-tactile px-2 py-0.5 text-[11px] font-semibold rounded-md transition-all cursor-pointer"
-                :class="activeTimeRange === 'ALL' && currentPeriod === p
+                :class="currentPeriod === p
                   ? 'text-indigo-600 dark:text-indigo-400 font-bold bg-white dark:bg-slate-700 shadow-2xs border border-slate-200/50 dark:border-slate-600/50'
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-white/50 dark:hover:bg-slate-700/50'">
                 {{ periodLabels[p] }}
@@ -372,32 +405,36 @@
               </button>
             </div>
           </div>
-          <!-- 右侧：时间范围下拉（主角，选中时高亮） -->
-          <div v-if="klineData.length > 0" class="relative shrink-0">
-            <button
-              @click="showTimeRangeMenu = !showTimeRangeMenu"
-              class="btn-tactile flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold rounded-lg transition-all cursor-pointer"
-              :class="activeTimeRange === 'ALL'
-                ? 'border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800'
-                : 'bg-indigo-600 text-white shadow-sm hover:bg-indigo-700'">
-              {{ timeRangeLabel(activeTimeRange) }}
-              <svg class="w-3 h-3" :class="activeTimeRange === 'ALL' ? '' : 'opacity-80'" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+
+          <!-- 右侧：侧边栏 Toggle 按钮组 -->
+          <div class="flex items-center gap-1.5 shrink-0">
+            <!-- Toggle Left Sidebar -->
+            <button @click="toggleLeftSidebar()"
+              class="btn-tactile px-2 py-1 flex items-center gap-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer"
+              :class="showLeftSidebar
+                ? 'border-indigo-200 dark:border-indigo-800/60 bg-indigo-50/70 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 shadow-2xs'
+                : 'border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600'"
+              :title="showLeftSidebar ? '收起左侧自选栏 (快捷键 [ )' : '展开左侧自选栏 (快捷键 [ )'">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <path d="M9 3v18" />
+              </svg>
+              <span class="text-[11px]">自选栏</span>
             </button>
-            <!-- 下拉菜单 -->
-            <Transition name="fade-scale">
-              <div v-if="showTimeRangeMenu" class="absolute right-0 top-full mt-1.5 z-50 min-w-[96px] bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 py-1 animate-fade-in-down">
-                <button
-                  v-for="range in timeRanges"
-                  :key="range.value"
-                  @click="selectTimeRange(range.value)"
-                  class="w-full text-left px-3 py-1.5 text-[11px] font-medium transition-colors cursor-pointer"
-                  :class="activeTimeRange === range.value
-                    ? 'text-indigo-600 dark:text-indigo-400 font-bold bg-indigo-50 dark:bg-indigo-950/40'
-                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'">
-                  {{ range.label }}
-                </button>
-              </div>
-            </Transition>
+
+            <!-- Toggle Right Sidebar -->
+            <button @click="toggleRightSidebar()"
+              class="btn-tactile px-2 py-1 flex items-center gap-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer"
+              :class="showRightSidebar
+                ? 'border-indigo-200 dark:border-indigo-800/60 bg-indigo-50/70 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 shadow-2xs'
+                : 'border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600'"
+              :title="showRightSidebar ? '收起右侧策略面板 (快捷键 ] )' : '展开右侧策略面板 (快捷键 ] )'">
+              <span class="text-[11px]">策略面板</span>
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <path d="M15 3v18" />
+              </svg>
+            </button>
           </div>
         </div>
         
@@ -409,6 +446,30 @@
 
         <!-- 实际图表绑定节点 -->
         <div ref="chartArea" class="flex-1 relative min-w-0 bg-white dark:bg-[#090d16]">
+          <!-- 左侧边栏展开把手 (当左侧自选栏收起时在左边缘悬浮显示) -->
+          <button
+            v-if="!showLeftSidebar"
+            @click="toggleLeftSidebar()"
+            class="absolute top-1/2 -translate-y-1/2 left-0 z-30 bg-white/95 dark:bg-[#0f172a]/95 hover:bg-indigo-600 hover:text-white border border-l-0 border-slate-200/80 dark:border-slate-700 shadow-md py-3 px-1 rounded-r-lg text-slate-400 dark:text-slate-500 transition-all cursor-pointer group"
+            title="展开自选标的 (快捷键 [ )"
+          >
+            <svg class="w-3.5 h-3.5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+
+          <!-- 右侧边栏展开把手 (当右侧策略面板收起时在右边缘悬浮显示) -->
+          <button
+            v-if="!showRightSidebar"
+            @click="toggleRightSidebar()"
+            class="absolute top-1/2 -translate-y-1/2 right-0 z-30 bg-white/95 dark:bg-[#0f172a]/95 hover:bg-indigo-600 hover:text-white border border-r-0 border-slate-200/80 dark:border-slate-700 shadow-md py-3 px-1 rounded-l-lg text-slate-400 dark:text-slate-500 transition-all cursor-pointer group"
+            title="展开策略面板 (快捷键 ] )"
+          >
+            <svg class="w-3.5 h-3.5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+
           <div ref="chartContainer" class="absolute inset-0 w-full h-full transition-opacity duration-300"
             :class="{ 'opacity-50': isLoading }"></div>
 
@@ -497,7 +558,7 @@
       </div>
 
       <!-- 比例调节拖拽条（右侧 Resizer） -->
-      <div @mousedown="startResizeRight"
+      <div v-if="showRightSidebar" @mousedown="startResizeRight"
         class="w-1 bg-slate-200/60 dark:bg-slate-800 hover:bg-indigo-500 active:bg-indigo-600 cursor-col-resize transition-colors shrink-0 z-50 group relative">
         <div class="absolute inset-y-0 -left-4 -right-4"></div>
         <!-- 拖拽指示器 -->
@@ -508,6 +569,7 @@
 
       <!-- 右侧：技术分析面板 (Swiss Modular Analysis Drawer) -->
       <div
+        v-show="showRightSidebar"
         :style="{ width: rightPanelWidth + 'px' }"
         class="bg-white dark:bg-[#0f172a] border-l border-slate-200/80 dark:border-slate-800 flex flex-col shrink-0 overflow-hidden">
 
@@ -525,37 +587,11 @@
             @scroll-to-sr="scrollToSRLevel"
             @highlight-time="(d) => chartAnnotations.highlightTimeLine(d)"
             @switch-symbol="(sym) => selectWatchlist(sym)"
+            @toggle-collapse="toggleRightSidebar"
           />
         </div>
       </div>
     </main>
-
-    <!-- 底部状态栏 (Swiss Minimalist Status Bar) -->
-    <footer class="h-7 bg-white dark:bg-[#0f172a] text-slate-500 dark:text-slate-400 text-[10px] flex items-center justify-between px-3 shrink-0 border-t border-slate-200/80 dark:border-slate-800 font-mono select-none">
-      <div class="flex items-center gap-3">
-        <span class="flex items-center gap-1.5 font-bold">
-          <span class="w-1.5 h-1.5 rounded-full" :class="useMockData ? 'bg-amber-400' : 'bg-emerald-500'"></span>
-          <span>{{ useMockData ? 'MOCK' : 'ONLINE' }}</span>
-        </span>
-        <button v-if="useMockData" @click="retryConnection()"
-          class="text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer">
-          RETRY
-        </button>
-        <span v-if="!useMockData && currentSymbol" class="flex items-center gap-1.5 text-slate-400 dark:text-slate-500">
-          <span class="w-1.5 h-1.5 rounded-full"
-            :class="quoteEngineStatus.cooling ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'"></span>
-          <span>{{ currentRefreshCycle }}s</span>
-          <span>·</span>
-          <span>{{ formatSymbol(currentSymbol) }}</span>
-          <span>({{ klineData.length }} bars)</span>
-        </span>
-      </div>
-      <div class="flex items-center gap-3 text-slate-400 dark:text-slate-500">
-        <span>WATCHLIST: {{ watchlist.length }}</span>
-        <span>·</span>
-        <span>Ctrl+K</span>
-      </div>
-    </footer>
 
     <!-- 模态框组 (Swiss Impeccable Modals) -->
     
@@ -680,14 +716,13 @@ import {
   type Period,
 } from './utils/api';
 import { getChartOptions } from './utils/chartUtils';
-import { calculateSRLevels } from './utils/mockEngine';
 import { useChartAnnotations, toChartTime as toChartTimeHelper } from './composables/useChartAnnotations';
 import { useSmartThrottling } from './composables/useSmartThrottling';
 import { useWebSocketControl } from './composables/useWebSocketControl';
 import { useChartIndicators } from './composables/useChartIndicators';
 import { useWatchlist, MARKET_TABS, canonSym, currencyOf } from './composables/useWatchlist';
 import { useLiveQuoteSync } from './composables/useLiveQuoteSync';
-import { useChartViewport, TIME_RANGES } from './composables/useChartViewport';
+import { useChartViewport } from './composables/useChartViewport';
 
 const { showEMA, showVWAP, initIndicators, updateIndicators } = useChartIndicators();
 const chartAnnotations = useChartAnnotations();
@@ -699,9 +734,8 @@ const currentSymbol = ref('');
 const currentPeriod = ref<Period>('1d');
 const periodOptions = SUPPORTED_PERIODS;
 const periodLabels = PERIOD_LABELS;
-const searchPlaceholder = '搜索代码或名称 (Ctrl+K)';
+const searchPlaceholder = '搜索代码或名称';
 
-const useMockData = ref(true);
 const chartReady = ref(false);
 const backendOnline = ref(false);
 const isDarkMode = ref(false);
@@ -726,7 +760,6 @@ let activeStrategyRequestId = 0;
 
 // 1. 组合图表视口与 K 线加载
 const viewport = useChartViewport({
-  useMockData,
   isDarkMode,
   currentSymbol,
   currentPeriod,
@@ -742,7 +775,7 @@ const viewport = useChartViewport({
   },
   onLoadSuccess: () => {
     wl.updateWatchlistPrices();
-    if (!useMockData.value) liveSync.refreshEngineSymbols();
+    liveSync.refreshEngineSymbols();
     handleRunStrategy('swing');
   },
   onLoadError: () => {
@@ -758,22 +791,16 @@ const {
   dataWarning,
   srLevels,
   highlightedSR,
-  activeTimeRange,
-  showTimeRangeMenu,
   latestPrice,
   latestChange,
-  selectTimeRange,
   highlightSRLevel,
   scrollToSRLevel,
+  renderSRLevels,
   loadKlineData,
 } = viewport;
 
-const timeRanges = TIME_RANGES;
-const timeRangeLabel = (v: string): string => timeRanges.find((r) => r.value === v)?.label ?? v;
-
 // 2. 组合实时行情同步引擎
 const liveSync = useLiveQuoteSync({
-  useMockData,
   currentSymbol,
   currentPeriod,
   klineData,
@@ -793,10 +820,9 @@ const {
   displayPrice,
   displayChange,
   displayExtendedInfo,
-  currentRefreshCycle,
-  quoteEngineStatus,
   startQuoteEngine,
-  stopQuoteEngine,
+  pauseQuoteEngine,
+  resumeQuoteEngine,
 } = liveSync;
 
 // 3. 组合自选分组与列表状态
@@ -811,7 +837,6 @@ const selectWatchlist = (sym: string) => {
 };
 
 const wl = useWatchlist({
-  useMockData,
   liveQuoteMap,
   quoteConfig,
   currentSymbol,
@@ -834,8 +859,7 @@ const {
   getStockName,
   delayFullOf,
   loadStockNameMap,
-  watchPriceInfo,
-  secondaryLineInfo,
+  rowInfoMap,
   loadWatchlist,
   isWatchlisted,
   toggleWatchlist,
@@ -904,7 +928,9 @@ const changePeriod = (period: Period) => {
   }
 };
 
-// 后端连通性与模式检测
+// 后端连通性与自愈检测
+let autoDetectTimer: any = null;
+
 async function detectBackend(): Promise<boolean> {
   try {
     const ctrl = new AbortController();
@@ -912,14 +938,18 @@ async function detectBackend(): Promise<boolean> {
     const res = await fetch(`${BASE_URL}/health`, { signal: ctrl.signal, cache: 'no-store' });
     clearTimeout(timer);
     const online = res.ok;
+    const wasOffline = !backendOnline.value;
     backendOnline.value = online;
-    if (online !== !useMockData.value) {
-      useMockData.value = !online;
+    if (online && wasOffline) {
+      wl.clearWatchlistCache();
+      startQuoteEngine();
+      if (chartReady.value && currentSymbol.value) {
+        handleSearch();
+      }
     }
     return online;
   } catch {
     backendOnline.value = false;
-    if (!useMockData.value) useMockData.value = true;
     return false;
   }
 }
@@ -931,7 +961,7 @@ async function retryConnection() {
     wl.clearWatchlistCache();
     handleSearch();
   } else if (!online) {
-    errorMsg.value = '仍未检测到后端服务，请确认已启动后端 (python main.py)，或继续在演示模式下浏览前端页面。';
+    errorMsg.value = '仍未检测到后端服务，请确认已启动后端 (FastAPI @ http://127.0.0.1:8000)。';
   }
 }
 
@@ -945,7 +975,7 @@ const handleRunStrategy = async (mode: string = 'swing', isManual: boolean = fal
   try {
     strategyLoading.value = true;
     if (!srLevels.value.length && klineData.value.length) {
-      srLevels.value = calculateSRLevels(klineData.value, 5, targetPeriod);
+      renderSRLevels();
     }
     if (reqId !== activeStrategyRequestId || currentSymbol.value !== targetSymbol || currentPeriod.value !== targetPeriod) {
       return;
@@ -959,6 +989,7 @@ const handleRunStrategy = async (mode: string = 'swing', isManual: boolean = fal
     if (res.annotations) {
       chartAnnotations.setAllAnnotations(res.annotations);
     }
+    renderSRLevels(undefined, res.summary);
   } catch (e: any) {
     if (reqId === activeStrategyRequestId && currentSymbol.value === targetSymbol && currentPeriod.value === targetPeriod) {
       if (isManual) errorMsg.value = e.message || '策略执行失败，请检查K线数据';
@@ -974,6 +1005,10 @@ const handleClearStrategy = () => {
   activeStrategyRequestId++;
   chartAnnotations.clearAnnotations();
   strategySummary.value = null;
+  renderSRLevels();
+  try {
+    chartInstance?.priceScale('right').setAutoScale(true);
+  } catch {}
 };
 
 const wsControl = useWebSocketControl({
@@ -1136,10 +1171,35 @@ const handleModalSearchSelect = (sym: string) => {
   modalSearchResults.value = [];
 };
 
+// 侧边栏展开/收起状态与持久化
+const showLeftSidebar = ref(localStorage.getItem('app_show_left_sidebar') !== 'false');
+const showRightSidebar = ref(localStorage.getItem('app_show_right_sidebar') !== 'false');
+
+const toggleLeftSidebar = () => {
+  showLeftSidebar.value = !showLeftSidebar.value;
+  try {
+    localStorage.setItem('app_show_left_sidebar', String(showLeftSidebar.value));
+  } catch {}
+  nextTick(() => {
+    syncChartSize();
+  });
+};
+
+const toggleRightSidebar = () => {
+  showRightSidebar.value = !showRightSidebar.value;
+  try {
+    localStorage.setItem('app_show_right_sidebar', String(showRightSidebar.value));
+  } catch {}
+  nextTick(() => {
+    syncChartSize();
+  });
+};
+
 // 左右栏拖拽调宽
 const leftSidebarWidth = ref(320);
 const rightPanelWidth = ref(340);
 let resizeRaf: number | null = null;
+let chartAreaResizeObserver: ResizeObserver | null = null;
 
 const syncChartSize = () => {
   requestAnimationFrame(() => {
@@ -1313,8 +1373,11 @@ const initChart = () => {
 
 // 生命周期与全局事件
 watch(isWindowActive, (active) => {
-  if (active && !useMockData.value) startQuoteEngine();
-  else stopQuoteEngine();
+  if (active) {
+    if (backendOnline.value) resumeQuoteEngine();
+  } else {
+    pauseQuoteEngine();
+  }
 });
 
 watch([showEMA, showVWAP], () => {
@@ -1330,16 +1393,8 @@ watch([currentSymbol, currentPeriod, klineData], () => {
   });
 });
 
-watch(useMockData, () => {
-  wl.clearWatchlistCache();
-  if (!useMockData.value) startQuoteEngine();
-  else stopQuoteEngine();
-  if (chartReady.value && currentSymbol.value) handleSearch();
-});
-
 const handleClickOutside = (e: MouseEvent) => {
   const target = e.target as HTMLElement;
-  if (showTimeRangeMenu.value && !target.closest('.relative')) showTimeRangeMenu.value = false;
   if (showGroupDropdown.value && !target.closest('.group-dropdown-container')) showGroupDropdown.value = false;
 };
 
@@ -1361,6 +1416,26 @@ const handleGlobalKeydown = (e: KeyboardEvent) => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
     e.preventDefault();
     searchComponentRef.value?.focus();
+    return;
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+    e.preventDefault();
+    toggleLeftSidebar();
+    return;
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'j') {
+    e.preventDefault();
+    toggleRightSidebar();
+    return;
+  }
+  if (e.key === '[' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    e.preventDefault();
+    toggleLeftSidebar();
+    return;
+  }
+  if (e.key === ']' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    e.preventDefault();
+    toggleRightSidebar();
     return;
   }
   if (PERIOD_KEY_MAP[e.key]) {
@@ -1391,13 +1466,31 @@ const handleGlobalKeydown = (e: KeyboardEvent) => {
   }
 };
 
+// 首屏 K 线与自选行情均就绪后，平滑关闭开屏动画并销毁监听
+const stopSplashWatch = watch(
+  [klineData, liveQuoteMap],
+  ([klines, quotes]) => {
+    if (klines.length > 0 || Object.keys(quotes).length > 0) {
+      (window as any).__dismissSplash?.();
+      stopSplashWatch();
+    }
+  }
+);
+
 onMounted(async () => {
   loadStockNameMap();
-  loadWatchlist();
   initDarkMode();
 
+  // 关键优化：优先加载本地与远程自选列表，保证 quoteEngine 启动瞬间就拥有完整的标的集合，消除多轮串行排队与标的遗漏
+  await loadWatchlist();
+
+  startQuoteEngine();
   await detectBackend();
-  if (!useMockData.value) startQuoteEngine();
+  autoDetectTimer = setInterval(async () => {
+    if (!backendOnline.value) {
+      await detectBackend();
+    }
+  }, 2000);
 
   nextTick(() => {
     if (!chartContainer.value) return;
@@ -1407,6 +1500,23 @@ onMounted(async () => {
         initChart();
         chartReady.value = true;
         handleSearch();
+
+        // 持续监听 chartArea 尺寸变动，在侧边栏折叠/展开或窗口变化时自适应图表
+        if (chartArea.value) {
+          chartAreaResizeObserver = new ResizeObserver((areaEntries) => {
+            for (const entry of areaEntries) {
+              if (entry.contentRect.width > 0 && entry.contentRect.height > 0) {
+                if (chartInstance) {
+                  chartInstance.applyOptions({
+                    width: Math.floor(entry.contentRect.width),
+                    height: Math.floor(entry.contentRect.height),
+                  });
+                }
+              }
+            }
+          });
+          chartAreaResizeObserver.observe(chartArea.value);
+        }
       }
     });
     observer.observe(chartContainer.value);
@@ -1417,6 +1527,14 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+  if (autoDetectTimer) {
+    clearInterval(autoDetectTimer);
+    autoDetectTimer = null;
+  }
+  if (chartAreaResizeObserver) {
+    chartAreaResizeObserver.disconnect();
+    chartAreaResizeObserver = null;
+  }
   if (chartInstance) {
     chartInstance.timeScale().unsubscribeVisibleLogicalRangeChange(viewport.onVisibleLogicalRangeChanged);
     chartInstance.remove();

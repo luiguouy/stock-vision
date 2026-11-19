@@ -236,13 +236,24 @@ class TencentQuoteProvider:
         disabled_syms = [s for s in symbols if s.lower().startswith(("sh", "sz", "hk")) or market_of(s) is None]
         regular_syms = [s for s in symbols if market_of(s) not in ("futures", "crypto") and s not in disabled_syms]
 
-        results: List[dict] = []
+        tasks = []
         if crypto_syms:
-            results.extend(await self.crypto_provider.get_quotes(crypto_syms))
+            tasks.append(self.crypto_provider.get_quotes(crypto_syms))
+        else:
+            tasks.append(asyncio.sleep(0, result=[]))
+
         if futures_syms:
-            results.extend(await self.futures_provider.get_quotes(futures_syms))
+            tasks.append(self.futures_provider.get_quotes(futures_syms))
+        else:
+            tasks.append(asyncio.sleep(0, result=[]))
+
         if regular_syms:
-            results.extend(await self._get_tencent_quotes(regular_syms))
+            tasks.append(self._get_tencent_quotes(regular_syms))
+        else:
+            tasks.append(asyncio.sleep(0, result=[]))
+
+        crypto_res, futures_res, regular_res = await asyncio.gather(*tasks)
+        results: List[dict] = list(crypto_res) + list(futures_res) + list(regular_res)
         for s in disabled_syms:
             results.append(_error_item(s, "disabled", "A股与港股功能已停用，仅支持美股与期货"))
         return results
@@ -277,9 +288,12 @@ class TencentQuoteProvider:
                     results.append(item)
 
         for sym, reason in blocked.items():
-            # 若已有末次有效行情，在非全局封禁时直接返回缓存，彻底消除前端黄灯闪烁与断流
-            if reason != "cooling" and sym in self._last_good_quotes:
-                results.append(self._last_good_quotes[sym])
+            # 若已有末次有效行情，在任何频控/冷却时均优先返回缓存，彻底消除前端闪烁骨架屏与断流
+            if sym in self._last_good_quotes:
+                cached_item = dict(self._last_good_quotes[sym])
+                if reason == "cooling":
+                    cached_item["status"] = "cooling"
+                results.append(cached_item)
             else:
                 msg = "接口冷却中" if reason == "cooling" else "频次受控"
                 results.append(_error_item(sym, reason, msg))
@@ -401,11 +415,12 @@ _SINA_FUTURES_CODE = {
 }
 
 class SinaFuturesQuoteProvider:
-    """新浪财经国际期货实时行情 provider（绕过 VPN 直连）。"""
+    """新浪财经国际期货实时行情 provider（失败/无数据时自动回退 Yahoo 连续合约）。"""
 
     def __init__(self) -> None:
         self.limiter = QuoteRateLimiter()
         self._last_good_quotes: Dict[str, dict] = {}
+        self._yahoo_fallback = YahooCryptoQuoteProvider()
 
     async def get_quotes(self, symbols: List[str]) -> List[dict]:
         allowed: List[str] = []
@@ -418,6 +433,8 @@ class SinaFuturesQuoteProvider:
                 blocked[sym] = reason
 
         results: List[dict] = []
+        missing_for_yahoo: List[str] = []
+
         if allowed:
             self.limiter.record_http_call()
             fetched = await self._fetch(allowed)
@@ -425,14 +442,25 @@ class SinaFuturesQuoteProvider:
                 self.limiter.record_symbol(sym)
                 item = fetched.get(sym)
                 if item is None:
+                    missing_for_yahoo.append(sym)
+                else:
+                    self._last_good_quotes[sym] = item
+                    results.append(item)
+
+        if missing_for_yahoo:
+            yahoo_res = await self._yahoo_fallback.get_quotes(missing_for_yahoo)
+            for sym, y_item in zip(missing_for_yahoo, yahoo_res):
+                if y_item.get("status") == "ok" and y_item.get("price") is not None:
+                    y_item["market"] = "futures"
+                    y_item["delay_label"] = get_market_cfg("futures")["delay_label"]
+                    self._last_good_quotes[sym] = y_item
+                    results.append(y_item)
+                else:
                     self.limiter.on_symbol_empty(sym)
                     if sym in self._last_good_quotes:
                         results.append(self._last_good_quotes[sym])
                     else:
                         results.append(_error_item(sym, "empty", "暂未返回期货行情"))
-                else:
-                    self._last_good_quotes[sym] = item
-                    results.append(item)
 
         for sym, reason in blocked.items():
             if sym in self._last_good_quotes:
@@ -496,7 +524,7 @@ class SinaFuturesQuoteProvider:
             time_ = parts[6].strip()
         except (ValueError, IndexError):
             return None
-        if price is None:
+        if price is None or price <= 0:
             return None
         change = round(price - prev_close, 3) if prev_close else None
         change_pct = round((price - prev_close) / prev_close * 100, 3) if prev_close else None
@@ -517,5 +545,6 @@ class SinaFuturesQuoteProvider:
             "status": "ok",
             "extended_price": None,
         }
+
 
 quote_provider = TencentQuoteProvider()

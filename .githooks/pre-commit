@@ -1,0 +1,72 @@
+#!/bin/sh
+# ============================================================
+# graft 图谱新鲜度检查（pre-commit）
+#
+# 目的：阻止「改了代码但没重建图谱」的提交。
+# 原因：PROJECT_MAP.md 中的 file:line 是纯派生结果，代码一动就会偏移；
+#       而偏移后的文档看起来依然是正确的，这种错误很难被发现。
+#
+# 启用：git config core.hooksPath .githooks
+# 跳过：SKIP_GRAFT_CHECK=1 git commit ...
+# ============================================================
+
+# 仅当暂存区包含代码文件时才检查，纯文档/配置提交直接放行
+CHANGED=$(git diff --cached --name-only --diff-filter=ACMR \
+  | grep -E '^stage_one/.*\.(py|ts|vue|js)$' || true)
+
+if [ -z "$CHANGED" ]; then
+  exit 0
+fi
+
+if [ "${SKIP_GRAFT_CHECK:-0}" = "1" ]; then
+  echo "[graft] 已通过 SKIP_GRAFT_CHECK=1 跳过图谱检查"
+  exit 0
+fi
+
+GRAFT_BIN=""
+for candidate in graft graft.cmd; do
+  if command -v "$candidate" >/dev/null 2>&1; then
+    GRAFT_BIN="$candidate"
+    break
+  fi
+done
+
+# 未安装 graft 时不阻断：图谱是本地缓存，不应成为他人的提交门槛
+if [ -z "$GRAFT_BIN" ]; then
+  echo "[graft] 未检测到 graft CLI，跳过图谱检查"
+  echo "        如需启用：npm install -g @nanonets/graft"
+  exit 0
+fi
+
+# 从未构建过图谱时同样放行，改为提示
+if [ ! -f "graft/.graph/wiring.json" ]; then
+  echo "[graft] 未发现 graft/.graph/wiring.json，跳过检查"
+  echo "        首次使用请先运行：graft build"
+  exit 0
+fi
+
+if "$GRAFT_BIN" build --check >/dev/null 2>&1; then
+  exit 0
+fi
+
+cat <<'EOF'
+
+  ============================================================
+  ✗ 提交被拦截：代码已变更，但 graft 图谱已过期
+  ============================================================
+
+  影响：PROJECT_MAP.md 中的「文件:行号」会指向错误位置，
+        据此跳转定位的阅读者与 AI 都会落到无关代码上。
+
+  修复：
+      graft build
+      python .workbuddy/tools/gen_project_map.py
+      python .workbuddy/tools/gen_project_map.py --slim
+      git add -A
+
+  本次确需跳过：
+      SKIP_GRAFT_CHECK=1 git commit ...
+
+EOF
+
+exit 1

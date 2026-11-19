@@ -345,5 +345,208 @@ class TestCryptoFeatures(unittest.TestCase):
             loop.close()
 
 
+class TestCryptoDowntrendAndRRGates(unittest.TestCase):
+    """
+    针对加密货币（以 BTC-USD 为主）在主跌/空头场景及盈亏比门禁的专项单元测试：
+    1. BTC-USD 下跌趋势测试：
+       - 验证止损不会锚定 1 个月前的远古历史高点（如 108,000），而是锚定波浪证伪线/通道上轨/200EMA/近端次级阻力 + 波动缓冲；
+       - TP1 采用前瞻斐波那契延展目标（如 1.618x），规避未确认的盘中即时低点；
+       - 风险报酬比 (RR) 计算公式正确且与多空方向匹配。
+    2. 盈亏比门禁 (RR Gate) 一致性测试：
+       - 验证当策略处于“观望”或未达标时，若条件挂单剧本预估 RR < 2.0R (加密货币) 或 < 2.5R (标准标的)，
+         绝对不会输出劣质剧本暴露给用户 (condition_playbook 必须为 None 或 passed_gates 为 True 且 >= 门禁)。
+    """
+
+    def setUp(self):
+        import numpy as np
+        # 构造包含 30 天前 108000 高点，但近期在 94500 -> 88500 下行的 BTC 日线数据 (60根)
+        dates = pd.date_range("2026-01-01", periods=60, freq="D")
+        prices = np.zeros(60)
+        # 前 15 天冲高至 108000 远古高点
+        prices[:15] = np.linspace(95000, 108000, 15)
+        # 第 16-45 天从 108000 回落至 93000
+        prices[15:45] = np.linspace(108000, 93000, 30)
+        # 第 46-50 天次级反弹至 94500
+        prices[45:50] = np.linspace(93000, 94500, 5)
+        # 第 51-60 天破位主跌至 88500
+        prices[50:] = np.linspace(94500, 88500, 10)
+
+        self.df_btc_downtrend = pd.DataFrame({
+            "Open": prices + 200,
+            "High": prices + 600,
+            "Low": prices - 600,
+            "Close": prices,
+            "Volume": [5000 + int(i * 100) for i in range(60)],
+        }, index=dates)
+
+    def test_btc_downtrend_stop_loss_not_taking_ancient_high(self):
+        """
+        BTC-USD 下跌趋势场景：
+        验证止损位不会生硬选取 30 天前的 108,000 历史远古高点，
+        而是锚定波浪失效位、通道阻力或近端次级阻力（如 94,000 左右）+ 波动缓冲。
+        """
+        from strategy_adapter import run_strategy_analysis
+
+        res = run_strategy_analysis("BTC-USD", period="1d", mode="swing", df=self.df_btc_downtrend)
+        plan = res["summary"]["trade_plan"]
+
+        self.assertIsNotNone(plan["stop_loss"], "应输出有效的止损价格")
+        # 远古历史高点为 108000，当前入场价为 88500
+        # 合理的动态止损应当远低于 100,000（在 92,000 - 96,000 区域），绝不应取 108,000
+        self.assertLess(plan["stop_loss"], 100000.0, f"止损位 ${plan['stop_loss']} 不应锚定远古历史高点 108,000")
+        self.assertGreater(plan["stop_loss"], plan["entry"], "空头防守止损必须高于入场价")
+
+        # 验证止损依据包含结构化锚点描述及防守缓冲
+        sl_reason = plan["stop_loss_reason"]
+        self.assertTrue(len(sl_reason) > 0)
+        has_anchor_keyword = any(kw in sl_reason for kw in ["证伪线", "失效位", "通道", "EMA", "波峰", "阻力", "扫损"])
+        self.assertTrue(has_anchor_keyword, f"止损依据应为结构性锚点: {sl_reason}")
+        self.assertIn("缓冲", sl_reason, f"止损依据应包含波动率防守缓冲: {sl_reason}")
+
+    def test_btc_downtrend_tp1_uses_forward_fibonacci_projection(self):
+        """
+        BTC-USD 下跌趋势场景：
+        验证 TP1 采用前瞻斐波那契空头扩展目标（如 1.618x），
+        而不是未确认的盘中即时低点。
+        """
+        from strategy_adapter import run_strategy_analysis
+
+        res = run_strategy_analysis("BTC-USD", period="1d", mode="swing", df=self.df_btc_downtrend)
+        plan = res["summary"]["trade_plan"]
+
+        entry = plan["entry"]
+        tp1 = plan["tp1"]
+        self.assertIsNotNone(tp1, "应输出 TP1 止盈目标")
+        self.assertLess(tp1, entry, "空头方向 TP1 必须严格低于入场价")
+
+        # 验证 TP1 来源为前瞻扩展测算，规避未确认即时极值
+        tp1_source = plan.get("tp1_source") or plan.get("tp_source")
+        self.assertIsNotNone(tp1_source)
+        is_forward_fib = any(kw in tp1_source for kw in ["斐波", "扩展", "测算", "目标"])
+        self.assertTrue(is_forward_fib, f"TP1 来源必须是前瞻斐波那契测算: {tp1_source}")
+
+    def test_btc_downtrend_rr_calculation_accuracy(self):
+        """
+        BTC-USD 下跌趋势场景：
+        验证盈亏比 (RR Ratio) 计算精确符合空头逻辑:
+        effective_risk = (stop_loss - entry) + friction
+        net_reward = (entry - tp1) - friction
+        rr = net_reward / effective_risk
+        """
+        from strategy_adapter import run_strategy_analysis
+
+        res = run_strategy_analysis("BTC-USD", period="1d", mode="swing", df=self.df_btc_downtrend)
+        plan = res["summary"]["trade_plan"]
+
+        entry = plan["entry"]
+        sl = plan["stop_loss"]
+        tp1 = plan["tp1"]
+        reported_rr = plan["rr_ratio"]
+
+        # 空头方向：风险 = sl - entry, 收益 = entry - tp1
+        friction = entry * 0.0008
+        effective_risk = max(0.01, (sl - entry) + friction)
+        net_reward = max(0.0, (entry - tp1) - friction)
+        expected_rr = round(net_reward / effective_risk, 2)
+
+        self.assertAlmostEqual(reported_rr, expected_rr, delta=0.05,
+                               msg=f"报告的盈亏比 {reported_rr} 与预期公式计算值 {expected_rr} 不一致")
+        self.assertGreater(reported_rr, 0.0)
+
+    def test_rr_gate_consistency_no_poor_playbook_exposed(self):
+        """
+        盈亏比硬门禁 (RR Gate) 一致性测试：
+        验证任何情况下，若策略处于“观望”且条件挂单剧本预估 RR 低于门禁
+        （加密资产 2.0R，标准美股 2.5R），
+        系统绝不能将劣质剧本暴露给用户（condition_playbook 必须为 None 或其 RR >= 门禁）。
+        """
+        import numpy as np
+        from strategy_adapter import run_strategy_analysis
+
+        # 构造多种不同的行情数据（多头、空头、横盘震荡、大幅突刺）
+        dates = pd.date_range("2026-01-01", periods=60, freq="B")
+        test_dfs = []
+
+        # 1. 窄幅微幅震荡
+        flat_prices = 100.0 + np.sin(np.linspace(0, 10, 60)) * 0.5
+        test_dfs.append(("flat", pd.DataFrame({
+            "Open": flat_prices - 0.1, "High": flat_prices + 0.15,
+            "Low": flat_prices - 0.15, "Close": flat_prices,
+            "Volume": [1000] * 60,
+        }, index=dates)))
+
+        # 2. 陡峭上涨后高位钝化
+        steep_up = np.linspace(100, 200, 50).tolist() + [199, 201, 198, 202, 199, 200, 201, 199, 200, 200]
+        test_dfs.append(("steep_up", pd.DataFrame({
+            "Open": np.array(steep_up) - 0.5, "High": np.array(steep_up) + 1.0,
+            "Low": np.array(steep_up) - 1.0, "Close": np.array(steep_up),
+            "Volume": [2000] * 60,
+        }, index=dates)))
+
+        # 3. 陡峭下跌后低位钝化
+        steep_down = np.linspace(200, 100, 50).tolist() + [101, 99, 102, 98, 101, 100, 99, 101, 100, 100]
+        test_dfs.append(("steep_down", pd.DataFrame({
+            "Open": np.array(steep_down) + 0.5, "High": np.array(steep_down) + 1.0,
+            "Low": np.array(steep_down) - 1.0, "Close": np.array(steep_down),
+            "Volume": [2000] * 60,
+        }, index=dates)))
+
+        for label, df in test_dfs:
+            # 测试加密资产 (BTC-USD): 门禁为 2.0R
+            res_crypto = run_strategy_analysis("BTC-USD", period="1d", mode="swing", df=df)
+            plan_c = res_crypto["summary"]["trade_plan"]
+            playbook_c = plan_c.get("condition_playbook")
+            if playbook_c is not None:
+                self.assertGreaterEqual(
+                    playbook_c["estimated_rr"], 2.0,
+                    f"[{label}] 加密货币条件剧本的预估盈亏比必须 >= 2.0R，实际为: {playbook_c['estimated_rr']}"
+                )
+                self.assertTrue(playbook_c["passed_gates"])
+
+            # 测试标准股票 (usAAPL): 门禁为 2.5R
+            res_stock = run_strategy_analysis("usAAPL", period="1d", mode="swing", df=df)
+            plan_s = res_stock["summary"]["trade_plan"]
+            playbook_s = plan_s.get("condition_playbook")
+            if playbook_s is not None:
+                self.assertGreaterEqual(
+                    playbook_s["estimated_rr"], 2.5,
+                    f"[{label}] 标准资产条件剧本的预估盈亏比必须 >= 2.5R，实际为: {playbook_s['estimated_rr']}"
+                )
+                self.assertTrue(playbook_s["passed_gates"])
+
+    def test_anti_chase_and_honest_structural_targets(self):
+        """
+        防追单极值超卖拦截与真实结构止盈测试：
+        使用真实 BTC-USD 日线数据验证：
+        1. 价格触及通道动态下轨极值超卖区 (pos <= 0.15) 时，严禁发出市价做空信号，主方向必须强制拦截为【观望】；
+        2. 绝不允许采用 entry - risk * 2.5 虚构暴跌 45% ($36,000) 的假目标，止盈必须锚定真实结构支撑 ($60,000)；
+        3. 真实盈亏比实事求是（如 0.26R），且风控理由明确提示超卖拦截；
+        4. 顺势反弹挂单剧本达到合格门禁 (>= 2.0R)。
+        """
+        from strategy_adapter import run_strategy_analysis
+
+        res = run_strategy_analysis("BTC-USD", period="1d", mode="swing")
+        plan = res["summary"]["trade_plan"]
+
+        # 1. 主计划必须为观望，禁止地板做空
+        self.assertEqual(plan["direction"], "观望", "极端超卖区主计划必须强制拦截为观望")
+        self.assertFalse(plan["passed_gates"])
+
+        # 2. 止盈目标必须是真实下行支撑（如 $60,000），绝不能虚构到 $36,000 腰斩
+        self.assertGreater(plan["tp1"], 50000.0, f"TP1 止盈目标 ${plan['tp1']} 绝不能凭空捏造至暴跌 45% 的火星价位")
+
+        # 3. 盈亏比真实反映结构空间，未被强行凑成 2.5R
+        self.assertLess(plan["rr_ratio"], 1.0, f"在当前超卖严重空间受限的位置，真实盈亏比应当 < 1.0R，实际为: {plan['rr_ratio']}")
+
+        # 4. 必须包含超卖风控拦截理由
+        has_anti_chase_reason = any("超卖" in r or "严禁" in r or "透支" in r for r in plan["reasons"])
+        self.assertTrue(has_anti_chase_reason, f"风控理由中必须明确提示超卖防追单拦截: {plan['reasons']}")
+
+        # 5. 反弹挂单剧本达到 >= 2.0R
+        playbook = plan.get("condition_playbook")
+        if playbook is not None:
+            self.assertGreaterEqual(playbook["estimated_rr"], 2.0, "反弹挂单剧本预期 RR 必须 >= 2.0R")
+
+
 if __name__ == "__main__":
     unittest.main()
