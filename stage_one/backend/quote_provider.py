@@ -201,6 +201,7 @@ class YahooCryptoQuoteProvider:
                                 "delay_label": get_market_cfg("crypto")["delay_label"],
                                 "status": "ok",
                                 "extended_price": None,
+                                "extended_label": "",
                             }
                             self._last_good[sym] = item
                             self._last_good[ticker] = item
@@ -222,13 +223,44 @@ class YahooCryptoQuoteProvider:
         return results
 
 class TencentQuoteProvider:
-    """腾讯免费公开实时行情 provider（带内存末次有效值缓存兜底）。"""
+    """腾讯免费公开实时行情 provider（带内存末次有效值缓存与盘后快照防冻结兜底）。"""
 
     def __init__(self) -> None:
         self.limiter = QuoteRateLimiter()
         self.futures_provider = SinaFuturesQuoteProvider()
         self.crypto_provider = YahooCryptoQuoteProvider()
         self._last_good_quotes: Dict[str, dict] = {}
+        self._post_close_snapshot: Dict[str, float] = {}
+
+    def _resolve_us_ext_session(self, symbol: str, ext_price: float) -> Tuple[Optional[float], str]:
+        """根据美东时间与盘后快照，精确判定美股扩展时段与防冻结标签。"""
+        dt = datetime.now(tz=US_EAST)
+        wd = dt.weekday()  # 0=Mon ... 4=Fri, 5=Sat, 6=Sun
+        mins = dt.hour * 60 + dt.minute
+
+        # 1. 常规盘中 (周一至周五 09:30 - 16:00 ET)：隐藏扩展价
+        if wd < 5 and (9 * 60 + 30 <= mins < 16 * 60):
+            return None, ""
+
+        # 2. 盘前时段 (周一至周五 04:00 - 09:30 ET)
+        if wd < 5 and (4 * 60 <= mins < 9 * 60 + 30):
+            return ext_price, "盘前"
+
+        # 3. 盘后时段 (周一至周五 16:00 - 20:00 ET)：持续刷新盘后快照
+        if wd < 5 and (16 * 60 <= mins < 20 * 60):
+            self._post_close_snapshot[symbol] = ext_price
+            return ext_price, "盘后"
+
+        # 4. 周末休市 (周五 20:00 ~ 周日 20:00 ET)：延续显示周五盘后
+        if wd == 5 or (wd == 4 and mins >= 20 * 60) or (wd == 6 and mins < 20 * 60):
+            return ext_price, "盘后"
+
+        # 5. 夜盘窗口 (周日 20:00 ~ 周五 04:00 ET)：
+        # 仅当扩展价格相对 20:00 盘后快照发生真实变动时才标为“夜盘”，否则保持“盘后”
+        snap = self._post_close_snapshot.get(symbol)
+        if snap is not None and abs(ext_price - snap) >= 0.01:
+            return ext_price, "夜盘"
+        return ext_price, "盘后"
 
     async def get_quotes(self, symbols: List[str]) -> List[dict]:
         crypto_syms = [s for s in symbols if market_of(s) == "crypto"]
@@ -342,10 +374,11 @@ class TencentQuoteProvider:
                 m = market_of(code)
                 cfg = get_market_cfg(m)
                 ext_price = None
+                ext_label = ""
                 if m == "us" and len(parts) > _IDX_EXT_PRICE:
                     ep = _to_float(parts[_IDX_EXT_PRICE])
                     if ep is not None and ep > 0:
-                        ext_price = ep
+                        ext_price, ext_label = self._resolve_us_ext_session(code, ep)
                 out[code] = {
                     "symbol": code,
                     "name": parts[_IDX_NAME],
@@ -361,6 +394,7 @@ class TencentQuoteProvider:
                     "delay_label": cfg["delay_label"],
                     "status": "ok",
                     "extended_price": ext_price,
+                    "extended_label": ext_label,
                 }
             except (ValueError, IndexError):
                 continue
@@ -404,6 +438,7 @@ def _error_item(symbol: str, status: str, msg: str) -> dict:
         "status": status,
         "message": msg,
         "extended_price": None,
+        "extended_label": "",
     }
 
 _SINA_FUTURES_REALTIME_HOST = "https://hq.sinajs.cn/list="
@@ -544,6 +579,7 @@ class SinaFuturesQuoteProvider:
             "delay_label": get_market_cfg("futures")["delay_label"],
             "status": "ok",
             "extended_price": None,
+            "extended_label": "",
         }
 
 

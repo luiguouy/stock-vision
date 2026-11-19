@@ -9,7 +9,7 @@ import {
   formatSymbol,
   type WatchGroup,
 } from '../utils/api';
-import { quoteEngine, type Quote, type QuoteConfig } from '../utils/quote';
+import { quoteEngine, getCurrentUSExtendedSession, type Quote, type QuoteConfig } from '../utils/quote';
 
 export type MarketTabKey = 'all' | 'us' | 'futures';
 export type SortKey = 'name' | 'price' | 'change';
@@ -216,10 +216,20 @@ export function useWatchlist(options: {
     const info = watchPriceInfo(item);
     if (info.price == null) return null;
 
-    if (info.extendedPrice != null && info.prevClose != null && info.prevClose > 0) {
-      if (Math.abs(info.extendedPrice - info.price) >= 0.01) {
-        const chg = ((info.extendedPrice - info.prevClose) / info.prevClose) * 100;
-        return { price: info.extendedPrice, changePct: chg, label: info.extendedLabel || '盘后' };
+    if (info.extendedPrice != null && info.extendedPrice > 0 && marketOf(item) === 'us') {
+      const extLabel = info.extendedLabel || getCurrentUSExtendedSession();
+      if (extLabel) {
+        const extBase =
+          extLabel === '盘前'
+            ? (info.prevClose && info.prevClose > 0 ? info.prevClose : info.price)
+            : (info.price && info.price > 0 ? info.price : info.prevClose);
+
+        if (extBase && extBase > 0) {
+          if (extLabel !== '盘后' || Math.abs(info.extendedPrice - extBase) >= 0.01) {
+            const chg = ((info.extendedPrice - extBase) / extBase) * 100;
+            return { price: info.extendedPrice, changePct: chg, label: extLabel };
+          }
+        }
       }
     }
 
@@ -242,7 +252,7 @@ export function useWatchlist(options: {
         formattedChange: info.change != null ? `${isUp ? '+' : ''}${info.change.toFixed(2)}%` : '',
         isUp,
         secondary: sec && sec.price != null ? {
-          price: sec.price.toFixed(2),
+          price: `${currencyOf(item)}${sec.price.toFixed(2)}`,
           changePct: sec.changePct,
           formattedChange: sec.changePct != null ? `${sec.changePct >= 0 ? '+' : ''}${sec.changePct.toFixed(2)}%` : null,
           label: sec.label,

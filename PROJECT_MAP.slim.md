@@ -2,7 +2,7 @@
 
 > 本文件由 graft 结构层自动导出，是对代码库的**索引**，不是实现说明。
 > 每条记录都带 `文件:行号`，用于精确定位；这里**不含函数体**，需要实现细节时应另行取源码。
-> 生成时间：2026-11-19 20:55
+> 生成时间：2026-11-19 21:16
 
 ## 1. 概览
 
@@ -10,9 +10,9 @@
 |---|---|
 | 源文件 | 55 |
 | 语言 | javascript, python, typescript, vue |
-| 符号总数 | 702（不含 55 个文件节点） |
-| 符号构成 | function 429 / method 193 / file 55 / class 41 / interface 30 / type 9 |
-| 依赖边 | 246（跨文件调用、导入、继承） |
+| 符号总数 | 705（不含 55 个文件节点） |
+| 符号构成 | function 430 / method 194 / file 55 / class 41 / interface 30 / type 10 |
+| 依赖边 | 249（跨文件调用、导入、继承） |
 
 后端为 FastAPI + WebSockets（Python），前端为 Vue 3 + Vite + Tailwind（TypeScript/Vue）。
 
@@ -20,14 +20,14 @@
 
 | 目录 | 文件数 | 符号数 | 被依赖 | 依赖外部 |
 |---|---|---|---|---|
-| `stage_one/backend/` | 25 | 326 | 137 | 138 |
+| `stage_one/backend/` | 25 | 327 | 137 | 138 |
 | `stage_one/backend/assets/` | 1 | 1 | 0 | 0 |
 | `stage_one/backend/strategy_core/` | 6 | 91 | 1 | 0 |
 | `stage_one/frontend/` | 3 | 0 | 0 | 0 |
 | `stage_one/frontend/src/` | 2 | 48 | 1 | 61 |
 | `stage_one/frontend/src/components/` | 4 | 41 | 3 | 7 |
-| `stage_one/frontend/src/composables/` | 8 | 136 | 45 | 32 |
-| `stage_one/frontend/src/utils/` | 6 | 59 | 59 | 8 |
+| `stage_one/frontend/src/composables/` | 8 | 136 | 45 | 35 |
+| `stage_one/frontend/src/utils/` | 6 | 61 | 62 | 8 |
 
 ## 3. 核心枢纽
 
@@ -43,10 +43,10 @@
 | `validate_klines` | `stage_one/backend/data_provider.py:L86-L116` | 8 | `def validate_klines(df: "pd.DataFrame", period: str) -> bool` |
 | `_get_connection` | `stage_one/backend/db_cache.py:L68-L80` | 8 | `def _get_connection() -> sqlite3.Connection` |
 | `broadcast` | `stage_one/backend/main.py:L768-L773` | 8 | `async def broadcast(self, data: dict)` |
+| `marketOf` | `stage_one/frontend/src/utils/symbols.ts:L43-L70` | 8 | `function marketOf(sym: string): Market \| null` |
 | `_post` | `stage_one/backend/control_client.py:L58-L64` | 7 | `def _post(path: str, payload: Optional[Dict[str, Any]] = None, err_prefix: str = "请求失败"...` |
 | `resample_to_period` | `stage_one/backend/data_provider.py:L193-L218` | 7 | `def resample_to_period(df: pd.DataFrame, rule: str) -> pd.DataFrame` |
 | `get_market_cfg` | `stage_one/backend/quote_config.py:L65-L67` | 7 | `def get_market_cfg(market: Optional[str]) -> dict` |
-| `marketOf` | `stage_one/frontend/src/utils/symbols.ts:L43-L70` | 7 | `function marketOf(sym: string): Market \| null` |
 | `strip_prefix` | `stage_one/backend/symbols.py:L123-L129` | 6 | `def strip_prefix(symbol: str) -> str` |
 | `median_bar_range` | `stage_one/backend/strategy_core/pa_engine.py:L84-L93` | 6 | `def median_bar_range(df: pd.DataFrame, n: int = 14) -> float` |
 | `loadKlineData` | `stage_one/frontend/src/composables/useChartViewport.ts:L697-L798` | 6 | `loadKlineData = async (targetSymbol: string, targetPeriod: Period)` |
@@ -79,8 +79,8 @@
 - **stage_one/frontend/src/composables/useChartCore.ts** → `stage_one/frontend/src/utils/chartUtils.ts` (calls, imports)
 - **stage_one/frontend/src/composables/useChartIndicators.ts** → `stage_one/frontend/src/composables/useChartAnnotations.ts` (imports), `stage_one/frontend/src/utils/api.ts` (imports)
 - **stage_one/frontend/src/composables/useChartViewport.ts** → `stage_one/frontend/src/composables/useChartAnnotations.ts` (imports), `stage_one/frontend/src/composables/useChartIndicators.ts` (calls ×2), `stage_one/frontend/src/utils/api.ts` (calls, imports), `stage_one/frontend/src/utils/mockEngine.ts` (calls, imports), `stage_one/frontend/src/utils/srUtils.ts` (calls, imports), `stage_one/frontend/src/utils/symbols.ts` (calls)
-- **stage_one/frontend/src/composables/useLiveQuoteSync.ts** → `stage_one/frontend/src/composables/useChartAnnotations.ts` (imports), `stage_one/frontend/src/composables/useChartViewport.ts` (calls), `stage_one/frontend/src/composables/useWatchlist.ts` (calls ×2, imports), `stage_one/frontend/src/utils/api.ts` (calls, imports), `stage_one/frontend/src/utils/quote.ts` (imports), `stage_one/frontend/src/utils/symbols.ts` (calls)
-- **stage_one/frontend/src/composables/useWatchlist.ts** → `stage_one/frontend/src/utils/api.ts` (calls ×2, imports), `stage_one/frontend/src/utils/quote.ts` (imports), `stage_one/frontend/src/utils/symbols.ts` (calls ×5)
+- **stage_one/frontend/src/composables/useLiveQuoteSync.ts** → `stage_one/frontend/src/composables/useChartAnnotations.ts` (imports), `stage_one/frontend/src/composables/useChartViewport.ts` (calls), `stage_one/frontend/src/composables/useWatchlist.ts` (calls ×2, imports), `stage_one/frontend/src/utils/api.ts` (calls, imports), `stage_one/frontend/src/utils/quote.ts` (calls, imports), `stage_one/frontend/src/utils/symbols.ts` (calls)
+- **stage_one/frontend/src/composables/useWatchlist.ts** → `stage_one/frontend/src/utils/api.ts` (calls ×2, imports), `stage_one/frontend/src/utils/quote.ts` (calls, imports), `stage_one/frontend/src/utils/symbols.ts` (calls ×6)
 - **stage_one/frontend/src/main.ts** → `stage_one/frontend/src/App.vue` (imports)
 - **stage_one/frontend/src/utils/api.ts** → `stage_one/frontend/src/utils/mockEngine.ts` (calls ×2, imports)
 - **stage_one/frontend/src/utils/quote.ts** → `stage_one/frontend/src/utils/api.ts` (imports), `stage_one/frontend/src/utils/symbols.ts` (calls ×3)

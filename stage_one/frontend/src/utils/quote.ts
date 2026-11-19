@@ -16,6 +16,37 @@ export function toCanonSym(s: string): string {
   return n.replace(/^(US|SH|SZ|HK)/i, (m) => m.toLowerCase());
 }
 
+export type USExtendedSessionLabel = '夜盘' | '盘前' | '盘后' | '';
+
+/**
+ * 根据当前美东时间 (America/New_York) 判定美股所处的扩展交易时段
+ * 返回 '' 表示正处于常规盘中 (09:30 - 16:00 ET)
+ */
+export function getCurrentUSExtendedSession(now: Date = new Date()): USExtendedSessionLabel {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(now);
+
+  const weekday = parts.find((p) => p.type === 'weekday')?.value || '';
+  const hour = parseInt(parts.find((p) => p.type === 'hour')?.value || '0', 10);
+  const minute = parseInt(parts.find((p) => p.type === 'minute')?.value || '0', 10);
+  const mins = hour * 60 + minute;
+
+  if (weekday === 'Sat') return '盘后';
+  if (weekday === 'Sun') return mins >= 20 * 60 ? '夜盘' : '盘后';
+  if (weekday === 'Fri' && mins >= 20 * 60) return '盘后';
+
+  if (mins < 4 * 60) return '夜盘';
+  if (mins < 9 * 60 + 30) return '盘前';
+  if (mins < 16 * 60) return '';
+  if (mins < 20 * 60) return '盘后';
+  return '夜盘';
+}
+
 export interface Quote {
   symbol: string;
   name: string;
@@ -337,14 +368,9 @@ class QuoteEngine {
   }
 
   private detectUSSession(): USSession {
-    const now = new Date();
-    const etStr = now.toLocaleString('en-US', { timeZone: 'America/New_York' });
-    const et = new Date(etStr);
-    const day = et.getDay();
-    const mins = et.getHours() * 60 + et.getMinutes();
-    if (day === 0 || day === 6) return 'post';
-    if (mins < 9 * 60 + 30) return 'pre';
-    if (mins < 16 * 60) return 'regular';
+    const label = getCurrentUSExtendedSession();
+    if (label === '盘前' || label === '夜盘') return 'pre';
+    if (label === '') return 'regular';
     return 'post';
   }
 
@@ -472,6 +498,12 @@ class QuoteEngine {
       for (const r of (data.quotes as any[] || [])) {
         const raw = r.symbol || '';
         const canon = toCanonSym(raw) || raw;
+        const rawExtPrice = r.extended_price ?? null;
+        // 优先采信后端返回标签；兼容旧缓存或缺省时用前端美东时段兜底
+        const resolvedExtLabel = rawExtPrice
+          ? (typeof r.extended_label === 'string' ? r.extended_label : getCurrentUSExtendedSession())
+          : '';
+
         const q: Quote = {
           symbol: canon,
           name: r.name,
@@ -487,8 +519,8 @@ class QuoteEngine {
           delayLabel: r.delay_label ?? '',
           status: (r.status as QuoteStatus) || 'empty',
           message: r.message,
-          extendedPrice: r.extended_price ?? null,
-          extendedLabel: r.extended_price ? '盘后' : '',
+          extendedPrice: resolvedExtLabel ? rawExtPrice : null,
+          extendedLabel: resolvedExtLabel,
         };
         map.set(raw, q);
         map.set(canon, q);

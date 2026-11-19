@@ -1,7 +1,7 @@
 import { ref, computed, nextTick, onUnmounted, type Ref } from 'vue';
 import type { IChartApi } from 'lightweight-charts';
 import { getKLines, marketOf, type KLinePoint, type Period } from '../utils/api';
-import { quoteEngine, type Quote, type SymbolMeta, type QuoteConfig } from '../utils/quote';
+import { quoteEngine, getCurrentUSExtendedSession, type Quote, type SymbolMeta, type QuoteConfig } from '../utils/quote';
 import { toChartTime } from './useChartAnnotations';
 import { canonSym } from './useWatchlist';
 
@@ -91,13 +91,27 @@ export function useLiveQuoteSync(options: {
   const displayExtendedInfo = computed(() => {
     if (!currentSymbol.value) return null;
     const sym = currentSymbol.value;
+    if (marketOf(sym) !== 'us') return null;
+
     const c = canonSym(sym) || sym;
     const q = liveQuoteMap.value[c] || liveQuoteMap.value[sym] || quoteEngine.getQuote(c);
-    if (!q || !q.extendedPrice || !q.prevClose || q.prevClose <= 0) return null;
-    if (q.price != null && Math.abs(q.extendedPrice - q.price) < 0.01) return null;
-    const chgPct = ((q.extendedPrice - q.prevClose) / q.prevClose) * 100;
+    if (!q || !q.extendedPrice || q.extendedPrice <= 0) return null;
+
+    const label = q.extendedLabel || getCurrentUSExtendedSession();
+    if (!label) return null; // 常规盘中 (09:30-16:00 ET) 不显示
+
+    // 盘前相对昨收(prevClose)计算涨跌；盘后/夜盘相对当日正常收盘价(q.price)计算涨跌
+    const basePrice =
+      label === '盘前'
+        ? (q.prevClose && q.prevClose > 0 ? q.prevClose : q.price)
+        : (q.price && q.price > 0 ? q.price : q.prevClose);
+
+    if (!basePrice || basePrice <= 0) return null;
+    if (Math.abs(q.extendedPrice - basePrice) < 0.01 && label === '盘后') return null;
+
+    const chgPct = ((q.extendedPrice - basePrice) / basePrice) * 100;
     return {
-      label: q.extendedLabel || '盘后',
+      label,
       price: q.extendedPrice,
       changePct: chgPct,
     };
