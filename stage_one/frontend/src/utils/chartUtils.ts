@@ -75,6 +75,13 @@ export const getChartOptions = (isDark: boolean = false): DeepPartial<ChartOptio
     timeScale: {
       borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#e2e8f0',
       timeVisible: true,
+      rightOffset: 12,
+      barSpacing: 8,
+      minBarSpacing: 3,
+      // 关键：当用户正在查看历史数据（未停留在最右侧）时，新 K 线到达不强制右移视口
+      shiftVisibleRangeOnNewBar: false,
+      // 窗口/侧边栏调整大小时，保持右侧锚定而非重置历史位置
+      rightBarStaysOnScroll: true,
     },
     // 显式开启鼠标滚轮缩放 / 触控板捏合缩放 / 拖拽平移
     handleScale: {

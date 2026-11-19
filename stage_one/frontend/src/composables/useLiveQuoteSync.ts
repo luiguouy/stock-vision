@@ -1,4 +1,4 @@
-import { ref, computed, nextTick, triggerRef, onUnmounted, type Ref } from 'vue';
+import { ref, computed, nextTick, onUnmounted, type Ref } from 'vue';
 import type { IChartApi } from 'lightweight-charts';
 import { getKLines, marketOf, type KLinePoint, type Period } from '../utils/api';
 import { quoteEngine, type Quote, type SymbolMeta, type QuoteConfig } from '../utils/quote';
@@ -44,6 +44,8 @@ export function useLiveQuoteSync(options: {
   setSuppressRangeEvents: (v: boolean) => void;
   onCacheUpdate: (sym: string, period: Period, data: KLinePoint[]) => void;
   onIndicatorsUpdate: (data: KLinePoint[]) => void;
+  onPatchTailBar?: (updatedBar: KLinePoint, isNewBar: boolean) => void;
+  onSetKlineDataSilently?: (freshData: KLinePoint[], preserveRange?: { from: number; to: number } | null) => void;
 }) {
   const {
     currentSymbol,
@@ -57,6 +59,8 @@ export function useLiveQuoteSync(options: {
     setSuppressRangeEvents,
     onCacheUpdate,
     onIndicatorsUpdate,
+    onPatchTailBar,
+    onSetKlineDataSilently,
   } = options;
 
   const quoteConfig = ref<QuoteConfig | null>(quoteEngine.config);
@@ -130,13 +134,17 @@ export function useLiveQuoteSync(options: {
 
       const chart = getChartInstance();
       const prevRange = chart?.timeScale().getVisibleLogicalRange();
-      klineData.value = freshData;
-      if (prevRange && chart) {
-        nextTick(() => {
-          setSuppressRangeEvents(true);
-          chart.timeScale().setVisibleLogicalRange(prevRange);
-          setSuppressRangeEvents(false);
-        });
+      if (onSetKlineDataSilently) {
+        onSetKlineDataSilently(freshData, prevRange || null);
+      } else {
+        klineData.value = freshData;
+        if (prevRange && chart) {
+          nextTick(() => {
+            setSuppressRangeEvents(true);
+            chart.timeScale().setVisibleLogicalRange(prevRange);
+            setSuppressRangeEvents(false);
+          });
+        }
       }
     } catch {
       // 静默忽略
@@ -164,8 +172,6 @@ export function useLiveQuoteSync(options: {
         high: Math.max(lastBar.high, activePrice, currentPeriod.value === '1d' && q.high ? q.high : activePrice),
         low: Math.min(lastBar.low, activePrice, currentPeriod.value === '1d' && q.low ? q.low : activePrice),
       };
-      arr[arr.length - 1] = updatedBar;
-      triggerRef(klineData);
       series.update({
         time: toChartTime(updatedBar.time),
         open: updatedBar.open,
@@ -173,9 +179,14 @@ export function useLiveQuoteSync(options: {
         low: updatedBar.low,
         close: updatedBar.close,
       });
-      try {
-        onIndicatorsUpdate(klineData.value);
-      } catch {}
+      if (onPatchTailBar) {
+        onPatchTailBar(updatedBar, false);
+      } else {
+        arr[arr.length - 1] = updatedBar;
+        try {
+          onIndicatorsUpdate(klineData.value);
+        } catch {}
+      }
     } else if (bucketTime > lastBar.time) {
       const openPrice = currentPeriod.value === '1d' && q.open ? q.open : activePrice;
       const newBar: KLinePoint = {
@@ -186,8 +197,6 @@ export function useLiveQuoteSync(options: {
         close: activePrice,
         volume: 0,
       };
-      arr.push(newBar);
-      triggerRef(klineData);
       series.update({
         time: toChartTime(newBar.time),
         open: newBar.open,
@@ -195,9 +204,14 @@ export function useLiveQuoteSync(options: {
         low: newBar.low,
         close: newBar.close,
       });
-      try {
-        onIndicatorsUpdate(klineData.value);
-      } catch {}
+      if (onPatchTailBar) {
+        onPatchTailBar(newBar, true);
+      } else {
+        arr.push(newBar);
+        try {
+          onIndicatorsUpdate(klineData.value);
+        } catch {}
+      }
       if (tailSyncTimer) {
         clearTimeout(tailSyncTimer);
         tailSyncTimer = null;

@@ -141,6 +141,8 @@ export function useChartViewport(options: {
 
   const zoomMemoryByPeriod = new Map<Period, { fromFrac: number; toFrac: number }>();
   let suppressRangeEvents = false;
+  let isTailPatching = false;
+  let pendingPreserveRange: { from: number; to: number } | null = null;
   interface SRPriceLineItem {
     price: number;
     type: 'support' | 'resistance';
@@ -795,7 +797,33 @@ export function useChartViewport(options: {
     }
   };
 
+  const patchTailBar = (updatedBar: KLinePoint, isNewBar: boolean) => {
+    const arr = klineData.value;
+    if (!arr.length) return;
+    isTailPatching = true;
+    try {
+      if (isNewBar) {
+        arr.push(updatedBar);
+      } else {
+        arr[arr.length - 1] = updatedBar;
+      }
+      // 仅更新指标线与缓存，绝不触发 candleSeries.setData() 和视口重置
+      updateIndicators(arr);
+      updateCache(currentSymbol.value, currentPeriod.value, arr);
+    } finally {
+      isTailPatching = false;
+    }
+  };
+
+  const setKlineDataSilently = (freshData: KLinePoint[], preserveRange?: { from: number; to: number } | null) => {
+    if (preserveRange) {
+      pendingPreserveRange = preserveRange;
+    }
+    klineData.value = freshData;
+  };
+
   watch(klineData, (newData) => {
+    if (isTailPatching) return;
     const candleSeries = getCandlestickSeries();
     const volSeries = getVolumeSeries();
     const chart = getChartInstance();
@@ -855,24 +883,31 @@ export function useChartViewport(options: {
 
       updateIndicators(clean);
 
-      const n = clean.length;
-      const mem = zoomMemoryByPeriod.get(currentPeriod.value);
-      if (mem && n > 10) {
-        const from = Math.max(0, Math.min(n, mem.fromFrac * n));
-        const to = Math.max(0, Math.min(n, mem.toFrac * n));
-        if (to - from >= 1) {
+      if (pendingPreserveRange) {
+        suppressRangeEvents = true;
+        chart?.timeScale().setVisibleLogicalRange(pendingPreserveRange);
+        suppressRangeEvents = false;
+        pendingPreserveRange = null;
+      } else {
+        const n = clean.length;
+        const mem = zoomMemoryByPeriod.get(currentPeriod.value);
+        if (mem && n > 10) {
+          const from = Math.max(-50, mem.fromFrac * n);
+          const to = Math.min(n + 50, mem.toFrac * n);
+          if (to - from >= 1) {
+            suppressRangeEvents = true;
+            chart?.timeScale().setVisibleLogicalRange({ from, to });
+            suppressRangeEvents = false;
+          } else {
+            chart?.timeScale().fitContent();
+          }
+        } else if (n > 140) {
           suppressRangeEvents = true;
-          chart?.timeScale().setVisibleLogicalRange({ from, to });
+          chart?.timeScale().setVisibleLogicalRange({ from: n - 140, to: n + 12 });
           suppressRangeEvents = false;
         } else {
           chart?.timeScale().fitContent();
         }
-      } else if (n > 140) {
-        suppressRangeEvents = true;
-        chart?.timeScale().setVisibleLogicalRange({ from: n - 140, to: n + 12 });
-        suppressRangeEvents = false;
-      } else {
-        chart?.timeScale().fitContent();
       }
     } catch (err) {
       console.error('Error rendering chart data:', err);
@@ -917,5 +952,7 @@ export function useChartViewport(options: {
     scrollToSRLevel,
     renderSRLevels,
     loadKlineData,
+    patchTailBar,
+    setKlineDataSilently,
   };
 }

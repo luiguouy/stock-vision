@@ -2,7 +2,7 @@
 
 > 本文件由 graft 结构层自动导出，是对代码库的**索引**，不是实现说明。
 > 每条记录都带 `文件:行号`，用于精确定位；这里**不含函数体**，需要实现细节时应另行取源码。
-> 生成时间：2026-11-19 20:35
+> 生成时间：2026-11-19 20:55
 
 ## 1. 概览
 
@@ -10,9 +10,9 @@
 |---|---|
 | 源文件 | 55 |
 | 语言 | javascript, python, typescript, vue |
-| 符号总数 | 700（不含 55 个文件节点） |
-| 符号构成 | function 427 / method 193 / file 55 / class 41 / interface 30 / type 9 |
-| 依赖边 | 245（跨文件调用、导入、继承） |
+| 符号总数 | 702（不含 55 个文件节点） |
+| 符号构成 | function 429 / method 193 / file 55 / class 41 / interface 30 / type 9 |
+| 依赖边 | 246（跨文件调用、导入、继承） |
 
 后端为 FastAPI + WebSockets（Python），前端为 Vue 3 + Vite + Tailwind（TypeScript/Vue）。
 
@@ -26,7 +26,7 @@
 | `stage_one/frontend/` | 3 | 0 | 0 | 0 |
 | `stage_one/frontend/src/` | 2 | 48 | 1 | 61 |
 | `stage_one/frontend/src/components/` | 4 | 41 | 3 | 7 |
-| `stage_one/frontend/src/composables/` | 8 | 134 | 44 | 31 |
+| `stage_one/frontend/src/composables/` | 8 | 136 | 45 | 32 |
 | `stage_one/frontend/src/utils/` | 6 | 59 | 59 | 8 |
 
 ## 3. 核心枢纽
@@ -49,7 +49,7 @@
 | `marketOf` | `stage_one/frontend/src/utils/symbols.ts:L43-L70` | 7 | `function marketOf(sym: string): Market \| null` |
 | `strip_prefix` | `stage_one/backend/symbols.py:L123-L129` | 6 | `def strip_prefix(symbol: str) -> str` |
 | `median_bar_range` | `stage_one/backend/strategy_core/pa_engine.py:L84-L93` | 6 | `def median_bar_range(df: pd.DataFrame, n: int = 14) -> float` |
-| `loadKlineData` | `stage_one/frontend/src/composables/useChartViewport.ts:L695-L796` | 6 | `loadKlineData = async (targetSymbol: string, targetPeriod: Period)` |
+| `loadKlineData` | `stage_one/frontend/src/composables/useChartViewport.ts:L697-L798` | 6 | `loadKlineData = async (targetSymbol: string, targetPeriod: Period)` |
 
 ## 4. 文件级依赖
 
@@ -78,7 +78,7 @@
 - **stage_one/frontend/src/components/StrategyPanel.vue** → `stage_one/frontend/src/utils/api.ts` (imports), `stage_one/frontend/src/utils/srUtils.ts` (calls, imports)
 - **stage_one/frontend/src/composables/useChartCore.ts** → `stage_one/frontend/src/utils/chartUtils.ts` (calls, imports)
 - **stage_one/frontend/src/composables/useChartIndicators.ts** → `stage_one/frontend/src/composables/useChartAnnotations.ts` (imports), `stage_one/frontend/src/utils/api.ts` (imports)
-- **stage_one/frontend/src/composables/useChartViewport.ts** → `stage_one/frontend/src/composables/useChartAnnotations.ts` (imports), `stage_one/frontend/src/composables/useChartIndicators.ts` (calls), `stage_one/frontend/src/utils/api.ts` (calls, imports), `stage_one/frontend/src/utils/mockEngine.ts` (calls, imports), `stage_one/frontend/src/utils/srUtils.ts` (calls, imports), `stage_one/frontend/src/utils/symbols.ts` (calls)
+- **stage_one/frontend/src/composables/useChartViewport.ts** → `stage_one/frontend/src/composables/useChartAnnotations.ts` (imports), `stage_one/frontend/src/composables/useChartIndicators.ts` (calls ×2), `stage_one/frontend/src/utils/api.ts` (calls, imports), `stage_one/frontend/src/utils/mockEngine.ts` (calls, imports), `stage_one/frontend/src/utils/srUtils.ts` (calls, imports), `stage_one/frontend/src/utils/symbols.ts` (calls)
 - **stage_one/frontend/src/composables/useLiveQuoteSync.ts** → `stage_one/frontend/src/composables/useChartAnnotations.ts` (imports), `stage_one/frontend/src/composables/useChartViewport.ts` (calls), `stage_one/frontend/src/composables/useWatchlist.ts` (calls ×2, imports), `stage_one/frontend/src/utils/api.ts` (calls, imports), `stage_one/frontend/src/utils/quote.ts` (imports), `stage_one/frontend/src/utils/symbols.ts` (calls)
 - **stage_one/frontend/src/composables/useWatchlist.ts** → `stage_one/frontend/src/utils/api.ts` (calls ×2, imports), `stage_one/frontend/src/utils/quote.ts` (imports), `stage_one/frontend/src/utils/symbols.ts` (calls ×5)
 - **stage_one/frontend/src/main.ts** → `stage_one/frontend/src/App.vue` (imports)
@@ -733,53 +733,53 @@
 共 48 个符号 · 被依赖 1 · 依赖外部 60
 
 -   `value` · method · L844-L844 — `get value()`
--   `selectWatchlist` · function · L864-L872 — `selectWatchlist = (sym: string)`
--   `navBack` · function · L909-L915 — `navBack = ()`
--   `navForward` · function · L917-L923 — `navForward = ()`
--   `refreshCurrent` · function · L925-L929 — `refreshCurrent = ()`
--   `selectSuggestion` · function · L931-L934 — `selectSuggestion = (symbol: string)`
--   `resolveSymbol` · function · L936-L945 — `async function resolveSymbol(raw: string): Promise<string>`
--   `handleSearch` · function · L947-L953 — `handleSearch = async ()`
--   `changePeriod` · function · L955-L968 — `changePeriod = (period: Period)`
--   `detectBackend` · function · L973-L994 — `async function detectBackend(): Promise<boolean>`
--   `retryConnection` · function · L996-L1005 — `async function retryConnection()`
--   `handleRunStrategy` · function · L1008-L1052 — `handleRunStrategy = async (mode: string = 'swing', isManual: boolean = false)`
--   `handleClearStrategy` · function · L1054-L1066 — `handleClearStrategy = ()`
--   `onOpenChart` · method · L1070-L1077 — `onOpenChart(symbol, period)`
--   `onAddMarkers` · method · L1078-L1081 — `onAddMarkers(markers, sym)`
--   `onDrawLines` · method · L1082-L1085 — `onDrawLines(lines, sym)`
--   `onDrawBoxes` · method · L1086-L1089 — `onDrawBoxes(boxes, sym)`
--   `onDrawChannelLines` · method · L1090-L1093 — `onDrawChannelLines(channelLines, sym)`
--   `onDrawWaveLines` · method · L1094-L1097 — `onDrawWaveLines(waveLines, sym)`
--   `onDrawTimeLines` · method · L1098-L1101 — `onDrawTimeLines(timeLines, sym)`
--   `onDrawFibLines` · method · L1102-L1105 — `onDrawFibLines(fibLines, sym)`
--   `onDrawGapBoxes` · method · L1106-L1109 — `onDrawGapBoxes(gapBoxes, sym)`
--   `onDrawEma200` · method · L1110-L1113 — `onDrawEma200(ema200Data, sym)`
--   `onClearAnnotations` · method · L1114-L1126 — `onClearAnnotations(kind, sym)`
--   `onCaptureChart` · method · L1128-L1137 — `onCaptureChart()`
--   `toChartTime` · function · L1141-L1141 — `toChartTime = (timeStr: any): any`
--   `applyChartTheme` · function · L1143-L1163 — `applyChartTheme = (isDark: boolean)`
--   `toggleDarkMode` · function · L1165-L1170 — `toggleDarkMode = ()`
--   `initDarkMode` · function · L1172-L1177 — `initDarkMode = ()`
--   `triggerCreateGroup` · function · L1192-L1196 — `triggerCreateGroup = ()`
--   `triggerManageGroups` · function · L1198-L1201 — `triggerManageGroups = ()`
--   `handleCreateGroupSubmit` · function · L1203-L1207 — `handleCreateGroupSubmit = ()`
--   `confirmRename` · function · L1209-L1213 — `confirmRename = (id: string)`
--   `handleModalSearchInput` · function · L1216-L1234 — `handleModalSearchInput = ()`
--   `handleModalSearchSelect` · function · L1236-L1242 — `handleModalSearchSelect = (sym: string)`
--   `toggleLeftSidebar` · function · L1248-L1256 — `toggleLeftSidebar = ()`
--   `toggleRightSidebar` · function · L1258-L1266 — `toggleRightSidebar = ()`
--   `syncChartSize` · function · L1273-L1277 — `syncChartSize = ()`
--   `createColumnResizer` · function · L1279-L1316 — `createColumnResizer = (getStartWidth: () => number, setWidth: (w: number) => void, sign: 1 | -1)`
--   `handleMouseMove` · function · L1289-L1300 — `handleMouseMove = (moveEvent: MouseEvent)`
--   `cleanup` · function · L1302-L1311 — `cleanup = ()`
--   `formatVolumeNum` · function · L1339-L1344 — `formatVolumeNum = (vol: number): string`
--   `findPrevClose` · function · L1346-L1357 — `findPrevClose = (time: any): number | null`
--   `formatDate` · function · L1359-L1368 — `formatDate = (input: Date | string): string`
--   `updateTooltipPosition` · function · L1370-L1377 — `updateTooltipPosition = (relX: number)`
--   `initChart` · function · L1380-L1424 — `initChart = ()`
--   `handleClickOutside` · function · L1448-L1451 — `handleClickOutside = (e: MouseEvent)`
--   `handleGlobalKeydown` · function · L1464-L1519 — `handleGlobalKeydown = (e: KeyboardEvent)`
+-   `selectWatchlist` · function · L866-L874 — `selectWatchlist = (sym: string)`
+-   `navBack` · function · L911-L917 — `navBack = ()`
+-   `navForward` · function · L919-L925 — `navForward = ()`
+-   `refreshCurrent` · function · L927-L931 — `refreshCurrent = ()`
+-   `selectSuggestion` · function · L933-L936 — `selectSuggestion = (symbol: string)`
+-   `resolveSymbol` · function · L938-L947 — `async function resolveSymbol(raw: string): Promise<string>`
+-   `handleSearch` · function · L949-L955 — `handleSearch = async ()`
+-   `changePeriod` · function · L957-L970 — `changePeriod = (period: Period)`
+-   `detectBackend` · function · L975-L996 — `async function detectBackend(): Promise<boolean>`
+-   `retryConnection` · function · L998-L1007 — `async function retryConnection()`
+-   `handleRunStrategy` · function · L1010-L1054 — `handleRunStrategy = async (mode: string = 'swing', isManual: boolean = false)`
+-   `handleClearStrategy` · function · L1056-L1068 — `handleClearStrategy = ()`
+-   `onOpenChart` · method · L1072-L1079 — `onOpenChart(symbol, period)`
+-   `onAddMarkers` · method · L1080-L1083 — `onAddMarkers(markers, sym)`
+-   `onDrawLines` · method · L1084-L1087 — `onDrawLines(lines, sym)`
+-   `onDrawBoxes` · method · L1088-L1091 — `onDrawBoxes(boxes, sym)`
+-   `onDrawChannelLines` · method · L1092-L1095 — `onDrawChannelLines(channelLines, sym)`
+-   `onDrawWaveLines` · method · L1096-L1099 — `onDrawWaveLines(waveLines, sym)`
+-   `onDrawTimeLines` · method · L1100-L1103 — `onDrawTimeLines(timeLines, sym)`
+-   `onDrawFibLines` · method · L1104-L1107 — `onDrawFibLines(fibLines, sym)`
+-   `onDrawGapBoxes` · method · L1108-L1111 — `onDrawGapBoxes(gapBoxes, sym)`
+-   `onDrawEma200` · method · L1112-L1115 — `onDrawEma200(ema200Data, sym)`
+-   `onClearAnnotations` · method · L1116-L1128 — `onClearAnnotations(kind, sym)`
+-   `onCaptureChart` · method · L1130-L1139 — `onCaptureChart()`
+-   `toChartTime` · function · L1143-L1143 — `toChartTime = (timeStr: any): any`
+-   `applyChartTheme` · function · L1145-L1165 — `applyChartTheme = (isDark: boolean)`
+-   `toggleDarkMode` · function · L1167-L1172 — `toggleDarkMode = ()`
+-   `initDarkMode` · function · L1174-L1179 — `initDarkMode = ()`
+-   `triggerCreateGroup` · function · L1194-L1198 — `triggerCreateGroup = ()`
+-   `triggerManageGroups` · function · L1200-L1203 — `triggerManageGroups = ()`
+-   `handleCreateGroupSubmit` · function · L1205-L1209 — `handleCreateGroupSubmit = ()`
+-   `confirmRename` · function · L1211-L1215 — `confirmRename = (id: string)`
+-   `handleModalSearchInput` · function · L1218-L1236 — `handleModalSearchInput = ()`
+-   `handleModalSearchSelect` · function · L1238-L1244 — `handleModalSearchSelect = (sym: string)`
+-   `toggleLeftSidebar` · function · L1250-L1258 — `toggleLeftSidebar = ()`
+-   `toggleRightSidebar` · function · L1260-L1268 — `toggleRightSidebar = ()`
+-   `syncChartSize` · function · L1275-L1279 — `syncChartSize = ()`
+-   `createColumnResizer` · function · L1281-L1318 — `createColumnResizer = (getStartWidth: () => number, setWidth: (w: number) => void, sign: 1 | -1)`
+-   `handleMouseMove` · function · L1291-L1302 — `handleMouseMove = (moveEvent: MouseEvent)`
+-   `cleanup` · function · L1304-L1313 — `cleanup = ()`
+-   `formatVolumeNum` · function · L1341-L1346 — `formatVolumeNum = (vol: number): string`
+-   `findPrevClose` · function · L1348-L1359 — `findPrevClose = (time: any): number | null`
+-   `formatDate` · function · L1361-L1370 — `formatDate = (input: Date | string): string`
+-   `updateTooltipPosition` · function · L1372-L1379 — `updateTooltipPosition = (relX: number)`
+-   `initChart` · function · L1382-L1426 — `initChart = ()`
+-   `handleClickOutside` · function · L1450-L1453 — `handleClickOutside = (e: MouseEvent)`
+-   `handleGlobalKeydown` · function · L1466-L1521 — `handleGlobalKeydown = (e: KeyboardEvent)`
 
 ### stage_one/frontend/src/components/DateRangePicker.vue
 
@@ -911,7 +911,7 @@
 
 ### stage_one/frontend/src/composables/useChartIndicators.ts
 
-共 5 个符号 · 被依赖 5 · 依赖外部 2
+共 5 个符号 · 被依赖 6 · 依赖外部 2
 
 - + `useChartIndicators` · function · L6-L149 — `function useChartIndicators()`
 - + `calcEMA` · function · L19-L27 — `function calcEMA(data: KLinePoint[], span: number)`
@@ -921,42 +921,44 @@
 
 ### stage_one/frontend/src/composables/useChartViewport.ts
 
-共 20 个符号 · 被依赖 11 · 依赖外部 9
+共 22 个符号 · 被依赖 11 · 依赖外部 10
 
 - + `generateFutureWhitespace` · function · L18-L83 — `function generateFutureWhitespace( lastTimeStr: string, period: Period, symbol: string, count: number = 24 ): { time: any }[]`
 -   `toLocalDateStr` · function · L85-L90 — `toLocalDateStr = (d: Date): string`
-- + `useChartViewport` · function · L92-L921 — `function useChartViewport(options: { isDarkMode: Ref<boolean>; currentSymbol: Ref<string>; currentPeriod: Ref<Period>; getChartInstance: () => IChartApi | null; getCandlestickSeries: () => any; getVolumeSeries: () => any; getMarkersPlugin: () => any; clearChartAnnotations: () => void; updateIndicators: (data: KLinePoint[]) => void; onBeforeLoad: () => void; onLoadSuccess: () => void; onLoadError: () => void; })`
+- + `useChartViewport` · function · L92-L958 — `function useChartViewport(options: { isDarkMode: Ref<boolean>; currentSymbol: Ref<string>; currentPeriod: Ref<Period>; getChartInstance: () => IChartApi | null; getCandlestickSeries: () => any; getVolumeSeries: () => any; getMarkersPlugin: () => any; clearChartAnnotations: () => void; updateIndicators: (data: KLinePoint[]) => void; onBeforeLoad: () => void; onLoadSuccess: () => void; onLoadError: () => void; })`
 - + `cacheKey` · function · L124-L124 — `cacheKey = (symbol: string, period: Period)`
 - + `getFromCache` · function · L126-L132 — `getFromCache = (key: string): KLinePoint[] | undefined`
-- + `SRPriceLineItem` · interface · L144-L149 — `interface SRPriceLineItem`
-- + `setSuppressRangeEvents` · function · L173-L175 — `setSuppressRangeEvents = (v: boolean)`
-- + `updateCache` · function · L177-L188 — `updateCache = (sym: string, period: Period, data: KLinePoint[])`
-- + `stopFlashing` · function · L190-L210 — `stopFlashing = ()`
-- + `clearOverlays` · function · L212-L242 — `clearOverlays = ()`
-- + `animatePriceRange` · function · L244-L274 — `animatePriceRange = ( priceScale: any, startFrom: number, startTo: number, targetFrom: number, targetTo: number, duration = 240 )`
-- + `step` · function · L257-L272 — `step = (now: number)`
-- + `onVisibleLogicalRangeChanged` · function · L276-L285 — `onVisibleLogicalRangeChanged = (range: any)`
-- + `setTimeRange` · function · L287-L347 — `setTimeRange = (range: string)`
-- + `selectTimeRange` · function · L349-L352 — `selectTimeRange = (range: string)`
-- + `highlightSRLevel` · function · L354-L399 — `highlightSRLevel = (idx: number, isHover: boolean, level?: SRLevel)`
-- + `scrollToSRLevel` · function · L401-L652 — `scrollToSRLevel = (level: SRLevel, idx?: number)`
-- + `animatePulse` · function · L493-L526 — `animatePulse = (now: number)`
-- + `renderSRLevels` · function · L654-L693 — `renderSRLevels = (levels?: SRLevel[], summary?: any)`
-- + `loadKlineData` · function · L695-L796 — `loadKlineData = async (targetSymbol: string, targetPeriod: Period)`
+- + `SRPriceLineItem` · interface · L146-L151 — `interface SRPriceLineItem`
+- + `setSuppressRangeEvents` · function · L175-L177 — `setSuppressRangeEvents = (v: boolean)`
+- + `updateCache` · function · L179-L190 — `updateCache = (sym: string, period: Period, data: KLinePoint[])`
+- + `stopFlashing` · function · L192-L212 — `stopFlashing = ()`
+- + `clearOverlays` · function · L214-L244 — `clearOverlays = ()`
+- + `animatePriceRange` · function · L246-L276 — `animatePriceRange = ( priceScale: any, startFrom: number, startTo: number, targetFrom: number, targetTo: number, duration = 240 )`
+- + `step` · function · L259-L274 — `step = (now: number)`
+- + `onVisibleLogicalRangeChanged` · function · L278-L287 — `onVisibleLogicalRangeChanged = (range: any)`
+- + `setTimeRange` · function · L289-L349 — `setTimeRange = (range: string)`
+- + `selectTimeRange` · function · L351-L354 — `selectTimeRange = (range: string)`
+- + `highlightSRLevel` · function · L356-L401 — `highlightSRLevel = (idx: number, isHover: boolean, level?: SRLevel)`
+- + `scrollToSRLevel` · function · L403-L654 — `scrollToSRLevel = (level: SRLevel, idx?: number)`
+- + `animatePulse` · function · L495-L528 — `animatePulse = (now: number)`
+- + `renderSRLevels` · function · L656-L695 — `renderSRLevels = (levels?: SRLevel[], summary?: any)`
+- + `loadKlineData` · function · L697-L798 — `loadKlineData = async (targetSymbol: string, targetPeriod: Period)`
+- + `patchTailBar` · function · L800-L816 — `patchTailBar = (updatedBar: KLinePoint, isNewBar: boolean)`
+- + `setKlineDataSilently` · function · L818-L823 — `setKlineDataSilently = (freshData: KLinePoint[], preserveRange?: { from: number; to: number } | null)`
 
 ### stage_one/frontend/src/composables/useLiveQuoteSync.ts
 
 共 9 个符号 · 被依赖 6 · 依赖外部 9
 
 - + `resolveBarBucketTime` · function · L8-L33 — `function resolveBarBucketTime(updateTime: string, period: Period, lastBarTime: string): string`
-- + `useLiveQuoteSync` · function · L35-L299 — `function useLiveQuoteSync(options: { currentSymbol: Ref<string>; currentPeriod: Ref<Period>; klineData: Ref<KLinePoint[]>; latestPrice: Ref<number | null>; latestChange: Ref<number>; watchlist: Ref<string[]>; getChartInstance: () => IChartApi | null; getCandlestickSeries: () => any; setSuppressRangeEvents: (v: boolean) => void; onCacheUpdate: (sym: string, period: Period, data: KLinePoint[]) => void; onIndicatorsUpdate: (data: KLinePoint[]) => void; })`
-- + `refreshEngineSymbols` · function · L114-L120 — `function refreshEngineSymbols()`
-- + `syncLatestBarsSilently` · function · L122-L146 — `async function syncLatestBarsSilently(sym: string, period: Period)`
-- + `applyLiveQuoteToChart` · function · L148-L210 — `function applyLiveQuoteToChart(q: Quote)`
-- + `startQuoteEngine` · function · L212-L236 — `async function startQuoteEngine()`
-- + `pauseQuoteEngine` · function · L238-L240 — `function pauseQuoteEngine()`
-- + `resumeQuoteEngine` · function · L243-L255 — `function resumeQuoteEngine()`
-- + `stopQuoteEngine` · function · L266-L269 — `function stopQuoteEngine()`
+- + `useLiveQuoteSync` · function · L35-L313 — `function useLiveQuoteSync(options: { currentSymbol: Ref<string>; currentPeriod: Ref<Period>; klineData: Ref<KLinePoint[]>; latestPrice: Ref<number | null>; latestChange: Ref<number>; watchlist: Ref<string[]>; getChartInstance: () => IChartApi | null; getCandlestickSeries: () => any; setSuppressRangeEvents: (v: boolean) => void; onCacheUpdate: (sym: string, period: Period, data: KLinePoint[]) => void; onIndicatorsUpdate: (data: KLinePoint[]) => void; onPatchTailBar?: (updatedBar: KLinePoint, isNewBar: boolean) => void; onSetKlineDataSilently?: (freshData: KLinePoint[], preserveRange?: { from: number; to: number } | null) => void; })`
+- + `refreshEngineSymbols` · function · L118-L124 — `function refreshEngineSymbols()`
+- + `syncLatestBarsSilently` · function · L126-L154 — `async function syncLatestBarsSilently(sym: string, period: Period)`
+- + `applyLiveQuoteToChart` · function · L156-L224 — `function applyLiveQuoteToChart(q: Quote)`
+- + `startQuoteEngine` · function · L226-L250 — `async function startQuoteEngine()`
+- + `pauseQuoteEngine` · function · L252-L254 — `function pauseQuoteEngine()`
+- + `resumeQuoteEngine` · function · L257-L269 — `function resumeQuoteEngine()`
+- + `stopQuoteEngine` · function · L280-L283 — `function stopQuoteEngine()`
 
 ### stage_one/frontend/src/composables/useSmartThrottling.ts
 
@@ -1042,7 +1044,7 @@
 
 共 1 个符号 · 被依赖 4 · 依赖外部 0
 
-- + `getChartOptions` · function · L4-L90 — `getChartOptions = (isDark: boolean = false): DeepPartial<ChartOptions>`
+- + `getChartOptions` · function · L4-L97 — `getChartOptions = (isDark: boolean = false): DeepPartial<ChartOptions>`
 
 ### stage_one/frontend/src/utils/mockEngine.ts
 

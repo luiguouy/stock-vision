@@ -847,6 +847,8 @@ const liveSync = useLiveQuoteSync({
   setSuppressRangeEvents: viewport.setSuppressRangeEvents,
   onCacheUpdate: viewport.updateCache,
   onIndicatorsUpdate: updateIndicators,
+  onPatchTailBar: viewport.patchTailBar,
+  onSetKlineDataSilently: viewport.setKlineDataSilently,
 });
 
 const {
