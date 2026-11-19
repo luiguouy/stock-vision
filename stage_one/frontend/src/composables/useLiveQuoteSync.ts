@@ -100,12 +100,9 @@ export function useLiveQuoteSync(options: {
     const label = q.extendedLabel || getCurrentUSExtendedSession();
     if (!label) return null; // 常规盘中 (09:30-16:00 ET) 不显示
 
-    // 盘前相对昨收(prevClose)计算涨跌；盘后/夜盘相对当日正常收盘价(q.price)计算涨跌
-    const basePrice =
-      label === '盘前'
-        ? (q.prevClose && q.prevClose > 0 ? q.prevClose : q.price)
-        : (q.price && q.price > 0 ? q.price : q.prevClose);
-
+    // 修正：腾讯/Yahoo接口中，盘前时段 q.price 已经是昨日正常盘收盘价，盘后/夜盘 q.price 是今日正常盘收盘价
+    // 因此所有扩展时段均统一以 q.price 为基准计算涨跌幅
+    const basePrice = q.price && q.price > 0 ? q.price : q.prevClose;
     if (!basePrice || basePrice <= 0) return null;
     if (Math.abs(q.extendedPrice - basePrice) < 0.01 && label === '盘后') return null;
 

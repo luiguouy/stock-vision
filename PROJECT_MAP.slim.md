@@ -2,7 +2,7 @@
 
 > 本文件由 graft 结构层自动导出，是对代码库的**索引**，不是实现说明。
 > 每条记录都带 `文件:行号`，用于精确定位；这里**不含函数体**，需要实现细节时应另行取源码。
-> 生成时间：2026-11-19 21:16
+> 生成时间：2026-11-19 21:25
 
 ## 1. 概览
 
@@ -10,8 +10,8 @@
 |---|---|
 | 源文件 | 55 |
 | 语言 | javascript, python, typescript, vue |
-| 符号总数 | 705（不含 55 个文件节点） |
-| 符号构成 | function 430 / method 194 / file 55 / class 41 / interface 30 / type 10 |
+| 符号总数 | 707（不含 55 个文件节点） |
+| 符号构成 | function 431 / method 195 / file 55 / class 41 / interface 30 / type 10 |
 | 依赖边 | 249（跨文件调用、导入、继承） |
 
 后端为 FastAPI + WebSockets（Python），前端为 Vue 3 + Vite + Tailwind（TypeScript/Vue）。
@@ -20,7 +20,7 @@
 
 | 目录 | 文件数 | 符号数 | 被依赖 | 依赖外部 |
 |---|---|---|---|---|
-| `stage_one/backend/` | 25 | 327 | 137 | 138 |
+| `stage_one/backend/` | 25 | 329 | 137 | 138 |
 | `stage_one/backend/assets/` | 1 | 1 | 0 | 0 |
 | `stage_one/backend/strategy_core/` | 6 | 91 | 1 | 0 |
 | `stage_one/frontend/` | 3 | 0 | 0 | 0 |

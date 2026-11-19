@@ -2,7 +2,7 @@
 
 > 本文件由 graft 结构层自动导出，是对代码库的**索引**，不是实现说明。
 > 每条记录都带 `文件:行号`，用于精确定位；这里**不含函数体**，需要实现细节时应另行取源码。
-> 生成时间：2026-11-19 21:16
+> 生成时间：2026-11-19 21:25
 
 ## 1. 概览
 
@@ -10,8 +10,8 @@
 |---|---|
 | 源文件 | 55 |
 | 语言 | javascript, python, typescript, vue |
-| 符号总数 | 705（不含 55 个文件节点） |
-| 符号构成 | function 430 / method 194 / file 55 / class 41 / interface 30 / type 10 |
+| 符号总数 | 707（不含 55 个文件节点） |
+| 符号构成 | function 431 / method 195 / file 55 / class 41 / interface 30 / type 10 |
 | 依赖边 | 249（跨文件调用、导入、继承） |
 
 后端为 FastAPI + WebSockets（Python），前端为 Vue 3 + Vite + Tailwind（TypeScript/Vue）。
@@ -20,7 +20,7 @@
 
 | 目录 | 文件数 | 符号数 | 被依赖 | 依赖外部 |
 |---|---|---|---|---|
-| `stage_one/backend/` | 25 | 327 | 137 | 138 |
+| `stage_one/backend/` | 25 | 329 | 137 | 138 |
 | `stage_one/backend/assets/` | 1 | 1 | 0 | 0 |
 | `stage_one/backend/strategy_core/` | 6 | 91 | 1 | 0 |
 | `stage_one/frontend/` | 3 | 0 | 0 | 0 |
@@ -359,7 +359,7 @@
 
 ### stage_one/backend/quote_provider.py
 
-共 28 个符号 · 被依赖 7 · 依赖外部 8
+共 30 个符号 · 被依赖 7 · 依赖外部 8
 
 - + `QuoteRateLimiter` · class · L38-L98 — `class QuoteRateLimiter`
 -   `__init__` · method · L41-L48 — `def __init__(self) -> None`
@@ -374,21 +374,23 @@
 - + `YahooCryptoQuoteProvider` · class · L145-L223 — `class YahooCryptoQuoteProvider`
 -   `__init__` · method · L148-L149 — `def __init__(self) -> None`
 - + `get_quotes` · method · L151-L223 — `async def get_quotes(self, symbols: List[str]) -> List[dict]`
-- + `TencentQuoteProvider` · class · L225-L401 — `class TencentQuoteProvider`
+- + `TencentQuoteProvider` · class · L225-L436 — `class TencentQuoteProvider`
 -   `__init__` · method · L228-L233 — `def __init__(self) -> None`
 -   `_resolve_us_ext_session` · method · L235-L263 — `def _resolve_us_ext_session(self, symbol: str, ext_price: float) -> Tuple[Optional[float], str]`
-- + `get_quotes` · method · L265-L291 — `async def get_quotes(self, symbols: List[str]) -> List[dict]`
--   `_get_tencent_quotes` · method · L293-L332 — `async def _get_tencent_quotes(self, symbols: List[str]) -> List[dict]`
--   `_fetch_raw` · method · L334-L348 — `async def _fetch_raw(self, symbols: List[str]) -> str`
--   `_parse` · method · L350-L401 — `def _parse(self, text: str, symbols: List[str]) -> Dict[str, Optional[dict]]`
--   `_to_float` · function · L403-L414 — `def _to_float(s) -> Optional[float]`
--   `_format_update_time` · function · L416-L420 — `def _format_update_time(raw: str) -> str`
--   `_error_item` · function · L422-L442 — `def _error_item(symbol: str, status: str, msg: str) -> dict`
-- + `SinaFuturesQuoteProvider` · class · L452-L583 — `class SinaFuturesQuoteProvider`
--   `__init__` · method · L455-L458 — `def __init__(self) -> None`
-- + `get_quotes` · method · L460-L505 — `async def get_quotes(self, symbols: List[str]) -> List[dict]`
--   `_fetch` · method · L507-L541 — `async def _fetch(self, symbols: List[str]) -> Dict[str, Optional[dict]]`
--   `_parse_line` · method · L544-L583 — `def _parse_line(line: str) -> Optional[dict]`
+-   `_fetch_yahoo_premarket` · method · L265-L288 — `async def _fetch_yahoo_premarket(self, us_symbols: List[str]) -> Dict[str, float]`
+-   `_one` · function · L272-L285 — `async def _one(sym: str)`
+- + `get_quotes` · method · L290-L316 — `async def get_quotes(self, symbols: List[str]) -> List[dict]`
+-   `_get_tencent_quotes` · method · L318-L367 — `async def _get_tencent_quotes(self, symbols: List[str]) -> List[dict]`
+-   `_fetch_raw` · method · L369-L383 — `async def _fetch_raw(self, symbols: List[str]) -> str`
+-   `_parse` · method · L385-L436 — `def _parse(self, text: str, symbols: List[str]) -> Dict[str, Optional[dict]]`
+-   `_to_float` · function · L438-L449 — `def _to_float(s) -> Optional[float]`
+-   `_format_update_time` · function · L451-L455 — `def _format_update_time(raw: str) -> str`
+-   `_error_item` · function · L457-L477 — `def _error_item(symbol: str, status: str, msg: str) -> dict`
+- + `SinaFuturesQuoteProvider` · class · L487-L618 — `class SinaFuturesQuoteProvider`
+-   `__init__` · method · L490-L493 — `def __init__(self) -> None`
+- + `get_quotes` · method · L495-L540 — `async def get_quotes(self, symbols: List[str]) -> List[dict]`
+-   `_fetch` · method · L542-L576 — `async def _fetch(self, symbols: List[str]) -> Dict[str, Optional[dict]]`
+-   `_parse_line` · method · L579-L618 — `def _parse_line(line: str) -> Optional[dict]`
 
 ### stage_one/backend/strategy_adapter.py
 
@@ -952,14 +954,14 @@
 共 9 个符号 · 被依赖 6 · 依赖外部 10
 
 - + `resolveBarBucketTime` · function · L8-L33 — `function resolveBarBucketTime(updateTime: string, period: Period, lastBarTime: string): string`
-- + `useLiveQuoteSync` · function · L35-L327 — `function useLiveQuoteSync(options: { currentSymbol: Ref<string>; currentPeriod: Ref<Period>; klineData: Ref<KLinePoint[]>; latestPrice: Ref<number | null>; latestChange: Ref<number>; watchlist: Ref<string[]>; getChartInstance: () => IChartApi | null; getCandlestickSeries: () => any; setSuppressRangeEvents: (v: boolean) => void; onCacheUpdate: (sym: string, period: Period, data: KLinePoint[]) => void; onIndicatorsUpdate: (data: KLinePoint[]) => void; onPatchTailBar?: (updatedBar: KLinePoint, isNewBar: boolean) => void; onSetKlineDataSilently?: (freshData: KLinePoint[], preserveRange?: { from: number; to: number } | null) => void; })`
-- + `refreshEngineSymbols` · function · L132-L138 — `function refreshEngineSymbols()`
-- + `syncLatestBarsSilently` · function · L140-L168 — `async function syncLatestBarsSilently(sym: string, period: Period)`
-- + `applyLiveQuoteToChart` · function · L170-L238 — `function applyLiveQuoteToChart(q: Quote)`
-- + `startQuoteEngine` · function · L240-L264 — `async function startQuoteEngine()`
-- + `pauseQuoteEngine` · function · L266-L268 — `function pauseQuoteEngine()`
-- + `resumeQuoteEngine` · function · L271-L283 — `function resumeQuoteEngine()`
-- + `stopQuoteEngine` · function · L294-L297 — `function stopQuoteEngine()`
+- + `useLiveQuoteSync` · function · L35-L324 — `function useLiveQuoteSync(options: { currentSymbol: Ref<string>; currentPeriod: Ref<Period>; klineData: Ref<KLinePoint[]>; latestPrice: Ref<number | null>; latestChange: Ref<number>; watchlist: Ref<string[]>; getChartInstance: () => IChartApi | null; getCandlestickSeries: () => any; setSuppressRangeEvents: (v: boolean) => void; onCacheUpdate: (sym: string, period: Period, data: KLinePoint[]) => void; onIndicatorsUpdate: (data: KLinePoint[]) => void; onPatchTailBar?: (updatedBar: KLinePoint, isNewBar: boolean) => void; onSetKlineDataSilently?: (freshData: KLinePoint[], preserveRange?: { from: number; to: number } | null) => void; })`
+- + `refreshEngineSymbols` · function · L129-L135 — `function refreshEngineSymbols()`
+- + `syncLatestBarsSilently` · function · L137-L165 — `async function syncLatestBarsSilently(sym: string, period: Period)`
+- + `applyLiveQuoteToChart` · function · L167-L235 — `function applyLiveQuoteToChart(q: Quote)`
+- + `startQuoteEngine` · function · L237-L261 — `async function startQuoteEngine()`
+- + `pauseQuoteEngine` · function · L263-L265 — `function pauseQuoteEngine()`
+- + `resumeQuoteEngine` · function · L268-L280 — `function resumeQuoteEngine()`
+- + `stopQuoteEngine` · function · L291-L294 — `function stopQuoteEngine()`
 
 ### stage_one/frontend/src/composables/useSmartThrottling.ts
 
@@ -983,7 +985,7 @@
 - + `WatchlistRowInfo` · interface · L23-L38 — `interface WatchlistRowInfo`
 - + `canonSym` · function · L52-L56 — `canonSym = (s: string): string`
 - + `currencyOf` · function · L58-L58 — `currencyOf = (_sym: string): string`
-- + `useWatchlist` · function · L60-L521 — `function useWatchlist(options: { liveQuoteMap: Ref<Record<string, Quote>>; quoteConfig: Ref<QuoteConfig | null>; currentSymbol: Ref<string>; onSelectSymbol: (sym: string) => void; onSymbolsChanged: () => void; })`
+- + `useWatchlist` · function · L60-L518 — `function useWatchlist(options: { liveQuoteMap: Ref<Record<string, Quote>>; quoteConfig: Ref<QuoteConfig | null>; currentSymbol: Ref<string>; onSelectSymbol: (sym: string) => void; onSymbolsChanged: () => void; })`
 - + `genGroupId` · function · L69-L72 — `genGroupId = (): string`
 - + `defaultGroups` · function · L74-L76 — `defaultGroups = (): WatchGroup[]`
 - + `getInitialGroups` · function · L78-L95 — `function getInitialGroups(): WatchGroup[]`
@@ -991,24 +993,24 @@
 - + `delayFullOf` · function · L135-L138 — `delayFullOf = (sym: string): string`
 - + `loadStockNameMap` · function · L140-L158 — `async function loadStockNameMap()`
 - + `watchPriceInfo` · function · L160-L209 — `function watchPriceInfo(item: string): { price: number | null; change: number | null; loading: boolean; extendedPrice: number | null; extendedLabel: string; prevClose: number | null; status?: string; reason?: string; }`
-- + `secondaryLineInfo` · function · L211-L240 — `function secondaryLineInfo(item: string): { price: number | null; changePct: number | null; label: string; } | null`
-- + `updateWatchlistPrices` · function · L268-L270 — `async function updateWatchlistPrices()`
-- + `persistWatchlistLocal` · function · L272-L274 — `persistWatchlistLocal = ()`
-- + `persistWatchlist` · function · L276-L279 — `persistWatchlist = ()`
-- + `loadWatchlist` · function · L281-L331 — `loadWatchlist = async ()`
-- + `isWatchlisted` · function · L333-L336 — `isWatchlisted = (sym: string): boolean`
-- + `removeFromWatchlist` · function · L338-L349 — `removeFromWatchlist = (sym: string, groupId?: string)`
-- + `toggleWatchlist` · function · L351-L369 — `toggleWatchlist = (sym: string)`
-- + `addToActiveGroup` · function · L371-L387 — `addToActiveGroup = (sym: string)`
-- + `createGroup` · function · L389-L396 — `createGroup = (rawName: string)`
-- + `renameGroup` · function · L398-L404 — `renameGroup = (id: string, name: string)`
-- + `deleteGroup` · function · L406-L416 — `deleteGroup = (id: string)`
-- + `selectGroup` · function · L418-L421 — `selectGroup = (id: string)`
-- + `toggleGroupDropdown` · function · L423-L425 — `toggleGroupDropdown = ()`
-- + `setSort` · function · L427-L434 — `setSort = (key: SortKey)`
-- + `matchMarketTab` · function · L436-L444 — `matchMarketTab = (sym: string, tab: MarketTabKey): boolean`
-- + `clearWatchlistCache` · function · L478-L480 — `clearWatchlistCache = ()`
-- + `markAllLoadingFailed` · function · L482-L486 — `markAllLoadingFailed = ()`
+- + `secondaryLineInfo` · function · L211-L237 — `function secondaryLineInfo(item: string): { price: number | null; changePct: number | null; label: string; } | null`
+- + `updateWatchlistPrices` · function · L265-L267 — `async function updateWatchlistPrices()`
+- + `persistWatchlistLocal` · function · L269-L271 — `persistWatchlistLocal = ()`
+- + `persistWatchlist` · function · L273-L276 — `persistWatchlist = ()`
+- + `loadWatchlist` · function · L278-L328 — `loadWatchlist = async ()`
+- + `isWatchlisted` · function · L330-L333 — `isWatchlisted = (sym: string): boolean`
+- + `removeFromWatchlist` · function · L335-L346 — `removeFromWatchlist = (sym: string, groupId?: string)`
+- + `toggleWatchlist` · function · L348-L366 — `toggleWatchlist = (sym: string)`
+- + `addToActiveGroup` · function · L368-L384 — `addToActiveGroup = (sym: string)`
+- + `createGroup` · function · L386-L393 — `createGroup = (rawName: string)`
+- + `renameGroup` · function · L395-L401 — `renameGroup = (id: string, name: string)`
+- + `deleteGroup` · function · L403-L413 — `deleteGroup = (id: string)`
+- + `selectGroup` · function · L415-L418 — `selectGroup = (id: string)`
+- + `toggleGroupDropdown` · function · L420-L422 — `toggleGroupDropdown = ()`
+- + `setSort` · function · L424-L431 — `setSort = (key: SortKey)`
+- + `matchMarketTab` · function · L433-L441 — `matchMarketTab = (sym: string, tab: MarketTabKey): boolean`
+- + `clearWatchlistCache` · function · L475-L477 — `clearWatchlistCache = ()`
+- + `markAllLoadingFailed` · function · L479-L483 — `markAllLoadingFailed = ()`
 
 ### stage_one/frontend/src/composables/useWebSocketControl.ts
 

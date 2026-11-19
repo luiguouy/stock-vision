@@ -262,6 +262,31 @@ class TencentQuoteProvider:
             return ext_price, "夜盘"
         return ext_price, "盘后"
 
+    async def _fetch_yahoo_premarket(self, us_symbols: List[str]) -> Dict[str, float]:
+        """美东盘前 (04:00-09:30 ET) 通过 Yahoo includePrePost=true 获取真实实时盘前价。"""
+        out: Dict[str, float] = {}
+        if not us_symbols:
+            return out
+        client = await _get_proxy_client()
+
+        async def _one(sym: str):
+            ticker = sym[2:].upper() if sym.lower().startswith("us") else sym.upper()
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?range=1d&interval=1m&includePrePost=true"
+            try:
+                resp = await client.get(url, timeout=4.0)
+                if resp.status_code == 200:
+                    res = resp.json().get("chart", {}).get("result")
+                    if res:
+                        meta = res[0].get("meta", {})
+                        pre_p = _to_float(meta.get("preMarketPrice"))
+                        if pre_p and pre_p > 0:
+                            out[sym] = pre_p
+            except Exception:
+                pass
+
+        await asyncio.gather(*[_one(s) for s in us_symbols], return_exceptions=True)
+        return out
+
     async def get_quotes(self, symbols: List[str]) -> List[dict]:
         crypto_syms = [s for s in symbols if market_of(s) == "crypto"]
         futures_syms = [s for s in symbols if market_of(s) == "futures"]
@@ -306,9 +331,19 @@ class TencentQuoteProvider:
             self.limiter.record_http_call()
             raw_text = await self._fetch_raw(allowed)
             parsed = self._parse(raw_text, allowed)
+
+            dt_et = datetime.now(tz=US_EAST)
+            is_us_pre = dt_et.weekday() < 5 and (4 * 60 <= dt_et.hour * 60 + dt_et.minute < 9 * 60 + 30)
+            us_allowed = [s for s in allowed if market_of(s) == "us"]
+            yahoo_pre_map = await self._fetch_yahoo_premarket(us_allowed) if is_us_pre else {}
+
             for sym in allowed:
                 self.limiter.record_symbol(sym)
                 item = parsed.get(sym)
+                if item is not None and sym in yahoo_pre_map:
+                    item["extended_price"] = yahoo_pre_map[sym]
+                    item["extended_label"] = "盘前"
+
                 if item is None:
                     self.limiter.on_symbol_empty(sym)
                     if sym in self._last_good_quotes:

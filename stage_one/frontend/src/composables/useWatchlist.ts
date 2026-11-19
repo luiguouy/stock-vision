@@ -219,10 +219,7 @@ export function useWatchlist(options: {
     if (info.extendedPrice != null && info.extendedPrice > 0 && marketOf(item) === 'us') {
       const extLabel = info.extendedLabel || getCurrentUSExtendedSession();
       if (extLabel) {
-        const extBase =
-          extLabel === '盘前'
-            ? (info.prevClose && info.prevClose > 0 ? info.prevClose : info.price)
-            : (info.price && info.price > 0 ? info.price : info.prevClose);
+        const extBase = info.price && info.price > 0 ? info.price : info.prevClose;
 
         if (extBase && extBase > 0) {
           if (extLabel !== '盘后' || Math.abs(info.extendedPrice - extBase) >= 0.01) {
