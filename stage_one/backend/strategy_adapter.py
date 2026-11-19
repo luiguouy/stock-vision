@@ -114,8 +114,9 @@ def _evaluate_market_structure(
     """管道阶段 2：计算道氏拐点、200 EMA、箱体、动态回归通道、波浪客观形态与道氏成交量结构。"""
     order = 3 if len(df_clean) < 50 else (4 if is_intraday else 5)
     swings = pa.extract_swings(df_clean, order=order, confirmed_only=False)
-    dow_bias_val = pa.dow_bias(swings, df_clean) if swings else 0
-    dow_phase_desc = pa._determine_dow_phase(swings) if swings else "数据不足"
+    conf_swings = [s for s in swings if s.get("confirmed", True)]
+    dow_bias_val = pa.dow_bias(conf_swings, df_clean) if conf_swings else 0
+    dow_phase_desc = pa._determine_dow_phase(conf_swings) if conf_swings else "数据不足"
 
     # 道氏成交量验证 (Dow Theory Volume Confirmation)
     dow_volume = (
@@ -173,9 +174,9 @@ def _evaluate_market_structure(
     }
 
     # 波浪客观状态与铁律证伪线 (支持加密/高波动下浪4浅刺容忍)
-    wp_raw = pa.classify_wave_pattern(swings, df_clean, allow_shallow_w4=is_crypto) or {}
-    wave_pos = pa.evaluate_wave_position(swings, df_clean, current_price, allow_shallow_w4=is_crypto) or {}
-    wp = wave_pos.get("wave_pattern_detail") or wp_raw
+    # 使用已确认拐点做波浪判定，避免未确认拐点导致形态反复重绘；直接复用 evaluate_wave_position 的 wave_pattern_detail，避免重复计算
+    wave_pos = pa.evaluate_wave_position(conf_swings, df_clean, current_price, allow_shallow_w4=is_crypto) or {}
+    wp = wave_pos.get("wave_pattern_detail") or {}
     elliott_chan = wave_pos.get("elliott_channel") or {}
 
     w4_inv = wave_pos.get("wave4_invalidation_level")
@@ -224,6 +225,7 @@ def _evaluate_market_structure(
 
     return {
         "swings": swings,
+        "conf_swings": conf_swings,
         "dow_bias": dow_bias_val,
         "dow_phase": dow_phase_desc,
         "dow_volume": dow_volume,
@@ -254,15 +256,16 @@ def _verify_us_market_dow(
     pa: Any,
     spy_df: Optional[Any] = None,
     qqq_df: Optional[Any] = None,
+    iwm_df: Optional[Any] = None,
     force_refresh: bool = False,
 ) -> Dict[str, Any]:
     """
-    道氏理论宏观大势定性与指数相互验证 (SPY & QQQ):
+    道氏理论宏观大势定性与指数相互验证 (SPY & QQQ & IWM 市场广度):
     现代美股实战映射：标普 500 指数 (SPY) 与 纳斯达克 100 指数 (QQQ) 必须处于上升趋势 (HH+HL) 且相互确认。
-    若走势背离（如一涨一跌、一创新高另一未确认）或主趋势向下，禁止盲目做多。
+    引入罗素 2000 (IWM) 作为中小盘市场广度验证；若走势背离（如一涨一跌、一创新高另一未确认）或主趋势向下，禁止盲目做多。
     """
     global _DOW_MARKET_CACHE
-    if not force_refresh and spy_df is None and qqq_df is None and _DOW_MARKET_CACHE:
+    if not force_refresh and spy_df is None and qqq_df is None and iwm_df is None and _DOW_MARKET_CACHE:
         return _DOW_MARKET_CACHE
 
     s_clean = _normalize_df(spy_df) if spy_df is not None else _prepare_strategy_df("SPY", None)
@@ -274,10 +277,12 @@ def _verify_us_market_dow(
             "verified": True,
             "spy_phase": "未加载",
             "qqq_phase": "未加载",
+            "iwm_phase": "未加载",
             "aligned": True,
             "description": "大盘指数数据未配置，按单标的结构研判",
+            "desc": "大盘指数数据未配置，按单标的结构研判",
         }
-        if spy_df is None and qqq_df is None:
+        if spy_df is None and qqq_df is None and iwm_df is None:
             _DOW_MARKET_CACHE = res
         return res
 
@@ -285,8 +290,9 @@ def _verify_us_market_dow(
         tail = df.tail(250) if len(df) >= 250 else df
         order = 5 if len(tail) < 120 else 8
         sw = pa.extract_swings(tail, order=order, confirmed_only=False)
-        phase = pa._determine_dow_phase(sw) if sw else "数据不足"
-        bias = pa.dow_bias(sw, tail) if sw else 0
+        conf_sw = [s for s in sw if s.get("confirmed", True)]
+        phase = pa._determine_dow_phase(conf_sw) if conf_sw else "数据不足"
+        bias = pa.dow_bias(conf_sw, tail) if conf_sw else 0
         c = float(tail["Close"].iloc[-1])
         span_len = min(200, len(tail))
         ema = float(tail["Close"].ewm(span=span_len, adjust=False).mean().iloc[-1])
@@ -312,11 +318,23 @@ def _verify_us_market_dow(
     spy_phase, spy_bull, spy_bear, sc, sema = _eval_index(s_clean)
     qqq_phase, qqq_bull, qqq_bear, qc, qema = _eval_index(q_clean)
 
+    # 补充 IWM 广度校验 (若调用方显式提供了 spy_df/qqq_df 且未传 iwm_df，不回退加载本地文件以保持测试/调用方隔离)
+    i_clean = _normalize_df(iwm_df) if iwm_df is not None else (_prepare_strategy_df("IWM", None) if (spy_df is None and qqq_df is None) else None)
+    iwm_phase, iwm_bear = "未加载", False
+    if i_clean is not None and len(i_clean) >= 10:
+        iwm_phase, _, iwm_bear, _, _ = _eval_index(i_clean)
+
     if spy_bull and qqq_bull:
-        status = "PASS"
-        verified = True
-        aligned = True
-        desc = f"道氏大盘指数相互验证通过：标普500 (SPY, {spy_phase}) 与 纳指100 (QQQ, {qqq_phase}) 同步上升 (HH+HL)，大势顺风允许做多。"
+        if iwm_bear:
+            status = "BREADTH_DIVERGENCE"
+            verified = True
+            aligned = False
+            desc = f"道氏市场广度背离预警：SPY/QQQ 走强但罗素2000 (IWM, {iwm_phase}) 偏空，警惕权重股独涨风险，建议缩减仓位。"
+        else:
+            status = "PASS"
+            verified = True
+            aligned = True
+            desc = f"道氏大盘指数相互验证通过：标普500 (SPY, {spy_phase}) 与 纳指100 (QQQ, {qqq_phase}) 同步上升 (HH+HL)，IWM({iwm_phase}) 广度配合，大势顺风允许做多。"
     elif (spy_bull and not qqq_bull) or (qqq_bull and not spy_bull):
         status = "DIVERGENCE"
         verified = False
@@ -333,11 +351,12 @@ def _verify_us_market_dow(
         "verified": verified,
         "spy_phase": spy_phase,
         "qqq_phase": qqq_phase,
+        "iwm_phase": iwm_phase,
         "aligned": aligned,
         "description": desc,
         "desc": desc,
     }
-    if spy_df is None and qqq_df is None:
+    if spy_df is None and qqq_df is None and iwm_df is None:
         _DOW_MARKET_CACHE = res
     return res
 
@@ -377,8 +396,13 @@ def _build_trade_plan(
     }
 
     swings = struct["swings"]
-    last_high_swings = [s for s in swings if s["type"] == "High"]
-    last_low_swings = [s for s in swings if s["type"] == "Low"]
+    conf = struct.get("conf_swings") or [s for s in swings if s.get("confirmed", True)]
+    conf_highs = [s for s in conf if s["type"] == "High"]
+    conf_lows = [s for s in conf if s["type"] == "Low"]
+
+    last_high_swings = conf_highs if conf_highs else [s for s in swings if s["type"] == "High"]
+    last_low_swings = conf_lows if conf_lows else [s for s in swings if s["type"] == "Low"]
+    conf_swings = conf if (conf_highs and conf_lows) else swings
     if not last_low_swings or not last_high_swings:
         return trade_plan
 
@@ -598,7 +622,7 @@ def _build_trade_plan(
 
         # 加密货币 2B 扫损极值专属优先覆盖
         if is_crypto and hasattr(crypto_mod, "check_recent_crypto_2b_sweep"):
-            sweep_info = crypto_mod.check_recent_crypto_2b_sweep(df_clean, side=1, swings=swings, bar_rng=med_range)
+            sweep_info = crypto_mod.check_recent_crypto_2b_sweep(df_clean, side=1, swings=conf_swings, bar_rng=med_range)
             if sweep_info.get("detected"):
                 stop_loss = round(float(sweep_info["stop_loss"]), 2)
                 stop_loss_reason = sweep_info["desc"]
@@ -1140,7 +1164,7 @@ def _build_trade_plan(
         is_2b_active = False
 
         if is_crypto and hasattr(crypto_mod, "check_recent_crypto_2b_sweep"):
-            sweep_info = crypto_mod.check_recent_crypto_2b_sweep(df_clean, side=-1, swings=swings, bar_rng=med_range)
+            sweep_info = crypto_mod.check_recent_crypto_2b_sweep(df_clean, side=-1, swings=conf_swings, bar_rng=med_range)
             if sweep_info.get("detected"):
                 is_2b_active = True
                 stop_loss = round(float(sweep_info["stop_loss"]), 2)
@@ -1907,6 +1931,7 @@ def run_strategy_analysis(
     market: Optional[str] = None,
     spy_df: Optional[Any] = None,
     qqq_df: Optional[Any] = None,
+    iwm_df: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """运行 StockVision 完整自包含交易策略矩阵、艾略特波浪与双数列变盘时间窗预测。"""
     modules = _get_modules()
@@ -1964,16 +1989,55 @@ def run_strategy_analysis(
         lookahead_bars=25,
     )
 
-    # 美股大盘道氏相互验证 (SPY & QQQ)
-    dow_market_ver = _verify_us_market_dow(pa, spy_df=spy_df, qqq_df=qqq_df) if (is_us and not is_crypto) else {
+    # 美股大盘道氏相互验证 (SPY & QQQ & IWM 广度)
+    dow_market_ver = _verify_us_market_dow(pa, spy_df=spy_df, qqq_df=qqq_df, iwm_df=iwm_df) if (is_us and not is_crypto) else {
         "status": "PASS",
         "verified": True,
         "spy_phase": "未适用",
         "qqq_phase": "未适用",
+        "iwm_phase": "未适用",
         "aligned": True,
         "description": "非美股标的，跳过美股大盘指数相互验证",
         "desc": "非美股标的，跳过美股大盘指数相互验证",
     }
+
+    # 周线-日线分形嵌套共振 (1d 周期)
+    fractal_resonance = {"active": False, "desc": "未触发跨周期共振"}
+    if period == "1d" and len(df_clean) >= 40:
+        try:
+            df_temp = df_clean.copy()
+            if not isinstance(df_temp.index, pd.DatetimeIndex):
+                dt_idx = pd.to_datetime(df_temp.index, errors="coerce")
+                if not dt_idx.isna().all():
+                    df_temp.index = dt_idx
+            if isinstance(df_temp.index, pd.DatetimeIndex):
+                agg_dict = {
+                    "Open": "first", "High": "max", "Low": "min", "Close": "last"
+                }
+                if "Volume" in df_temp.columns:
+                    agg_dict["Volume"] = "sum"
+                df_w = df_temp.resample("W-FRI").agg(agg_dict).dropna(subset=["Open", "High", "Low", "Close"])
+                if len(df_w) >= 15:
+                    w_swings = pa.extract_swings(df_w, order=3, confirmed_only=True)
+                    htf_wave = pa.classify_wave_pattern(w_swings, df_w)
+                    htf_pat = htf_wave.get("pattern", "")
+                    htf_cur = str(htf_wave.get("current_wave", ""))
+                    d_pat = struct["wp"].get("pattern", "")
+                    d_cur = str(struct["wp"].get("current_wave", ""))
+
+                    is_htf_w3 = (htf_pat in ("developing_wave_3", "impulse_5_wave") or "3" in htf_cur)
+                    is_daily_w24 = (d_pat in ("wave_2_correction", "wave_4_correction", "developing_wave_3", "developing_wave_5")
+                                    or "2" in d_cur or "4" in d_cur or "3" in d_cur)
+                    if is_htf_w3 and is_daily_w24:
+                        fractal_resonance = {
+                            "active": True,
+                            "htf_period": "1w",
+                            "htf_wave_pattern": htf_pat,
+                            "daily_wave_pattern": d_pat,
+                            "desc": "周线大级别第3浪主升 + 日线健康次回调/推进，跨周期共振高胜率买点"
+                        }
+        except Exception:
+            pass
 
     trade_plan = _build_trade_plan(
         pa,
@@ -2007,6 +2071,7 @@ def run_strategy_analysis(
             "box": struct["box"],
             "channel": struct["channel"],
             "wave": struct["wave"],
+            "fractal_resonance": fractal_resonance,
             "turn_windows": turn_windows_res,
             "turning_dates": turn_windows_res.get("turning_dates", []),
             "trade_plan": trade_plan,

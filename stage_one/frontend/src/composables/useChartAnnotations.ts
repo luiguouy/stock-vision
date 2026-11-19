@@ -223,6 +223,7 @@ export function getTimeCoordinate(timeScale: any, rawTime: string | number): num
  * 全面集成：盘整箱体、动态价格通道、波浪节点卡片 & 淡灰辅助连线、局部右延 Fib 扩展虚线、缺口共振区与底部微型时间窗
  */
 class AnnotationOverlayPrimitive implements ISeriesPrimitive<any> {
+  private _isDarkMode: boolean = false;
   private _boxes: ChartBoxItem[] = [];
   private _channelLines: ChartChannelLineItem[] = [];
   private _waveLines: ChartWaveLinesItem | null = null;
@@ -236,6 +237,7 @@ class AnnotationOverlayPrimitive implements ISeriesPrimitive<any> {
   private _renderer: IPrimitivePaneRenderer;
 
   constructor() {
+    this._isDarkMode = false;
     this._boxes = [];
     this._channelLines = [];
     this._waveLines = null;
@@ -260,7 +262,7 @@ class AnnotationOverlayPrimitive implements ISeriesPrimitive<any> {
           const mediaW = scope.mediaSize.width;
           const mediaH = scope.mediaSize.height;
 
-          // 0. 绘制 200 EMA 连续均线 (深蓝色平滑连线)
+          // 0. 绘制 200 EMA 连续均线 (深蓝色平滑连线) - 裁剪至可视视口 [-20, mediaW + 20]
           if (self._ema200Data && self._ema200Data.length > 1) {
             ctx.save();
             ctx.strokeStyle = '#2563eb';
@@ -268,17 +270,33 @@ class AnnotationOverlayPrimitive implements ISeriesPrimitive<any> {
             ctx.setLineDash([]);
             ctx.beginPath();
             let started = false;
+            let prevPt: { x: number; y: number } | null = null;
             for (const pt of self._ema200Data) {
               const x = getTimeCoordinate(timeScale, pt.time);
               const y = series.priceToCoordinate(pt.value);
-              if (x !== null && y !== null && Number.isFinite(x) && Number.isFinite(y)) {
-                if (!started) {
-                  ctx.moveTo(x, y);
-                  started = true;
-                } else {
+              if (x === null || y === null || !Number.isFinite(x) || !Number.isFinite(y)) {
+                continue;
+              }
+              if (x < -20) {
+                prevPt = { x, y };
+                continue;
+              }
+              if (x > mediaW + 20) {
+                if (started) {
                   ctx.lineTo(x, y);
                 }
+                break;
               }
+              if (!started) {
+                if (prevPt) {
+                  ctx.moveTo(prevPt.x, prevPt.y);
+                } else {
+                  ctx.moveTo(x, y);
+                }
+                started = true;
+              }
+              ctx.lineTo(x, y);
+              prevPt = { x, y };
             }
             if (started) {
               ctx.stroke();
@@ -507,8 +525,8 @@ class AnnotationOverlayPrimitive implements ISeriesPrimitive<any> {
                   const cardLeft = c.x - cardW / 2;
                   const cardTop = cardY - cardH / 2;
 
-                  // 白底 (深色模式下半透深灰)
-                  ctx.fillStyle = 'rgba(255, 255, 255, 0.96)';
+                  // 卡片底色 (暗色模式 rgba(15, 23, 42, 0.92)，亮色模式 rgba(255, 255, 255, 0.96))
+                  ctx.fillStyle = self._isDarkMode ? 'rgba(15, 23, 42, 0.92)' : 'rgba(255, 255, 255, 0.96)';
                   ctx.beginPath();
                   if (typeof ctx.roundRect === 'function') {
                     ctx.roundRect(cardLeft, cardTop, cardW, cardH, 4);
@@ -518,12 +536,12 @@ class AnnotationOverlayPrimitive implements ISeriesPrimitive<any> {
                   ctx.fill();
 
                   // 细边框
-                  ctx.strokeStyle = c.color || '#94a3b8';
+                  ctx.strokeStyle = c.color || (self._isDarkMode ? '#475569' : '#94a3b8');
                   ctx.lineWidth = 1.0;
                   ctx.stroke();
 
-                  // 文字
-                  ctx.fillStyle = '#0f172a';
+                  // 文字 (暗色模式 #f8fafc，亮色模式 #0f172a)
+                  ctx.fillStyle = self._isDarkMode ? '#f8fafc' : '#0f172a';
                   ctx.textAlign = 'center';
                   ctx.textBaseline = 'middle';
                   ctx.fillText(txt, c.x, cardY);
@@ -677,6 +695,11 @@ class AnnotationOverlayPrimitive implements ISeriesPrimitive<any> {
     ];
   }
 
+  public setDarkMode(isDark: boolean) {
+    this._isDarkMode = isDark;
+    this.requestUpdate();
+  }
+
   public setBoxes(boxes: ChartBoxItem[]) {
     this._boxes = boxes;
     this.requestUpdate();
@@ -708,7 +731,34 @@ class AnnotationOverlayPrimitive implements ISeriesPrimitive<any> {
   }
 
   public setEma200Data(data: EmaPointItem[]) {
-    this._ema200Data = data || [];
+    this._ema200Data = (data || []).map((pt) => ({
+      time: toChartTime(pt.time),
+      value: pt.value,
+    }));
+    this.requestUpdate();
+  }
+
+  public setBatch(payload: {
+    boxes?: ChartBoxItem[];
+    channelLines?: ChartChannelLineItem[];
+    waveLines?: ChartWaveLinesItem | null;
+    timeLines?: TimeLineItem[];
+    fibLines?: FibLineItem[];
+    gapBoxes?: GapBoxItem[];
+    ema200Data?: EmaPointItem[];
+  }) {
+    if (payload.boxes !== undefined) this._boxes = payload.boxes || [];
+    if (payload.channelLines !== undefined) this._channelLines = payload.channelLines || [];
+    if (payload.waveLines !== undefined) this._waveLines = payload.waveLines;
+    if (payload.timeLines !== undefined) this._timeLines = payload.timeLines || [];
+    if (payload.fibLines !== undefined) this._fibLines = payload.fibLines || [];
+    if (payload.gapBoxes !== undefined) this._gapBoxes = payload.gapBoxes || [];
+    if (payload.ema200Data !== undefined) {
+      this._ema200Data = (payload.ema200Data || []).map((pt) => ({
+        time: toChartTime(pt.time),
+        value: pt.value,
+      }));
+    }
     this.requestUpdate();
   }
 
@@ -934,6 +984,32 @@ export function useChartAnnotations() {
     overlayPrimitive.setHighlightedTime(dateStr);
   }
 
+  function setDarkMode(isDark: boolean) {
+    if (!overlayPrimitive) return;
+    overlayPrimitive.setDarkMode(isDark);
+  }
+
+  function setBatch(payload: {
+    boxes?: ChartBoxItem[];
+    channelLines?: ChartChannelLineItem[];
+    waveLines?: ChartWaveLinesItem | null;
+    timeLines?: TimeLineItem[];
+    fibLines?: FibLineItem[];
+    gapBoxes?: GapBoxItem[];
+    ema200Data?: EmaPointItem[];
+  }) {
+    if (payload.boxes !== undefined) boxesCount.value = payload.boxes.length;
+    if (payload.channelLines !== undefined) channelLinesCount.value = payload.channelLines.length;
+    if (payload.waveLines !== undefined) waveLinesCount.value = payload.waveLines ? payload.waveLines.points.length : 0;
+    if (payload.timeLines !== undefined) timeLinesCount.value = payload.timeLines.length;
+    if (payload.fibLines !== undefined) fibLinesCount.value = payload.fibLines.length;
+    if (payload.gapBoxes !== undefined) gapBoxesCount.value = payload.gapBoxes.length;
+
+    if (overlayPrimitive) {
+      overlayPrimitive.setBatch(payload);
+    }
+  }
+
   function setAllAnnotations(anno: {
     markers?: ChartMarkerItem[];
     lines?: ChartPriceLineItem[];
@@ -953,36 +1029,62 @@ export function useChartAnnotations() {
   }) {
     setMarkers(anno.markers || []);
     setPriceLines(anno.lines || []);
-    setBoxes(anno.boxes || []);
-    const chans = anno.channel_lines ?? anno.channelLines ?? [];
-    setChannelLines(chans);
-    const waves = anno.wave_lines !== undefined ? anno.wave_lines : (anno.waveLines !== undefined ? anno.waveLines : null);
-    setWaveLines(waves);
-    const times = anno.time_lines ?? anno.timeLines ?? [];
-    setTimeLines(times);
-    const fibs = anno.fib_lines ?? anno.fibLines ?? [];
-    setFibLines(fibs);
-    const gaps = anno.gap_boxes ?? anno.gapBoxes ?? [];
-    setGapBoxes(gaps);
-    const emaData = anno.ema200_data ?? anno.ema200Data ?? [];
-    setEma200Data(emaData);
+    setBatch({
+      boxes: anno.boxes || [],
+      channelLines: anno.channel_lines ?? anno.channelLines ?? [],
+      waveLines: anno.wave_lines !== undefined ? anno.wave_lines : (anno.waveLines !== undefined ? anno.waveLines : null),
+      timeLines: anno.time_lines ?? anno.timeLines ?? [],
+      fibLines: anno.fib_lines ?? anno.fibLines ?? [],
+      gapBoxes: anno.gap_boxes ?? anno.gapBoxes ?? [],
+      ema200Data: anno.ema200_data ?? anno.ema200Data ?? [],
+    });
   }
 
   function clearAnnotations() {
     setMarkers([]);
     setPriceLines([]);
-    setBoxes([]);
-    setChannelLines([]);
-    setWaveLines(null);
-    setTimeLines([]);
-    setFibLines([]);
-    setGapBoxes([]);
-    setEma200Data([]);
+    setBatch({
+      boxes: [],
+      channelLines: [],
+      waveLines: null,
+      timeLines: [],
+      fibLines: [],
+      gapBoxes: [],
+      ema200Data: [],
+    });
     highlightTimeLine(null);
+  }
+
+  function dispose() {
+    if (seriesApi && overlayPrimitive) {
+      try {
+        seriesApi.detachPrimitive(overlayPrimitive);
+      } catch (e) {
+        console.warn('detachPrimitive error:', e);
+      }
+    }
+    if (seriesApi && activePriceLines.length > 0) {
+      for (const pl of activePriceLines) {
+        try {
+          seriesApi.removePriceLine(pl);
+        } catch {
+          // ignore
+        }
+      }
+      activePriceLines = [];
+    }
+    if (overlayPrimitive) {
+      overlayPrimitive.clear();
+      overlayPrimitive = null;
+    }
+    markersPlugin = null;
+    seriesApi = null;
+    _chartApi = null;
   }
 
   return {
     init,
+    setDarkMode,
     setMarkers,
     setPriceLines,
     setBoxes,
@@ -992,9 +1094,11 @@ export function useChartAnnotations() {
     setFibLines,
     setGapBoxes,
     setEma200Data,
+    setBatch,
     highlightTimeLine,
     setAllAnnotations,
     clearAnnotations,
+    dispose,
     markersCount,
     linesCount,
     boxesCount,

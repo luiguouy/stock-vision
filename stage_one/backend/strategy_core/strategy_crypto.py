@@ -152,7 +152,7 @@ def extract_crypto_levels(df: pd.DataFrame, t: int, side: int, swings: list,
     if len(swings) < 2 or t < 0 or t >= len(df):
         return {}
 
-    conf = [s for s in swings if s.get("confirmed")]
+    conf = [s for s in swings if s.get("confirmed", True)]
     if len(conf) < 2:
         conf = swings
 
@@ -429,13 +429,14 @@ def _weekly_prefix(df: pd.DataFrame, t: int) -> pd.DataFrame:
     return w.dropna(subset=["Open", "High", "Low", "Close"])
 
 
-def check_crypto_primary_trend(df: pd.DataFrame, t: int, side: int) -> dict:
+def check_crypto_primary_trend(df: pd.DataFrame, t: int, side: int,
+                               weekly_df: pd.DataFrame = None) -> dict:
     """
     周线结构顺势门禁 (Higher-Timeframe Structure Trend Gate):
       - 裸K流派边界: 趋势由结构定义 (HH/HL vs LH/LL), 禁用 MA/EMA 等滞后方向指标
         (docs/pa_engine_audit_2026-10-22.md 方向性指标禁令; 替换消融证据见
         docs/index_stat_validation.md 附录);
-      - 由 <= t 的日线切片聚合周线, 提取周线摆动结构 (order=3), 以道氏 MSS 偏向
+      - 由 <= t 的日线切片聚合周线 (支持外部预聚合 weekly_df 传入消除重复计算), 提取周线摆动结构 (order=3), 以道氏 MSS 偏向
         (pe.dow_bias) 判定高周期结构方向, 严格零未来函数;
       - 多头 (side == 1): 周线结构偏向须为 +1 (高周期上升结构);
       - 空头 (side == -1): 周线结构偏向须为 -1 (高周期下降结构);
@@ -448,11 +449,11 @@ def check_crypto_primary_trend(df: pd.DataFrame, t: int, side: int) -> dict:
     if df is None or len(df) < 50 or t < 0 or t >= len(df):
         return {"aligned": True, "structure_bias": None, "reason": "insufficient_history_neutral"}
 
-    weekly = _weekly_prefix(df, t)
+    weekly = weekly_df if weekly_df is not None else _weekly_prefix(df, t)
     if weekly.empty:
         return {"aligned": True, "structure_bias": None, "reason": "insufficient_history_neutral"}
 
-    w_swings = pe.extract_swings(weekly, order=3)
+    w_swings = pe.extract_swings(weekly, order=3, min_swing_k=1.5)
     bias = pe.dow_bias(w_swings, df=weekly, buffer_k=0.0)
 
     if side == 1:
@@ -470,7 +471,8 @@ def simulate_crypto_trigger_entry(df: pd.DataFrame, t: int, side: int,
                                   structural_stop: float,
                                   max_wait_bars: int = CRYPTO_MAX_WAIT_BARS,
                                   use_trend_gate: bool = True,
-                                  disallow_short_engulfing: bool = True) -> dict:
+                                  disallow_short_engulfing: bool = True,
+                                  weekly_df: pd.DataFrame = None) -> dict:
     """
     突破确认后（t 根），在关键位附近监控加密裸K确认形态：
       - 从 t+1 开始扫描至 t+max_wait_bars 根；
@@ -499,7 +501,7 @@ def simulate_crypto_trigger_entry(df: pd.DataFrame, t: int, side: int,
 
             # 2. 周线结构顺势门禁 (HTF Structure Gate, 纯价格结构零滞后指标)
             if use_trend_gate:
-                trend_chk = check_crypto_primary_trend(df, k, side)
+                trend_chk = check_crypto_primary_trend(df, k, side, weekly_df=weekly_df)
                 if not trend_chk.get("aligned", True):
                     continue
 

@@ -697,8 +697,6 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue';
-import { createChart, CandlestickSeries, HistogramSeries, createSeriesMarkers } from 'lightweight-charts';
-import type { IChartApi } from 'lightweight-charts';
 import GlobalSecuritySearch from './components/GlobalSecuritySearch.vue';
 import StrategyPanel from './components/StrategyPanel.vue';
 import ThemeToggle from './components/ThemeToggle.vue';
@@ -723,6 +721,7 @@ import { useChartIndicators } from './composables/useChartIndicators';
 import { useWatchlist, MARKET_TABS, canonSym, currencyOf } from './composables/useWatchlist';
 import { useLiveQuoteSync } from './composables/useLiveQuoteSync';
 import { useChartViewport } from './composables/useChartViewport';
+import { useChartCore } from './composables/useChartCore';
 
 const { showEMA, showVWAP, initIndicators, updateIndicators } = useChartIndicators();
 const chartAnnotations = useChartAnnotations();
@@ -736,7 +735,6 @@ const periodOptions = SUPPORTED_PERIODS;
 const periodLabels = PERIOD_LABELS;
 const searchPlaceholder = '搜索代码或名称';
 
-const chartReady = ref(false);
 const backendOnline = ref(false);
 const isDarkMode = ref(false);
 
@@ -748,10 +746,21 @@ const navForwardHistory = ref<string[]>([]);
 const chartContainer = ref<HTMLElement | null>(null);
 const chartArea = ref<HTMLElement | null>(null);
 const tooltipEl = ref<HTMLElement | null>(null);
-let chartInstance: IChartApi | null = null;
-let candlestickSeries: any = null;
-let volumeSeries: any = null;
-let markersPlugin: any = null;
+
+const {
+  chartInstance,
+  candlestickSeries,
+  volumeSeries,
+  markersPlugin,
+  chartReady,
+  initChart: initChartCore,
+  observeChartArea,
+  syncChartSize: syncCoreChartSize,
+  dispose: disposeChartCore,
+} = useChartCore({
+  chartArea,
+  isDarkMode,
+});
 
 // 策略状态与竞态令牌
 const strategySummary = ref<any>(null);
@@ -763,10 +772,10 @@ const viewport = useChartViewport({
   isDarkMode,
   currentSymbol,
   currentPeriod,
-  getChartInstance: () => chartInstance,
-  getCandlestickSeries: () => candlestickSeries,
-  getVolumeSeries: () => volumeSeries,
-  getMarkersPlugin: () => markersPlugin,
+  getChartInstance: () => chartInstance.value,
+  getCandlestickSeries: () => candlestickSeries.value,
+  getVolumeSeries: () => volumeSeries.value,
+  getMarkersPlugin: () => markersPlugin.value,
   clearChartAnnotations: () => chartAnnotations.clearAnnotations(),
   updateIndicators,
   onBeforeLoad: () => {
@@ -799,6 +808,27 @@ const {
   loadKlineData,
 } = viewport;
 
+// O(1) 前收盘价缓存索引表，杜绝 crosshairMove 逐帧 findIndex 遍历开销
+let prevCloseMap = new Map<string, number>();
+
+watch(
+  klineData,
+  (data) => {
+    prevCloseMap = new Map<string, number>();
+    if (!data || data.length < 2) return;
+    for (let i = 1; i < data.length; i++) {
+      const prevClose = data[i - 1].close;
+      const curTime = data[i].time;
+      prevCloseMap.set(String(curTime), prevClose);
+      const ct = toChartTimeHelper(curTime);
+      if (ct) {
+        prevCloseMap.set(String(ct), prevClose);
+      }
+    }
+  },
+  { immediate: true }
+);
+
 // 2. 组合实时行情同步引擎
 const liveSync = useLiveQuoteSync({
   currentSymbol,
@@ -807,8 +837,8 @@ const liveSync = useLiveQuoteSync({
   latestPrice,
   latestChange,
   watchlist: { get value() { return wl.watchlist.value; } } as any,
-  getChartInstance: () => chartInstance,
-  getCandlestickSeries: () => candlestickSeries,
+  getChartInstance: () => chartInstance.value,
+  getCandlestickSeries: () => candlestickSeries.value,
   setSuppressRangeEvents: viewport.setSuppressRangeEvents,
   onCacheUpdate: viewport.updateCache,
   onIndicatorsUpdate: updateIndicators,
@@ -1007,7 +1037,7 @@ const handleClearStrategy = () => {
   strategySummary.value = null;
   renderSRLevels();
   try {
-    chartInstance?.priceScale('right').setAutoScale(true);
+    chartInstance.value?.priceScale('right').setAutoScale(true);
   } catch {}
 };
 
@@ -1045,6 +1075,18 @@ const wsControl = useWebSocketControl({
     if (!sym || normalizeSymbol(sym) !== normalizeSymbol(currentSymbol.value)) return;
     chartAnnotations.setTimeLines(timeLines);
   },
+  onDrawFibLines(fibLines, sym) {
+    if (!sym || normalizeSymbol(sym) !== normalizeSymbol(currentSymbol.value)) return;
+    chartAnnotations.setFibLines(fibLines);
+  },
+  onDrawGapBoxes(gapBoxes, sym) {
+    if (!sym || normalizeSymbol(sym) !== normalizeSymbol(currentSymbol.value)) return;
+    chartAnnotations.setGapBoxes(gapBoxes);
+  },
+  onDrawEma200(ema200Data, sym) {
+    if (!sym || normalizeSymbol(sym) !== normalizeSymbol(currentSymbol.value)) return;
+    chartAnnotations.setEma200Data(ema200Data);
+  },
   onClearAnnotations(kind, sym) {
     if (sym && normalizeSymbol(sym) !== normalizeSymbol(currentSymbol.value)) return;
     if (kind === 'marker') chartAnnotations.setMarkers([]);
@@ -1053,13 +1095,16 @@ const wsControl = useWebSocketControl({
     else if (kind === 'channel') chartAnnotations.setChannelLines([]);
     else if (kind === 'wave') chartAnnotations.setWaveLines(null);
     else if (kind === 'time_line') chartAnnotations.setTimeLines([]);
+    else if (kind === 'fib_line') chartAnnotations.setFibLines([]);
+    else if (kind === 'gap_box') chartAnnotations.setGapBoxes([]);
+    else if (kind === 'ema200') chartAnnotations.setEma200Data([]);
     else chartAnnotations.clearAnnotations();
   },
   onRunStrategy: async (mode) => handleRunStrategy(mode, true),
   onCaptureChart() {
-    if (chartInstance && typeof (chartInstance as any).takeScreenshot === 'function') {
+    if (chartInstance.value && typeof (chartInstance.value as any).takeScreenshot === 'function') {
       try {
-        const canvas = (chartInstance as any).takeScreenshot();
+        const canvas = (chartInstance.value as any).takeScreenshot();
         if (canvas) return canvas.toDataURL('image/png');
       } catch {}
     }
@@ -1072,17 +1117,18 @@ const wsControl = useWebSocketControl({
 const toChartTime = (timeStr: any): any => toChartTimeHelper(timeStr);
 
 const applyChartTheme = (isDark: boolean) => {
-  if (!chartInstance) return;
-  chartInstance.applyOptions(getChartOptions(isDark));
-  if (candlestickSeries) {
+  chartAnnotations.setDarkMode(isDark);
+  if (!chartInstance.value) return;
+  chartInstance.value.applyOptions(getChartOptions(isDark));
+  if (candlestickSeries.value) {
     const upColor = isDark ? '#34d399' : '#10b981';
     const downColor = isDark ? '#fb7185' : '#f43f5e';
-    candlestickSeries.applyOptions({ upColor, downColor, wickUpColor: upColor, wickDownColor: downColor });
+    candlestickSeries.value.applyOptions({ upColor, downColor, wickUpColor: upColor, wickDownColor: downColor });
   }
-  if (volumeSeries && klineData.value.length > 0) {
+  if (volumeSeries.value && klineData.value.length > 0) {
     const upVol = isDark ? 'rgba(52, 211, 153, 0.35)' : 'rgba(16, 185, 129, 0.25)';
     const downVol = isDark ? 'rgba(251, 113, 133, 0.35)' : 'rgba(244, 63, 94, 0.25)';
-    volumeSeries.setData(
+    volumeSeries.value.setData(
       klineData.value.map((d) => ({
         time: toChartTime(d.time),
         value: d.volume,
@@ -1199,16 +1245,10 @@ const toggleRightSidebar = () => {
 const leftSidebarWidth = ref(320);
 const rightPanelWidth = ref(340);
 let resizeRaf: number | null = null;
-let chartAreaResizeObserver: ResizeObserver | null = null;
 
 const syncChartSize = () => {
   requestAnimationFrame(() => {
-    if (chartInstance && chartArea.value) {
-      const rect = chartArea.value.getBoundingClientRect();
-      if (rect.width > 0 && rect.height > 0) {
-        chartInstance.applyOptions({ width: Math.floor(rect.width), height: Math.floor(rect.height) });
-      }
-    }
+    syncCoreChartSize(chartArea.value);
   });
 };
 
@@ -1279,11 +1319,17 @@ const formatVolumeNum = (vol: number): string => {
   return vol.toString();
 };
 
-const findPrevClose = (time: string): number | null => {
-  const data = klineData.value;
-  if (data.length < 2) return null;
-  const idx = data.findIndex((d) => d.time === time);
-  return idx > 0 ? data[idx - 1].close : null;
+const findPrevClose = (time: any): number | null => {
+  if (time == null) return null;
+  if (typeof time === 'object' && time.year) {
+    const y = time.year;
+    const m = String(time.month).padStart(2, '0');
+    const d = String(time.day).padStart(2, '0');
+    const dateStr = `${y}-${m}-${d}`;
+    return prevCloseMap.get(dateStr) ?? null;
+  }
+  const s = String(time);
+  return prevCloseMap.get(s) ?? null;
 };
 
 const formatDate = (input: Date | string): string => {
@@ -1310,65 +1356,47 @@ const updateTooltipPosition = (relX: number) => {
 const initChart = () => {
   if (!chartContainer.value) return;
 
-  chartInstance = createChart(chartContainer.value, getChartOptions(isDarkMode.value));
-  chartInstance.timeScale().applyOptions({ minBarSpacing: 3, rightOffset: 12, barSpacing: 8 });
+  initChartCore(chartContainer.value, {
+    isDark: isDarkMode.value,
+    onRangeChange: viewport.onVisibleLogicalRangeChanged,
+    onCrosshairMove: (param) => {
+      if (!param.point || !param.time || !param.seriesData) {
+        tooltipVisible.value = false;
+        return;
+      }
+      const candleData = param.seriesData.get(candlestickSeries.value) as any;
+      if (!candleData) {
+        tooltipVisible.value = false;
+        return;
+      }
+      const timeStr = String(param.time);
+      const prevClose = findPrevClose(param.time as any);
+      const change = prevClose !== null ? ((candleData.close - prevClose) / prevClose) * 100 : 0;
+      const amplitude = prevClose !== null ? ((candleData.high - candleData.low) / prevClose) * 100 : 0;
+      const volData = param.seriesData.get(volumeSeries.value) as any;
 
-  const upColor = isDarkMode.value ? '#34d399' : '#10b981';
-  const downColor = isDarkMode.value ? '#fb7185' : '#f43f5e';
+      tooltipData.value = {
+        date: formatDate(timeStr),
+        open: candleData.open.toFixed(2),
+        high: candleData.high.toFixed(2),
+        low: candleData.low.toFixed(2),
+        close: candleData.close.toFixed(2),
+        change,
+        changeStr: `${change >= 0 ? '+' : ''}${change.toFixed(2)}%`,
+        amplitude: +amplitude.toFixed(2),
+        volumeStr: formatVolumeNum(volData?.value ?? 0),
+      };
 
-  candlestickSeries = chartInstance.addSeries(CandlestickSeries, {
-    upColor,
-    downColor,
-    borderVisible: false,
-    wickUpColor: upColor,
-    wickDownColor: downColor,
+      tooltipVisible.value = true;
+      nextTick(() => updateTooltipPosition(param.point!.x));
+    },
   });
-  markersPlugin = createSeriesMarkers(candlestickSeries);
-  chartAnnotations.init(chartInstance, candlestickSeries, markersPlugin);
+
+  chartAnnotations.init(chartInstance.value!, candlestickSeries.value!, markersPlugin.value!);
   chartAnnotations.clearAnnotations();
-  initIndicators(chartInstance);
-
-  volumeSeries = chartInstance.addSeries(HistogramSeries, {
-    priceFormat: { type: 'volume' },
-    priceScaleId: 'volume',
-  });
-
-  chartInstance.priceScale('volume').applyOptions({ scaleMargins: { top: 0.8, bottom: 0 }, visible: false });
-  chartInstance.priceScale('right').applyOptions({ scaleMargins: { top: 0.1, bottom: 0.25 } });
-  chartInstance.timeScale().subscribeVisibleLogicalRangeChange(viewport.onVisibleLogicalRangeChanged);
+  chartAnnotations.setDarkMode(isDarkMode.value);
+  initIndicators(chartInstance.value!);
   applyChartTheme(isDarkMode.value);
-
-  chartInstance.subscribeCrosshairMove((param) => {
-    if (!param.point || !param.time || !param.seriesData) {
-      tooltipVisible.value = false;
-      return;
-    }
-    const candleData = param.seriesData.get(candlestickSeries) as any;
-    if (!candleData) {
-      tooltipVisible.value = false;
-      return;
-    }
-    const timeStr = String(param.time);
-    const prevClose = findPrevClose(param.time as any);
-    const change = prevClose !== null ? ((candleData.close - prevClose) / prevClose) * 100 : 0;
-    const amplitude = prevClose !== null ? ((candleData.high - candleData.low) / prevClose) * 100 : 0;
-    const volData = param.seriesData.get(volumeSeries) as any;
-
-    tooltipData.value = {
-      date: formatDate(timeStr),
-      open: candleData.open.toFixed(2),
-      high: candleData.high.toFixed(2),
-      low: candleData.low.toFixed(2),
-      close: candleData.close.toFixed(2),
-      change,
-      changeStr: `${change >= 0 ? '+' : ''}${change.toFixed(2)}%`,
-      amplitude: +amplitude.toFixed(2),
-      volumeStr: formatVolumeNum(volData?.value ?? 0),
-    };
-
-    tooltipVisible.value = true;
-    nextTick(() => updateTooltipPosition(param.point!.x));
-  });
 };
 
 // 生命周期与全局事件
@@ -1503,19 +1531,7 @@ onMounted(async () => {
 
         // 持续监听 chartArea 尺寸变动，在侧边栏折叠/展开或窗口变化时自适应图表
         if (chartArea.value) {
-          chartAreaResizeObserver = new ResizeObserver((areaEntries) => {
-            for (const entry of areaEntries) {
-              if (entry.contentRect.width > 0 && entry.contentRect.height > 0) {
-                if (chartInstance) {
-                  chartInstance.applyOptions({
-                    width: Math.floor(entry.contentRect.width),
-                    height: Math.floor(entry.contentRect.height),
-                  });
-                }
-              }
-            }
-          });
-          chartAreaResizeObserver.observe(chartArea.value);
+          observeChartArea(chartArea.value);
         }
       }
     });
@@ -1531,15 +1547,8 @@ onUnmounted(() => {
     clearInterval(autoDetectTimer);
     autoDetectTimer = null;
   }
-  if (chartAreaResizeObserver) {
-    chartAreaResizeObserver.disconnect();
-    chartAreaResizeObserver = null;
-  }
-  if (chartInstance) {
-    chartInstance.timeScale().unsubscribeVisibleLogicalRangeChange(viewport.onVisibleLogicalRangeChanged);
-    chartInstance.remove();
-    chartInstance = null;
-  }
+  chartAnnotations.dispose();
+  disposeChartCore();
   window.removeEventListener('keydown', handleGlobalKeydown);
   document.removeEventListener('click', handleClickOutside);
 });

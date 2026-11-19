@@ -1,4 +1,4 @@
-import { ref, computed, nextTick, type Ref } from 'vue';
+import { ref, computed, nextTick, triggerRef, onUnmounted, type Ref } from 'vue';
 import type { IChartApi } from 'lightweight-charts';
 import { getKLines, marketOf, type KLinePoint, type Period } from '../utils/api';
 import { quoteEngine, type Quote, type SymbolMeta, type QuoteConfig } from '../utils/quote';
@@ -66,6 +66,7 @@ export function useLiveQuoteSync(options: {
 
   let quoteWired = false;
   let isSyncingTail = false;
+  let tailSyncTimer: ReturnType<typeof setTimeout> | null = null;
 
   const displayPrice = computed<number | null>(() => {
     const sym = currentSymbol.value;
@@ -164,6 +165,7 @@ export function useLiveQuoteSync(options: {
         low: Math.min(lastBar.low, activePrice, currentPeriod.value === '1d' && q.low ? q.low : activePrice),
       };
       arr[arr.length - 1] = updatedBar;
+      triggerRef(klineData);
       series.update({
         time: toChartTime(updatedBar.time),
         open: updatedBar.open,
@@ -185,6 +187,7 @@ export function useLiveQuoteSync(options: {
         volume: 0,
       };
       arr.push(newBar);
+      triggerRef(klineData);
       series.update({
         time: toChartTime(newBar.time),
         open: newBar.open,
@@ -195,7 +198,12 @@ export function useLiveQuoteSync(options: {
       try {
         onIndicatorsUpdate(klineData.value);
       } catch {}
-      setTimeout(() => {
+      if (tailSyncTimer) {
+        clearTimeout(tailSyncTimer);
+        tailSyncTimer = null;
+      }
+      tailSyncTimer = setTimeout(() => {
+        tailSyncTimer = null;
         syncLatestBarsSilently(currentSymbol.value, currentPeriod.value);
       }, 1500);
     }
@@ -259,6 +267,18 @@ export function useLiveQuoteSync(options: {
     quoteEngine.stop();
     engineCooling.value = false;
   }
+
+  onUnmounted(() => {
+    if (tailSyncTimer) {
+      clearTimeout(tailSyncTimer);
+      tailSyncTimer = null;
+    }
+    if (typeof window !== 'undefined') {
+      delete (window as any).__onDesktopWindowRestored;
+      delete (window as any).__onDesktopWindowMinimized;
+    }
+    stopQuoteEngine();
+  });
 
   return {
     quoteConfig,

@@ -174,83 +174,93 @@ def fetch_klines(ticker: str, interval: str, period: str, prepost: bool = False,
 # 2. 客观波段拐点（Swing High/Low）与道氏标签打标
 # ==============================================================================
 
-def extract_swings(df: pd.DataFrame, order: int = 5, confirmed_only: bool = True) -> list:
+def extract_swings(df: pd.DataFrame, order: int = 5, confirmed_only: bool = True,
+                   min_swing_k: float = 1.5) -> list:
     """
     使用 scipy.signal.argrelextrema 提取客观波段拐点
-    并进行同向极值归并，保证拐点严格高低交替
+    并进行同向极值归并与基于中位振幅的最小波幅抗噪剪枝，保证拐点严格高低交替且消除微小噪声震荡。
 
     [FIX-1] argrelextrema 的 order 语义要求右侧还需 order 根K线，该点才能成立。
     因此 index > len(df)-1-order 的拐点是「未确认」的：它可能被后续K线推翻（重绘），
     且回测中引用它等于使用未来信息。默认只返回已确认拐点。
     """
-    if len(df) < order * 2 + 3:
+    if df is None or len(df) < order * 2 + 3:
         return []
 
-    high_idx = argrelextrema(df['High'].values, np.greater_equal, order=order)[0]
-    low_idx = argrelextrema(df['Low'].values, np.less_equal, order=order)[0]
+    high_col = 'High' if 'High' in df.columns else 'high'
+    low_col = 'Low' if 'Low' in df.columns else 'low'
+    open_col = 'Open' if 'Open' in df.columns else ('open' if 'open' in df.columns else ('Close' if 'Close' in df.columns else 'close'))
+    close_col = 'Close' if 'Close' in df.columns else 'close'
 
+    highs = df[high_col].to_numpy(dtype=float)
+    lows = df[low_col].to_numpy(dtype=float)
+    opens = df[open_col].to_numpy(dtype=float)
+    closes = df[close_col].to_numpy(dtype=float)
+
+    high_idx = argrelextrema(highs, np.greater_equal, order=order)[0]
+    low_idx = argrelextrema(lows, np.less_equal, order=order)[0]
+
+    # 1. 处理同根 Outside Bar：根据阴阳线决定高低点先后，避免固定 High 在前
     raw_swings = []
-    for idx in high_idx:
-        raw_swings.append({
-            "index": idx,
-            "time": df.index[idx],
-            "type": "High",
-            "price": float(df['High'].iloc[idx])
-        })
-    for idx in low_idx:
-        raw_swings.append({
-            "index": idx,
-            "time": df.index[idx],
-            "type": "Low",
-            "price": float(df['Low'].iloc[idx])
-        })
+    high_set = set(high_idx.tolist())
+    low_set = set(low_idx.tolist())
+    all_idx = sorted(high_set | low_set)
 
-    # 按时间严格升序
-    raw_swings.sort(key=lambda x: x["time"])
-
-    # 归并连续相同类型的拐点（高点取更高，低点取更低）
-    clean_swings = []
-    for pt in raw_swings:
-        if not clean_swings:
-            clean_swings.append(pt)
-            continue
-        last = clean_swings[-1]
-        if last["type"] == pt["type"]:
-            if pt["type"] == "High" and pt["price"] > last["price"]:
-                clean_swings[-1] = pt
-            elif pt["type"] == "Low" and pt["price"] < last["price"]:
-                clean_swings[-1] = pt
+    for idx in all_idx:
+        t = df.index[idx]
+        if idx in high_set and idx in low_set:
+            # 阳线先低后高，阴线先高后低
+            seq = [("Low", lows[idx]), ("High", highs[idx])] if closes[idx] >= opens[idx] else [("High", highs[idx]), ("Low", lows[idx])]
+            for tp, pr in seq:
+                raw_swings.append({"index": idx, "time": t, "type": tp, "price": float(pr)})
+        elif idx in high_set:
+            raw_swings.append({"index": idx, "time": t, "type": "High", "price": float(highs[idx])})
         else:
-            clean_swings.append(pt)
+            raw_swings.append({"index": idx, "time": t, "type": "Low", "price": float(lows[idx])})
 
-    # 打上道氏结构标签 (HH, HL, LH, LL)
-    last_high = None
-    last_low = None
-    last_high_dow = None
+    # 2. 同向极值归并 + 最小波幅抗噪剪枝 (基于中位振幅)
+    bar_rng = median_bar_range(df, n=14)
+
+    def _prune(min_k: float) -> list:
+        amp = min_k * bar_rng if (min_k > 0 and bar_rng > 0) else 0.0
+        res = []
+        for pt in raw_swings:
+            if not res:
+                res.append(dict(pt))
+                continue
+            last = res[-1]
+            if last["type"] == pt["type"]:
+                if (pt["type"] == "High" and pt["price"] > last["price"]) or \
+                   (pt["type"] == "Low" and pt["price"] < last["price"]):
+                    res[-1] = dict(pt)
+            else:
+                # 抗噪剪枝：波幅不足阈值则忽略该毛刺拐点
+                if abs(pt["price"] - last["price"]) < amp:
+                    continue
+                res.append(dict(pt))
+        return res
+
+    clean_swings = _prune(min_swing_k)
+    # 自适应退火：若因尺度异常导致拐点被过度裁切(<4个且原始拐点充裕)，平滑降低阈值以保护主结构
+    if len(clean_swings) < 4 and len(raw_swings) >= 4 and min_swing_k > 0:
+        clean_swings = _prune(min_swing_k * 0.5)
+        if len(clean_swings) < 4:
+            clean_swings = _prune(0.0)
+
+    # 3. 客观道氏打标（严禁在 LH 后强行将抬高低点改写为 LL）
+    last_high, last_low = None, None
     for pt in clean_swings:
         if pt["type"] == "High":
-            if last_high is None:
-                pt["dow"] = "High"
-            else:
-                pt["dow"] = "HH" if pt["price"] >= last_high else "LH"
+            pt["dow"] = "High" if last_high is None else ("HH" if pt["price"] >= last_high else "LH")
             last_high = pt["price"]
-            last_high_dow = pt["dow"]
         else:
-            if last_low is None:
-                pt["dow"] = "Low"
-            else:
-                # 严格道氏理论与波浪法则：若前一波峰为次级高点 LH (处于下降波段/通道中)，
-                # 低点必须标注为 LL，严禁在空头波段中错误标注多头符号 HL
-                if pt["price"] < last_low:
-                    pt["dow"] = "LL"
-                else:
-                    pt["dow"] = "LL" if last_high_dow == "LH" else "HL"
+            pt["dow"] = "Low" if last_low is None else ("HL" if pt["price"] >= last_low else "LL")
             last_low = pt["price"]
 
     # [FIX-1] 标记确认状态：右侧需满 order 根才能确认
     cutoff = len(df) - 1 - order
     for pt in clean_swings:
-        pt["confirmed"] = pt["index"] <= cutoff
+        pt["confirmed"] = bool(pt["index"] <= cutoff)
         pt["bars_to_confirm"] = max(0, pt["index"] + order - (len(df) - 1))
 
     if confirmed_only:
@@ -303,12 +313,15 @@ def _determine_dow_phase(swings: list) -> str:
 # 2b. [P1-5] 市场结构转换检测 (MSS - Market Structure Shift)
 # ==============================================================================
 
-def detect_mss(swings: list, df: pd.DataFrame = None, buffer_k: float = 0.0) -> list:
+def detect_mss(swings: list, df: pd.DataFrame = None, buffer_k: float = 0.0,
+               vol_mult: float = 1.2) -> list:
     """
     [P1-5 / P1-7 优化] 市场结构转换检测 (MSS - Market Structure Shift)。
     
     当提供 df 时：
       要求收盘价对前一个结构位形成真实穿越（displacement），
+      且多翻空要求前置 LH（反弹未创新高）或跌破当日放量 >= 1.2x 20日均量；
+      空翻多要求前置 HL 或突破当日放量 >= 1.2x 20日均量。
       不仅看相邻标签组合，且同向事件去重，消除重复触发与伪信号。
     当 df 为 None 时：
       遍历道氏标签序列，检测趋势从多翻空（HH/HL → LH+LL）或空翻多（LH/LL → HL+HH）的精确转折点。
@@ -320,81 +333,96 @@ def detect_mss(swings: list, df: pd.DataFrame = None, buffer_k: float = 0.0) -> 
     if df is not None and len(df) > 0:
         bar_rng = median_bar_range(df, n=14) if buffer_k > 0 else 0.0
         buf = buffer_k * bar_rng
+        has_vol = "Volume" in df.columns
+        vols = df["Volume"].to_numpy(dtype=float) if has_vol else None
 
         confirmed = [s for s in swings if s.get("confirmed", True)]
         if len(confirmed) >= 3:
             highs = [s for s in confirmed if s.get("type") == "High"]
             lows = [s for s in confirmed if s.get("type") == "Low"]
 
-            # 多翻空条件：此前有多头特征，收盘击穿最近的波段低点
+            # 多翻空条件：此前有多头特征，收盘击穿最近的波段低点，且要求前置 LH 或放量确认 (>= 1.2x 20日均量)
             if lows and any(s.get("dow") in ("HH", "HL") for s in confirmed[-5:]):
                 last_l = lows[-1]
+                has_lh = bool(highs and highs[-1].get("dow") == "LH")
                 l_idx = max(0, min(last_l.get("index", 0), len(df) - 1))
                 sub_closes = df['Close'].iloc[l_idx:]
                 hits = sub_closes[sub_closes < last_l["price"] - buf]
                 if not hits.empty:
                     hit_time = str(hits.index[0])[:16]
                     hit_price = float(hits.iloc[0])
-                    hit_loc = df.index.get_loc(hits.index[0])
-                    events.append({
-                        "type": "🔻 空翻 (Bearish MSS)",
-                        "trigger_time": hit_time,
-                        "trigger_price": hit_price,
-                        "bars_ago": len(df) - 1 - hit_loc,
-                        "detail": f"收盘跌破前结构低点 ${last_l['price']:.2f}（外溢 ${buf:.2f}）→ 多头结构被破坏"
-                    })
+                    hit_loc = int(df.index.get_loc(hits.index[0]))
+                    vol_ok = True
+                    if has_vol and hit_loc >= 5:
+                        avg_v = float(np.mean(vols[max(0, hit_loc - 20):hit_loc]))
+                        vol_ok = avg_v <= 0 or vols[hit_loc] >= vol_mult * avg_v
+                    if has_lh or vol_ok:
+                        events.append({
+                            "type": "🔻 空翻 (Bearish MSS)",
+                            "trigger_time": hit_time,
+                            "trigger_price": hit_price,
+                            "bars_ago": len(df) - 1 - hit_loc,
+                            "detail": f"收盘跌破前结构低点 ${last_l['price']:.2f}（{'LH+破位' if has_lh else '放量破位'}）→ 多头结构被破坏"
+                        })
 
-            # 空翻多条件：此前有空头特征，收盘突破最近的波段高点
+            # 空翻多条件：此前有空头特征，收盘突破最近的波段高点，且要求前置 HL 或放量确认 (>= 1.2x 20日均量)
             if highs and any(s.get("dow") in ("LH", "LL") for s in confirmed[-5:]):
                 last_h = highs[-1]
+                has_hl = bool(lows and lows[-1].get("dow") == "HL")
                 h_idx = max(0, min(last_h.get("index", 0), len(df) - 1))
                 sub_closes = df['Close'].iloc[h_idx:]
                 hits = sub_closes[sub_closes > last_h["price"] + buf]
                 if not hits.empty:
                     hit_time = str(hits.index[0])[:16]
                     hit_price = float(hits.iloc[0])
-                    hit_loc = df.index.get_loc(hits.index[0])
+                    hit_loc = int(df.index.get_loc(hits.index[0]))
+                    vol_ok = True
+                    if has_vol and hit_loc >= 5:
+                        avg_v = float(np.mean(vols[max(0, hit_loc - 20):hit_loc]))
+                        vol_ok = avg_v <= 0 or vols[hit_loc] >= vol_mult * avg_v
+                    if has_hl or vol_ok:
+                        events.append({
+                            "type": "🔺 多翻 (Bullish MSS)",
+                            "trigger_time": hit_time,
+                            "trigger_price": hit_price,
+                            "bars_ago": len(df) - 1 - hit_loc,
+                            "detail": f"收盘突破前结构高点 ${last_h['price']:.2f}（{'HL+突破' if has_hl else '放量突破'}）→ 空头结构被破坏"
+                        })
+        # 若 df 模式下识别到了 MSS 事件，直接流向去重处理
+    # 未识别到位移穿越时，回退到纯拐点序列判定（仅使用已确认拐点，杜绝未确认尾部重绘）
+    if not events:
+        scan_swings = [s for s in swings if s.get("confirmed", True)] if swings else []
+        for i in range(3, len(scan_swings)):
+            curr = scan_swings[i]
+            prev = scan_swings[i - 1]
+
+            # 多翻空：先出现 LH，再出现 LL → 多头结构被破坏
+            if prev.get("dow") == "LH" and curr.get("dow") == "LL":
+                prior_bullish = any(
+                    scan_swings[j].get("dow") in ("HH", "HL")
+                    for j in range(max(0, i - 5), i - 1)
+                )
+                if prior_bullish:
+                    events.append({
+                        "type": "🔻 空翻 (Bearish MSS)",
+                        "trigger_time": str(curr["time"])[:16],
+                        "trigger_price": curr["price"],
+                        "detail": f"LH ${prev['price']:.2f} + LL ${curr['price']:.2f} → 多头结构被破坏"
+                    })
+
+            # 空翻多：先出现 HL，再出现 HH → 空头结构被破坏
+            elif prev.get("dow") == "HL" and curr.get("dow") == "HH":
+                prior_bearish = any(
+                    scan_swings[j].get("dow") in ("LH", "LL")
+                    for j in range(max(0, i - 5), i - 1)
+                )
+                if prior_bearish:
                     events.append({
                         "type": "🔺 多翻 (Bullish MSS)",
-                        "trigger_time": hit_time,
-                        "trigger_price": hit_price,
-                        "bars_ago": len(df) - 1 - hit_loc,
-                        "detail": f"收盘突破前结构高点 ${last_h['price']:.2f}（外溢 ${buf:.2f}）→ 空头结构被破坏"
+                        "trigger_time": str(curr["time"])[:16],
+                        "trigger_price": curr["price"],
+                        "detail": f"HL ${prev['price']:.2f} + HH ${curr['price']:.2f} → 空头结构被破坏"
                     })
-        # 若 df 模式下识别到了 MSS 事件，直接流向去重处理
-    # 未识别到位移穿越时，回退到纯拐点序列判定
-    if not events:
-        for i in range(3, len(swings)):
-            curr = swings[i]
-            prev = swings[i - 1]
-
-        # 多翻空：先出现 LH，再出现 LL → 多头结构被破坏
-        if prev.get("dow") == "LH" and curr.get("dow") == "LL":
-            prior_bullish = any(
-                swings[j].get("dow") in ("HH", "HL")
-                for j in range(max(0, i - 5), i - 1)
-            )
-            if prior_bullish:
-                events.append({
-                    "type": "🔻 空翻 (Bearish MSS)",
-                    "trigger_time": str(curr["time"])[:16],
-                    "trigger_price": curr["price"],
-                    "detail": f"LH ${prev['price']:.2f} + LL ${curr['price']:.2f} → 多头结构被破坏"
-                })
-
-        # 空翻多：先出现 HL，再出现 HH → 空头结构被破坏
-        elif prev.get("dow") == "HL" and curr.get("dow") == "HH":
-            prior_bearish = any(
-                swings[j].get("dow") in ("LH", "LL")
-                for j in range(max(0, i - 5), i - 1)
-            )
-            if prior_bearish:
-                events.append({
-                    "type": "🔺 多翻 (Bullish MSS)",
-                    "trigger_time": str(curr["time"])[:16],
-                    "trigger_price": curr["price"],
-                    "detail": f"HL ${prev['price']:.2f} + HH ${curr['price']:.2f} → 空头结构被破坏"
-                })
 
     # [P1-7] 同向连续重复触发去重
     deduped = []
@@ -1005,6 +1033,54 @@ def _resolve_swing_idx(swing: dict, df: pd.DataFrame = None) -> int | None:
     return None
 
 
+def _detect_wave5_variants_and_volume(cand: list, direction: int, df: pd.DataFrame = None,
+                                      rule1_passed: bool = True, rule2_passed: bool = True, rule3_passed: bool = True) -> dict:
+    """检测失败第五浪(Truncation)、终结倾斜三角形(Ending Diagonal)与5浪量能背离。"""
+    if len(cand) < 6:
+        return {"variant": None, "wave5_volume_divergence": False}
+
+    p0, p1, p2, p3, p4, p5 = [float(s["price"]) for s in cand]
+    l1 = abs(p1 - p0)
+    l3 = abs(p3 - p2)
+
+    variant = None
+    # 1. 失败第五浪：3浪强劲延伸 (>=1.618*L1)，5浪未创新高/新低但其余铁律成立
+    is_trunc = (
+        rule1_passed and rule3_passed and l1 > 0 and (l3 / l1) >= 1.618 and
+        ((direction == 1 and p4 < p5 <= p3) or (direction == -1 and p3 <= p5 < p4))
+    )
+    if is_trunc:
+        variant = "truncated_wave_5"
+
+    # 2. 终结倾斜三角形：允许4浪重叠1浪领地，但高低点呈楔形收敛 (两边斜率收敛)
+    if variant is None and rule1_passed and not rule3_passed:
+        i1, i2, i3, i4, i5 = [_resolve_swing_idx(cand[k], df) for k in (1, 2, 3, 4, 5)]
+        if None not in (i1, i2, i3, i4, i5) and i5 > i1 and i4 > i2:
+            if direction == 1 and p1 < p3 < p5 and p2 < p4 < p1:
+                slope_hi = (p5 - p1) / float(i5 - i1)
+                slope_lo = (p4 - p2) / float(i4 - i2)
+                if 0 < slope_hi < slope_lo:
+                    variant = "ending_diagonal"
+            elif direction == -1 and p1 > p3 > p5 and p2 > p4 > p1:
+                slope_lo = (p5 - p1) / float(i5 - i1)
+                slope_hi = (p4 - p2) / float(i4 - i2)
+                if slope_hi < slope_lo < 0:
+                    variant = "ending_diagonal"
+
+    # 3. 第5浪量能背离校验（5浪区间均量 < 0.8 * 3浪区间均量）
+    w5_vol_div = False
+    if df is not None and "Volume" in df.columns:
+        i2, i3, i4, i5 = [_resolve_swing_idx(cand[k], df) for k in (2, 3, 4, 5)]
+        if None not in (i2, i3, i4, i5) and i3 > i2 and i5 > i4:
+            v = df["Volume"].to_numpy(dtype=float)
+            v3 = float(np.mean(v[i2:i3 + 1]))
+            v5 = float(np.mean(v[i4:i5 + 1]))
+            if v3 > 0 and v5 < 0.8 * v3:
+                w5_vol_div = True
+
+    return {"variant": variant, "wave5_volume_divergence": w5_vol_div}
+
+
 def classify_wave_pattern(swings: list, df: pd.DataFrame = None, allow_shallow_w4: bool = False) -> dict:
     """
     基于客观确认的波段拐点自动进行浪型识别与三大铁律校验：
@@ -1089,11 +1165,35 @@ def classify_wave_pattern(swings: list, df: pd.DataFrame = None, allow_shallow_w
             rule3_effective_passed = rule3_passed or (allow_shallow_w4 and shallow_overlap_orthodox_ok)
             is_valid = rule1_passed and rule2_passed and rule3_effective_passed
 
+            w5_info = _detect_wave5_variants_and_volume(
+                cand, direction=1, df=df,
+                rule1_passed=rule1_passed, rule2_passed=rule2_passed, rule3_passed=rule3_passed
+            )
+            pat_name = "impulse_5_wave"
+            if w5_info["variant"] == "truncated_wave_5":
+                pat_name = "truncated_wave_5"
+                is_valid = True
+            elif w5_info["variant"] == "ending_diagonal":
+                pat_name = "ending_diagonal"
+                is_valid = True
+
+            summary_text = (
+                "多头失败第5浪 (Truncated Wave 5, 3浪延伸但5浪未创极值)" if pat_name == "truncated_wave_5" else (
+                    "多头终结倾斜三角形 (Ending Diagonal, 楔形收敛)" if pat_name == "ending_diagonal" else (
+                        "完整多头5浪冲量驱动结构（三大铁律全部通过）" if is_valid else "多头5浪形态破坏（未通过铁律校验）"
+                    )
+                )
+            )
+            if w5_info["wave5_volume_divergence"]:
+                summary_text += " [5浪量能显著背离]"
+
             return {
-                "pattern": "impulse_5_wave",
+                "pattern": pat_name,
                 "direction": 1,
                 "current_wave": "wave_5_completed" if is_valid else "impulse_failed",
                 "is_valid_impulse": is_valid,
+                "wave5_variant": w5_info["variant"],
+                "wave5_volume_divergence": w5_info["wave5_volume_divergence"],
                 "wave_points": {0: cand[0], 1: cand[1], 2: cand[2], 3: cand[3], 4: cand[4], 5: cand[5]},
                 "rules": {
                     "rule1": {
@@ -1138,7 +1238,7 @@ def classify_wave_pattern(swings: list, df: pd.DataFrame = None, allow_shallow_w
                     "w4_retrace": round(w4_retrace, 3),
                     "w5_to_w1": round(l5 / l1, 3) if l1 > 0 else None
                 },
-                "summary": "完整多头5浪冲量驱动结构（三大铁律全部通过）" if is_valid else "多头5浪形态破坏（未通过铁律校验）"
+                "summary": summary_text
             }
 
         # 空头推动浪候选：High, Low, High, Low, High, Low
@@ -1194,11 +1294,35 @@ def classify_wave_pattern(swings: list, df: pd.DataFrame = None, allow_shallow_w
             rule3_effective_passed = rule3_passed or (allow_shallow_w4 and shallow_overlap_orthodox_ok)
             is_valid = rule1_passed and rule2_passed and rule3_effective_passed
 
+            w5_info = _detect_wave5_variants_and_volume(
+                cand, direction=-1, df=df,
+                rule1_passed=rule1_passed, rule2_passed=rule2_passed, rule3_passed=rule3_passed
+            )
+            pat_name = "impulse_5_wave"
+            if w5_info["variant"] == "truncated_wave_5":
+                pat_name = "truncated_wave_5"
+                is_valid = True
+            elif w5_info["variant"] == "ending_diagonal":
+                pat_name = "ending_diagonal"
+                is_valid = True
+
+            summary_text = (
+                "空头失败第5浪 (Truncated Wave 5, 3浪延伸但5浪未创极值)" if pat_name == "truncated_wave_5" else (
+                    "空头终结倾斜三角形 (Ending Diagonal, 楔形收敛)" if pat_name == "ending_diagonal" else (
+                        "完整空头5浪冲量驱动结构（三大铁律全部通过）" if is_valid else "空头5浪形态破坏"
+                    )
+                )
+            )
+            if w5_info["wave5_volume_divergence"]:
+                summary_text += " [5浪量能显著背离]"
+
             return {
-                "pattern": "impulse_5_wave",
+                "pattern": pat_name,
                 "direction": -1,
                 "current_wave": "wave_5_completed" if is_valid else "impulse_failed",
                 "is_valid_impulse": is_valid,
+                "wave5_variant": w5_info["variant"],
+                "wave5_volume_divergence": w5_info["wave5_volume_divergence"],
                 "wave_points": {0: cand[0], 1: cand[1], 2: cand[2], 3: cand[3], 4: cand[4], 5: cand[5]},
                 "rules": {
                     "rule1": {"passed": rule1_passed, "name": "铁律1: 浪2不破浪1起点", "desc": f"浪2高点 ${p2:.2f} <= 浪1起点 ${p0:.2f}"},
@@ -1233,7 +1357,7 @@ def classify_wave_pattern(swings: list, df: pd.DataFrame = None, allow_shallow_w
                     "w4_retrace": round(w4_retrace, 3),
                     "w5_to_w1": round(l5 / l1, 3) if l1 > 0 else None
                 },
-                "summary": "完整空头5浪冲量驱动结构（三大铁律全部通过）" if is_valid else "空头5浪形态破坏"
+                "summary": summary_text
             }
         return None
 
@@ -1471,7 +1595,7 @@ def evaluate_wave_position(swings: list, df: pd.DataFrame = None, current_price:
     if pattern == "unclassified":
         is_valid = False
         reason = "拐点不足或未识别出合规波浪结构，无波浪证伪止损位"
-    elif pattern in ("developing_wave_5", "impulse_5_wave"):
+    elif pattern in ("developing_wave_5", "impulse_5_wave", "truncated_wave_5", "ending_diagonal"):
         # 铁律 3: 浪4 终点不重叠进入 浪1 领地 (多头 p4 > p1，空头 p4 < p1)
         # 铁律 1: 浪2 不跌破 浪1 起点 (多头 p2 >= p0，空头 p2 <= p0)
         p0 = float(pts.get(0, {}).get("price", 0)) if 0 in pts else 0.0
@@ -1700,7 +1824,8 @@ def classify_corrective_subtypes(swings: list) -> dict:
                         "direction": 1,
                         "ba_ratio": round(ba_ratio, 3),
                         "ca_ratio": round(ca_ratio, 3),
-                        "desc": f"顺势平台形 (Running Flat, B破顶 B/A={ba_ratio:.2f} 且 C未破A底，多头极强)"
+                        "nested_1212_warning": True,
+                        "desc": f"顺势平台形 (Running Flat, B破顶 B/A={ba_ratio:.2f} 且 C未破A底，多头极强)（警告：90% 概率实为 1-2-1-2 嵌套主升浪，严禁逆势摸顶）"
                     }
             if 0.85 <= ba_ratio <= 1.05 and 0.80 <= ca_ratio <= 1.20:
                 return {
@@ -1751,7 +1876,8 @@ def classify_corrective_subtypes(swings: list) -> dict:
                         "direction": -1,
                         "ba_ratio": round(ba_ratio, 3),
                         "ca_ratio": round(ca_ratio, 3),
-                        "desc": f"空头顺势平台形 (Running Flat, B破底 B/A={ba_ratio:.2f} 且 C未破A顶，空头极强)"
+                        "nested_1212_warning": True,
+                        "desc": f"空头顺势平台形 (Running Flat, B破底 B/A={ba_ratio:.2f} 且 C未破A顶，空头极强)（警告：90% 概率实为 1-2-1-2 嵌套主跌浪，严禁逆势抄底）"
                     }
             if 0.85 <= ba_ratio <= 1.05 and 0.80 <= ca_ratio <= 1.20:
                 return {
@@ -1835,9 +1961,10 @@ def calc_time_windows(swings: list, df: pd.DataFrame) -> dict:
     }
 
 
-def calc_elliott_channel(swings: list, df: pd.DataFrame, wp: dict = None) -> dict:
+def calc_elliott_channel(swings: list, df: pd.DataFrame, wp: dict = None,
+                         use_log: bool = True) -> dict:
     """
-    原著艾略特通道技术 (1-2 临时通道 & 2-4 主通道，严格因果)：
+    原著艾略特通道技术 (1-2 临时通道 & 2-4 主通道，严格因果，支持自适应对数坐标)：
       - 第一阶段 1-2 临时通道：连接 0(1浪起点) 与 2(2浪底) 作基线，过 1(1浪顶) 作平行轨，
         跟踪第 3 浪是否强势突破临时通道轨；
       - 第二阶段 2-4 主通道：连接 2(2浪底) 与 4(4浪底) 作核心基线，过 3(3浪顶) 作平行轨，
@@ -1855,39 +1982,52 @@ def calc_elliott_channel(swings: list, df: pd.DataFrame, wp: dict = None) -> dic
     curr_close = float(df["Close"].iloc[-1])
 
     def _project_line(i1: int, p1: float, i2: int, p2: float, target_i: int) -> float | None:
-        if i2 == i1:
+        if i2 == i1 or p1 <= 0 or p2 <= 0:
             return None
+        if use_log:
+            y1, y2 = np.log(p1), np.log(p2)
+            slope = (y2 - y1) / float(i2 - i1)
+            return float(np.exp(y1 + slope * float(target_i - i1)))
         slope = (p2 - p1) / float(i2 - i1)
         return p1 + slope * float(target_i - i1)
 
-    # 阶段二：2-4 主通道（优先，适用于 developing_wave_5 / impulse_5_wave）
-    if pattern in ("developing_wave_5", "impulse_5_wave") and all(k in pts for k in (2, 3, 4)):
+    def _project_parallel(i1: int, p1: float, i2: int, p2: float, i_anchor: int, p_anchor: float, target_i: int) -> float | None:
+        if i2 == i1 or p1 <= 0 or p2 <= 0 or p_anchor <= 0:
+            return None
+        if use_log:
+            slope = (np.log(p2) - np.log(p1)) / float(i2 - i1)
+            return float(np.exp(np.log(p_anchor) + slope * float(target_i - i_anchor)))
+        slope = (p2 - p1) / float(i2 - i1)
+        return p_anchor + slope * float(target_i - i_anchor)
+
+    # 阶段二：2-4 主通道（优先，适用于 developing_wave_5 / impulse_5_wave / truncated_wave_5 / ending_diagonal）
+    if pattern in ("developing_wave_5", "impulse_5_wave", "truncated_wave_5", "ending_diagonal") and all(k in pts for k in (2, 3, 4)):
         i2 = _resolve_swing_idx(pts[2], df)
         i3 = _resolve_swing_idx(pts[3], df)
         i4 = _resolve_swing_idx(pts[4], df)
-        if i2 is not None and i3 is not None and i4 is not None and i2 >= 0 and i4 > i2 and i4 <= curr_idx:
+        if i2 is not None and i3 is not None and i4 is not None and 0 <= i2 < i4 <= curr_idx:
             p2 = float(pts[2]["price"])
             p3 = float(pts[3]["price"])
             p4 = float(pts[4]["price"])
             base_val = _project_line(i2, p2, i4, p4, curr_idx)
-            slope = (p4 - p2) / float(i4 - i2)
-            # 过 3 浪顶点作平行轨：y(t) = p3 + slope * (t - i3)
-            parallel_val = p3 + slope * float(curr_idx - i3)
-            if base_val is not None:
+            parallel_val = _project_parallel(i2, p2, i4, p4, i3, p3, curr_idx)
+            if base_val is not None and parallel_val is not None:
                 width = parallel_val - base_val
                 pos = (curr_close - base_val) / width if abs(width) > 1e-9 else 0.5
                 trend_broken = bool((direction == 1 and curr_close < base_val) or
                                     (direction == -1 and curr_close > base_val))
+                scale_tag = "对数" if use_log else "算术"
                 if direction == 1:
-                    desc = (f"2-4 主通道已跌穿基线(${base_val:.2f})，宣告5浪推动终结"
+                    desc = (f"2-4 {scale_tag}主通道已跌穿基线(${base_val:.2f})，宣告5浪推动终结"
                             if trend_broken else
-                            f"2-4 主通道运行中（基线=${base_val:.2f}, 上轨=${parallel_val:.2f}, pos={pos:.2f}）")
+                            f"2-4 {scale_tag}主通道运行中（基线=${base_val:.2f}, 上轨=${parallel_val:.2f}, pos={pos:.2f}）")
                 else:
-                    desc = (f"2-4 主通道已向上突破基线(${base_val:.2f})，宣告空头5浪推动终结"
+                    desc = (f"2-4 {scale_tag}主通道已向上突破基线(${base_val:.2f})，宣告空头5浪终结"
                             if trend_broken else
-                            f"2-4 主通道运行中（基线=${base_val:.2f}, 下轨=${parallel_val:.2f}, pos={pos:.2f}）")
+                            f"2-4 {scale_tag}主通道运行中（基线=${base_val:.2f}, 下轨=${parallel_val:.2f}, pos={pos:.2f}）")
                 return {
                     "channel_stage": "2-4_primary",
+                    "scale": "log" if use_log else "linear",
                     "direction": direction,
                     "baseline_val": round(base_val, 2),
                     "parallel_rail_val": round(parallel_val, 2),
@@ -1901,26 +2041,27 @@ def calc_elliott_channel(swings: list, df: pd.DataFrame, wp: dict = None) -> dic
         i0 = _resolve_swing_idx(pts[0], df)
         i1 = _resolve_swing_idx(pts[1], df)
         i2 = _resolve_swing_idx(pts[2], df)
-        if i0 is not None and i1 is not None and i2 is not None and i0 >= 0 and i2 > i0 and i2 <= curr_idx:
+        if i0 is not None and i1 is not None and i2 is not None and 0 <= i0 < i2 <= curr_idx:
             p0 = float(pts[0]["price"])
             p1 = float(pts[1]["price"])
             p2 = float(pts[2]["price"])
             base_val = _project_line(i0, p0, i2, p2, curr_idx)
-            slope = (p2 - p0) / float(i2 - i0)
-            parallel_val = p1 + slope * float(curr_idx - i1)
-            if base_val is not None:
+            parallel_val = _project_parallel(i0, p0, i2, p2, i1, p1, curr_idx)
+            if base_val is not None and parallel_val is not None:
                 breakout_confirmed = bool((direction == 1 and curr_close > parallel_val) or
                                           (direction == -1 and curr_close < parallel_val))
+                scale_tag = "对数" if use_log else "算术"
                 accel_label = "主升加速确认" if direction == 1 else "主跌加速确认"
                 return {
                     "channel_stage": "1-2_temporary",
+                    "scale": "log" if use_log else "linear",
                     "direction": direction,
                     "baseline_val": round(base_val, 2),
                     "parallel_rail_val": round(parallel_val, 2),
                     "breakout_confirmed": breakout_confirmed,
                     "desc": (f"3浪已放量突破 1-2 临时通道轨(${parallel_val:.2f})，{accel_label}"
                              if breakout_confirmed else
-                             f"1-2 临时通道跟踪中（基线=${base_val:.2f}, 突破轨=${parallel_val:.2f}）")
+                             f"1-2 {scale_tag}临时通道跟踪中（基线=${base_val:.2f}, 突破轨=${parallel_val:.2f}）")
                 }
 
     return {"channel_stage": "none", "desc": "当前浪型未构成 1-2 或 2-4 艾略特通道"}
@@ -1995,45 +2136,56 @@ def generate_wave_counts(swings: list, df: pd.DataFrame = None, wp: dict = None)
 def detect_gaps(df: pd.DataFrame, min_gap_pct: float = 0.008) -> list:
     """
     探测客观价格结构中的跳空缺口（相邻K线高低点不重叠）
-    并自动跟踪检验该缺口在后续K线中是否未被完全回补
+    并自动跟踪检验该缺口在后续K线中是否未被完全回补。
+    基于后缀极值累积数组实现 O(N) 线性扫描。
     """
+    n = len(df)
+    if n < 5:
+        return []
+
+    high_col = 'High' if 'High' in df.columns else 'high'
+    low_col = 'Low' if 'Low' in df.columns else 'low'
+    highs = df[high_col].to_numpy(dtype=float)
+    lows = df[low_col].to_numpy(dtype=float)
+
+    # 后缀极值：suffix_min_low[i] 表示 i+1..n-1 中的最低价
+    # suffix_max_high[i] 表示 i+1..n-1 中的最高价
+    suffix_min_low = np.empty(n, dtype=float)
+    suffix_min_low[-1] = np.inf
+    suffix_min_low[:-1] = np.minimum.accumulate(lows[:0:-1])[::-1]
+
+    suffix_max_high = np.empty(n, dtype=float)
+    suffix_max_high[-1] = -np.inf
+    suffix_max_high[:-1] = np.maximum.accumulate(highs[:0:-1])[::-1]
+
+    # bull_mask / bear_mask 对应 i 从 1 到 n-1 (mask 索引 0 对应 i=1)
+    bull_mask = (lows[1:] > highs[:-1] * (1.0 + min_gap_pct)) & (suffix_min_low[1:] > highs[:-1])
+    bear_mask = (highs[1:] < lows[:-1] * (1.0 - min_gap_pct)) & (suffix_max_high[1:] < lows[:-1])
+
     gaps = []
-    if len(df) < 5:
-        return gaps
-
-    for i in range(1, len(df)):
-        prev = df.iloc[i - 1]
-        curr = df.iloc[i]
-
-        # 向上跳空：当前最低价 > 前一根最高价
-        if curr['Low'] > prev['High'] * (1 + min_gap_pct):
-            gap_low = prev['High']
-            gap_high = curr['Low']
-            subsequent = df.iloc[i + 1:]
-            filled = not subsequent.empty and subsequent['Low'].min() <= gap_low
-            if not filled:
-                gaps.append({
-                    "date": str(curr.name)[:10],
-                    "type": "向上跳空支撑缺口 (Bullish Gap)",
-                    "range": f"${gap_low:.2f} - ${gap_high:.2f}",
-                    "level": round(gap_low, 2),
-                    "status": "未回补 (强引力/支撑防线)"
-                })
-
-        # 向下跳空：当前最高价 < 前一根最低价
-        elif curr['High'] < prev['Low'] * (1 - min_gap_pct):
-            gap_high = prev['Low']
-            gap_low = curr['High']
-            subsequent = df.iloc[i + 1:]
-            filled = not subsequent.empty and subsequent['High'].max() >= gap_high
-            if not filled:
-                gaps.append({
-                    "date": str(curr.name)[:10],
-                    "type": "向下跳空阻力缺口 (Bearish Gap)",
-                    "range": f"${gap_low:.2f} - ${gap_high:.2f}",
-                    "level": round(gap_high, 2),
-                    "status": "未回补 (强引力/阻力防线)"
-                })
+    hit_indices = np.where(bull_mask | bear_mask)[0] + 1
+    for i in hit_indices:
+        dt = str(df.index[i])[:10]
+        if bull_mask[i - 1]:
+            gap_low = highs[i - 1]
+            gap_high = lows[i]
+            gaps.append({
+                "date": dt,
+                "type": "向上跳空支撑缺口 (Bullish Gap)",
+                "range": f"${gap_low:.2f} - ${gap_high:.2f}",
+                "level": round(float(gap_low), 2),
+                "status": "未回补 (强引力/支撑防线)"
+            })
+        elif bear_mask[i - 1]:
+            gap_high = lows[i - 1]
+            gap_low = highs[i]
+            gaps.append({
+                "date": dt,
+                "type": "向下跳空阻力缺口 (Bearish Gap)",
+                "range": f"${gap_low:.2f} - ${gap_high:.2f}",
+                "level": round(float(gap_high), 2),
+                "status": "未回补 (强引力/阻力防线)"
+            })
     return gaps
 
 

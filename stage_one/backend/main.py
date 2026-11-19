@@ -987,6 +987,9 @@ async def control_run_strategy(req: RunStrategyRequest):
             ("box", "draw_boxes", "boxes", annos.get("boxes", [])),
             ("channel_line", "draw_channel_lines", "channel_lines", annos.get("channel_lines", [])),
             ("time_line", "draw_time_lines", "time_lines", annos.get("time_lines", [])),
+            ("fib_line", "draw_fib_lines", "fib_lines", annos.get("fib_lines", [])),
+            ("gap_box", "draw_gap_boxes", "gap_boxes", annos.get("gap_boxes", [])),
+            ("ema200", "draw_ema200", "ema200_data", annos.get("ema200_data", [])),
         ]
         for db_kind, ws_action, payload_key, items in annotation_channels:
             if items:

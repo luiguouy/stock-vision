@@ -424,6 +424,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { LEVERAGE_ETF_MAP, formatSymbol, type SRLevel } from '../utils/api';
+import { enrichSRLevels } from '../utils/srUtils';
 
 const props = defineProps<{
   symbol: string;
@@ -754,41 +755,18 @@ const sortedSRLevels = computed(() => {
   if (!props.srLevels || !props.srLevels.length) return [];
   const curPrice = Number(props.summary?.current_price || props.summary?.trade_plan?.entry || 0);
 
-  // 严格按价格从高到低降序排列
-  const list = [...props.srLevels].sort((a, b) => Number(b.price) - Number(a.price));
+  const enriched = enrichSRLevels(props.srLevels, props.summary);
 
-  return list.map((lvl) => {
+  return enriched.map((lvl) => {
     const p = Number(lvl.price);
     const diffPct = curPrice > 0 ? ((p - curPrice) / curPrice) * 100 : 0;
     const diffPctStr = `${diffPct >= 0 ? '+' : ''}${diffPct.toFixed(1)}%`;
-
-    let basis = (lvl as any).basis || (lvl as any).desc || '';
-    if (!basis) {
-      const chan = props.summary?.channel || {};
-      const ema = props.summary?.ema_200_gate?.value;
-      const box = props.summary?.box || {};
-
-      const anchors: { dist: number; label: string }[] = [];
-      if (chan.upper_rail) anchors.push({ dist: Math.abs(p - chan.upper_rail) / p, label: '动态通道上轨阻力' });
-      if (chan.lower_rail) anchors.push({ dist: Math.abs(p - chan.lower_rail) / p, label: '动态通道下轨支撑' });
-      if (chan.mid_rail) anchors.push({ dist: Math.abs(p - chan.mid_rail) / p, label: '动态通道中轴' });
-      if (box.box_high) anchors.push({ dist: Math.abs(p - box.box_high) / p, label: '盘整箱体顶部阻力' });
-      if (box.box_low) anchors.push({ dist: Math.abs(p - box.box_low) / p, label: '盘整箱体底部支撑' });
-      if (ema) anchors.push({ dist: Math.abs(p - ema) / p, label: '200日均线 (200EMA)' });
-
-      anchors.sort((a, b) => a.dist - b.dist);
-      if (anchors.length > 0 && anchors[0].dist < 0.02) {
-        basis = anchors[0].label;
-      } else {
-        basis = lvl.type === 'resistance' ? '前高关键阻力' : '前低波段支撑';
-      }
-    }
 
     return {
       ...lvl,
       price: p,
       diffPctStr,
-      basis,
+      basis: lvl.basis || '',
     };
   });
 });

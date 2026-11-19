@@ -223,7 +223,8 @@ SYMBOL_SECTOR_MAP = {
 }
 
 
-def verify_primary_trend_gate(df: pd.DataFrame, side: int, ema_period: int = 200, t: int = None) -> dict:
+def verify_primary_trend_gate(df: pd.DataFrame, side: int, ema_period: int = 200, t: int = None,
+                              ema_series: pd.Series = None) -> dict:
     """
     200 EMA 大级别主趋势顺势门禁 (Primary Trend Gate - Dow Theory Smooth Proxy):
 
@@ -232,6 +233,7 @@ def verify_primary_trend_gate(df: pd.DataFrame, side: int, ema_period: int = 200
       - side == 1 (多头)：现价需 >= 200 EMA，顺应大级别主多头趋势；若现价 < 200 EMA 则一票否决 (rejected_by_primary_trend)；
       - side == -1 (空头)：现价需 <= 200 EMA，顺应大级别主空头趋势；若现价 > 200 EMA 则一票否决 (rejected_by_primary_trend)；
       - 历史数据不足 200 根时，采用可用序列自适应平滑降级，保证数值稳定与因果连续。
+      - 可选外部预计算并传入 ema_series，单步仅需 O(1) 索引，消除回测中的 O(N^2) 瓶颈。
 
     返回格式：
       {"passed": bool, "status": str, "current_price": float, "ema_val": float, "reason": str}
@@ -245,18 +247,8 @@ def verify_primary_trend_gate(df: pd.DataFrame, side: int, ema_period: int = 200
             "reason": "数据为空，大级别主趋势门禁默认放行"
         }
 
-    sub_df = df if t is None or t < 0 or t >= len(df) else df.iloc[:t + 1]
-    if sub_df.empty:
-        return {
-            "passed": True,
-            "status": "no_data",
-            "current_price": 0.0,
-            "ema_val": 0.0,
-            "reason": "切片数据为空，大级别主趋势门禁默认放行"
-        }
-
-    close_col = "Close" if "Close" in sub_df.columns else "close"
-    if close_col not in sub_df.columns:
+    close_col = "Close" if "Close" in df.columns else ("close" if "close" in df.columns else None)
+    if close_col is None:
         return {
             "passed": True,
             "status": "no_data",
@@ -265,14 +257,17 @@ def verify_primary_trend_gate(df: pd.DataFrame, side: int, ema_period: int = 200
             "reason": "缺少 Close 列，大级别主趋势门禁默认放行"
         }
 
-    close_series = sub_df[close_col].astype(float)
-    n_bars = len(close_series)
-    curr_price = float(close_series.iloc[-1])
+    idx = len(df) - 1 if (t is None or t < 0 or t >= len(df)) else t
+    curr_price = float(df[close_col].iloc[idx])
+    n_bars = idx + 1
 
-    # 纯因果 EMA 计算 (使用 pandas ewm, adjust=False 严格无未来函数)
-    span_val = min(n_bars, ema_period) if n_bars < ema_period else ema_period
-    ema_series = close_series.ewm(span=span_val, adjust=False).mean()
-    ema_val = float(ema_series.iloc[-1])
+    if ema_series is not None:
+        ema_val = float(ema_series.iloc[idx] if hasattr(ema_series, "iloc") else ema_series[idx])
+    else:
+        sub_series = df[close_col].iloc[:idx + 1].astype(float)
+        span_val = min(n_bars, ema_period) if n_bars < ema_period else ema_period
+        ema_calc = sub_series.ewm(span=span_val, adjust=False).mean()
+        ema_val = float(ema_calc.iloc[-1])
 
     is_fallback = (n_bars < ema_period)
     fb_note = f"（历史数据仅 {n_bars} 根 < {ema_period} 根，采用可用周期自适应平滑代理）" if is_fallback else ""
@@ -633,6 +628,7 @@ def verify_macro_short_gate(market_dow: dict = None,
                             micro_conviction: str = None,
                             allow_decoupling: bool = False,
                             target_symbol: str = None,
+                            ema_series: pd.Series = None,
                             **kwargs) -> dict:
     """
     非对称做空风险门禁 (Asymmetric Short-Selling Risk Gate - Requirement R4):
@@ -656,7 +652,7 @@ def verify_macro_short_gate(market_dow: dict = None,
 
     # 2. 标的自身跌破 200 EMA 大级别主趋势空翻
     if df is not None and not df.empty:
-        trend_res = verify_primary_trend_gate(df, side=-1, t=t)
+        trend_res = verify_primary_trend_gate(df, side=-1, t=t, ema_series=ema_series)
         if trend_res.get("passed"):
             return {
                 "passed": True,
@@ -1096,7 +1092,8 @@ def simulate_strategy_trade(df: pd.DataFrame, entry_t: int, entry_price: float,
                             target_symbol: str = None,
                             target_sector: str = None,
                             allow_decoupling: bool = False,
-                            micro_conviction: str = None) -> dict:
+                            micro_conviction: str = None,
+                            ema_series: pd.Series = None) -> dict:
     """
     全闭环策略持仓模拟：
       - 大盘硬闸门：若提供 market_dow，联动验证 SPY/QQQ/DIA/IWM，支持板块独立性与微观脱钩；
@@ -1143,8 +1140,7 @@ def simulate_strategy_trade(df: pd.DataFrame, entry_t: int, entry_price: float,
                 "side": side
             }
     elif use_trend_gate:
-        sub_d = df.iloc[:entry_t + 1] if df is not None and entry_t < len(df) else df
-        t_gate = verify_primary_trend_gate(sub_d, side=side)
+        t_gate = verify_primary_trend_gate(df, side=side, t=entry_t, ema_series=ema_series)
         if not t_gate.get("passed", True):
             return {
                 "status": "rejected_by_primary_trend",

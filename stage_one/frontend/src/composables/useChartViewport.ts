@@ -1,7 +1,8 @@
-import { ref, computed, watch, type Ref } from 'vue';
+import { ref, shallowRef, computed, watch, onUnmounted, type Ref } from 'vue';
 import type { IChartApi } from 'lightweight-charts';
 import { getKLines, marketOf, type KLinePoint, type SRLevel, type Period } from '../utils/api';
 import { calculateSRLevels } from '../utils/mockEngine';
+import { enrichSRLevels } from '../utils/srUtils';
 import { toChartTime } from './useChartAnnotations';
 
 export const TIME_RANGES = [
@@ -117,9 +118,18 @@ export function useChartViewport(options: {
     onLoadError,
   } = options;
 
-  const klineData = ref<KLinePoint[]>([]);
+  const klineData = shallowRef<KLinePoint[]>([]);
+  const MAX_CACHE_ENTRIES = 30;
   const klineCache = new Map<string, KLinePoint[]>();
   const cacheKey = (symbol: string, period: Period) => `${symbol}_${period}`;
+
+  const getFromCache = (key: string): KLinePoint[] | undefined => {
+    if (!klineCache.has(key)) return undefined;
+    const val = klineCache.get(key)!;
+    klineCache.delete(key);
+    klineCache.set(key, val);
+    return val;
+  };
 
   const isLoading = ref(false);
   const errorMsg = ref('');
@@ -138,6 +148,8 @@ export function useChartViewport(options: {
     defaultColor: string;
   }
   let priceLines: SRPriceLineItem[] = [];
+  let activePulseRaf: number | null = null;
+  let activeRangeRaf: number | null = null;
   let activeFlashTimer: any = null;
   let activeFlashingLine: { line: any; defaultColor: string } | null = null;
   let activeLocatingIdx: number | null = null;
@@ -163,10 +175,23 @@ export function useChartViewport(options: {
   };
 
   const updateCache = (sym: string, period: Period, data: KLinePoint[]) => {
-    klineCache.set(cacheKey(sym, period), data);
+    const key = cacheKey(sym, period);
+    if (klineCache.has(key)) {
+      klineCache.delete(key);
+    } else if (klineCache.size >= MAX_CACHE_ENTRIES) {
+      const oldest = klineCache.keys().next().value;
+      if (oldest !== undefined) {
+        klineCache.delete(oldest);
+      }
+    }
+    klineCache.set(key, data);
   };
 
   const stopFlashing = () => {
+    if (activePulseRaf !== null) {
+      cancelAnimationFrame(activePulseRaf);
+      activePulseRaf = null;
+    }
     if (activeFlashTimer) {
       clearInterval(activeFlashTimer);
       activeFlashTimer = null;
@@ -186,6 +211,10 @@ export function useChartViewport(options: {
 
   const clearOverlays = () => {
     stopFlashing();
+    if (activeRangeRaf !== null) {
+      cancelAnimationFrame(activeRangeRaf);
+      activeRangeRaf = null;
+    }
     if (locatingResetTimer) {
       clearTimeout(locatingResetTimer);
       locatingResetTimer = null;
@@ -210,6 +239,38 @@ export function useChartViewport(options: {
     try {
       getChartInstance()?.priceScale('right').setAutoScale(true);
     } catch {}
+  };
+
+  const animatePriceRange = (
+    priceScale: any,
+    startFrom: number,
+    startTo: number,
+    targetFrom: number,
+    targetTo: number,
+    duration = 240
+  ) => {
+    if (activeRangeRaf !== null) {
+      cancelAnimationFrame(activeRangeRaf);
+      activeRangeRaf = null;
+    }
+    const startTime = performance.now();
+    const step = (now: number) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(1, elapsed / duration);
+      // 240ms easeOutCubic view range animation
+      const ease = 1 - Math.pow(1 - progress, 3);
+      const currentFrom = startFrom + (targetFrom - startFrom) * ease;
+      const currentTo = startTo + (targetTo - startTo) * ease;
+      try {
+        priceScale.setVisibleRange({ from: currentFrom, to: currentTo });
+      } catch {}
+      if (progress < 1) {
+        activeRangeRaf = requestAnimationFrame(step);
+      } else {
+        activeRangeRaf = null;
+      }
+    };
+    activeRangeRaf = requestAnimationFrame(step);
   };
 
   const onVisibleLogicalRangeChanged = (range: any) => {
@@ -418,7 +479,7 @@ export function useChartViewport(options: {
       }
     }
 
-    // 3. 执行图表价格线高亮脉冲闪烁动效 (Flash / Pulse Animation)
+    // 3. 执行图表价格线 60fps rAF 脉冲动效 (wave = 0.5 - 0.5 * cos(t * pi * 4))
     if (targetLineItem && targetLineItem.line) {
       const origColor = targetLineItem.defaultColor;
       const flashColor = isDarkMode.value ? '#818cf8' : '#4f46e5';
@@ -426,39 +487,48 @@ export function useChartViewport(options: {
       activeFlashingLine = { line: targetLineItem.line, defaultColor: origColor };
       activeLocatingLine = { line: targetLineItem.line, defaultColor: origColor, title: titleText };
 
-      let count = 0;
-      targetLineItem.line.applyOptions({
-        lineWidth: 3.5,
-        lineStyle: 0,
-        color: flashColor,
-        axisLabelVisible: true,
-        title: titleText,
-      });
+      const animDuration = 1000;
+      const startTime = performance.now();
 
-      activeFlashTimer = setInterval(() => {
-        count++;
-        const isOdd = count % 2 === 1;
+      const animatePulse = (now: number) => {
+        const elapsed = now - startTime;
+        const t = Math.min(1, elapsed / animDuration);
+        const wave = 0.5 - 0.5 * Math.cos(t * Math.PI * 4);
+
         if (targetLineItem && targetLineItem.line) {
-          targetLineItem.line.applyOptions({
-            lineWidth: isOdd ? 2 : 3.5,
-            lineStyle: 0,
-            color: isOdd ? origColor : flashColor,
-          });
-        }
-
-        if (count >= 6) {
-          stopFlashing();
-          if (targetLineItem && targetLineItem.line) {
+          try {
             targetLineItem.line.applyOptions({
-              lineWidth: 2.5,
+              lineWidth: 1.5 + wave * 2.0,
               lineStyle: 0,
-              color: origColor,
+              color: wave > 0.35 ? flashColor : origColor,
               axisLabelVisible: true,
               title: titleText,
             });
+          } catch {}
+        }
+
+        if (t < 1) {
+          activePulseRaf = requestAnimationFrame(animatePulse);
+        } else {
+          activePulseRaf = null;
+          if (targetLineItem && targetLineItem.line) {
+            try {
+              targetLineItem.line.applyOptions({
+                lineWidth: 2.5,
+                lineStyle: 0,
+                color: origColor,
+                axisLabelVisible: true,
+                title: titleText,
+              });
+            } catch {}
           }
         }
-      }, 200);
+      };
+
+      if (activePulseRaf !== null) {
+        cancelAnimationFrame(activePulseRaf);
+      }
+      activePulseRaf = requestAnimationFrame(animatePulse);
 
       locatingResetTimer = setTimeout(() => {
         if (activeLocatingIdx === targetIdx) {
@@ -553,7 +623,10 @@ export function useChartViewport(options: {
       }
 
       if (needsAdjust) {
-        priceScale.setVisibleRange({ from: newFrom, to: newTo });
+        const curRange = typeof priceScale.getVisibleRange === 'function' ? priceScale.getVisibleRange() : null;
+        const startFrom = curRange && Number.isFinite(curRange.from) ? curRange.from : bottomPrice;
+        const startTo = curRange && Number.isFinite(curRange.to) ? curRange.to : topPrice;
+        animatePriceRange(priceScale, startFrom, startTo, newFrom, newTo, 240);
       }
     } catch (e) {
       console.warn('Adjust price scale visible range error:', e);
@@ -585,39 +658,7 @@ export function useChartViewport(options: {
     priceLines = [];
 
     const rawList = levels || (klineData.value.length > 0 ? calculateSRLevels(klineData.value, 5, currentPeriod.value) : []);
-    // 严格按价格从高到低降序排序，保证图表 PriceLines 与侧边栏面板列表完全一一对应
-    const sorted = [...rawList].sort((a, b) => Number(b.price) - Number(a.price));
-
-    const chan = summary?.channel || {};
-    const ema = summary?.ema_200_gate?.value;
-    const box = summary?.box || {};
-
-    const enriched = sorted.map((lvl) => {
-      const p = Number(lvl.price);
-      let basis = (lvl as any).basis || (lvl as any).desc || '';
-      if (!basis && summary) {
-        const anchors: { dist: number; label: string }[] = [];
-        if (chan.upper_rail) anchors.push({ dist: Math.abs(p - chan.upper_rail) / p, label: '动态通道上轨阻力' });
-        if (chan.lower_rail) anchors.push({ dist: Math.abs(p - chan.lower_rail) / p, label: '动态通道下轨支撑' });
-        if (chan.mid_rail) anchors.push({ dist: Math.abs(p - chan.mid_rail) / p, label: '动态通道中轴' });
-        if (box.box_high) anchors.push({ dist: Math.abs(p - box.box_high) / p, label: '盘整箱体顶部阻力' });
-        if (box.box_low) anchors.push({ dist: Math.abs(p - box.box_low) / p, label: '盘整箱体底部支撑' });
-        if (ema) anchors.push({ dist: Math.abs(p - ema) / p, label: '200日均线 (200EMA)' });
-
-        anchors.sort((a, b) => a.dist - b.dist);
-        if (anchors.length > 0 && anchors[0].dist < 0.02) {
-          basis = anchors[0].label;
-        } else {
-          basis = lvl.type === 'resistance' ? '前高关键阻力' : '前低波段支撑';
-        }
-      }
-      return {
-        ...lvl,
-        price: p,
-        basis: basis || undefined,
-      };
-    });
-
+    const enriched = enrichSRLevels(rawList, summary);
     srLevels.value = enriched;
 
     if (!series) return;
@@ -687,11 +728,12 @@ export function useChartViewport(options: {
       let klines: KLinePoint[];
 
       const key = cacheKey(targetSymbol, targetPeriod);
-      if (klineCache.has(key)) {
-        klines = klineCache.get(key)!;
+      const cached = getFromCache(key);
+      if (cached) {
+        klines = cached;
       } else {
         klines = await getKLines(targetSymbol, targetPeriod, true, false, signal);
-        if (klines.length > 0) klineCache.set(key, klines);
+        if (klines.length > 0) updateCache(targetSymbol, targetPeriod, klines);
       }
 
       if (reqId !== activeKlineReqId) return;
@@ -835,6 +877,23 @@ export function useChartViewport(options: {
     } catch (err) {
       console.error('Error rendering chart data:', err);
     }
+  });
+
+  onUnmounted(() => {
+    stopFlashing();
+    if (activePulseRaf !== null) {
+      cancelAnimationFrame(activePulseRaf);
+      activePulseRaf = null;
+    }
+    if (activeRangeRaf !== null) {
+      cancelAnimationFrame(activeRangeRaf);
+      activeRangeRaf = null;
+    }
+    if (activeKlineAbortController) {
+      activeKlineAbortController.abort();
+      activeKlineAbortController = null;
+    }
+    clearOverlays();
   });
 
   return {
