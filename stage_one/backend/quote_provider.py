@@ -279,6 +279,12 @@ class TencentQuoteProvider:
                     if res:
                         meta = res[0].get("meta", {})
                         pre_p = _to_float(meta.get("preMarketPrice"))
+                        if not pre_p or pre_p <= 0:
+                            # Yahoo chart API 的 meta.preMarketPrice 在盘前可能为 None，但 1m K 线序列包含实时盘前数据点
+                            quotes_list = res[0].get("indicators", {}).get("quote", [{}])[0].get("close", [])
+                            valid = [c for c in quotes_list if c is not None and c > 0]
+                            if valid:
+                                pre_p = round(float(valid[-1]), 2)
                         if pre_p and pre_p > 0:
                             out[sym] = pre_p
             except Exception:

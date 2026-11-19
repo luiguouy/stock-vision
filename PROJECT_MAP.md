@@ -2,7 +2,7 @@
 
 > 本文件由 graft 结构层自动导出，是对代码库的**索引**，不是实现说明。
 > 每条记录都带 `文件:行号`，用于精确定位；这里**不含函数体**，需要实现细节时应另行取源码。
-> 生成时间：2026-11-19 21:25
+> 生成时间：2026-11-19 21:35
 
 ## 1. 概览
 
@@ -374,23 +374,23 @@
 - + `YahooCryptoQuoteProvider` · class · L145-L223 — `class YahooCryptoQuoteProvider`
 -   `__init__` · method · L148-L149 — `def __init__(self) -> None`
 - + `get_quotes` · method · L151-L223 — `async def get_quotes(self, symbols: List[str]) -> List[dict]`
-- + `TencentQuoteProvider` · class · L225-L436 — `class TencentQuoteProvider`
+- + `TencentQuoteProvider` · class · L225-L442 — `class TencentQuoteProvider`
 -   `__init__` · method · L228-L233 — `def __init__(self) -> None`
 -   `_resolve_us_ext_session` · method · L235-L263 — `def _resolve_us_ext_session(self, symbol: str, ext_price: float) -> Tuple[Optional[float], str]`
--   `_fetch_yahoo_premarket` · method · L265-L288 — `async def _fetch_yahoo_premarket(self, us_symbols: List[str]) -> Dict[str, float]`
--   `_one` · function · L272-L285 — `async def _one(sym: str)`
-- + `get_quotes` · method · L290-L316 — `async def get_quotes(self, symbols: List[str]) -> List[dict]`
--   `_get_tencent_quotes` · method · L318-L367 — `async def _get_tencent_quotes(self, symbols: List[str]) -> List[dict]`
--   `_fetch_raw` · method · L369-L383 — `async def _fetch_raw(self, symbols: List[str]) -> str`
--   `_parse` · method · L385-L436 — `def _parse(self, text: str, symbols: List[str]) -> Dict[str, Optional[dict]]`
--   `_to_float` · function · L438-L449 — `def _to_float(s) -> Optional[float]`
--   `_format_update_time` · function · L451-L455 — `def _format_update_time(raw: str) -> str`
--   `_error_item` · function · L457-L477 — `def _error_item(symbol: str, status: str, msg: str) -> dict`
-- + `SinaFuturesQuoteProvider` · class · L487-L618 — `class SinaFuturesQuoteProvider`
--   `__init__` · method · L490-L493 — `def __init__(self) -> None`
-- + `get_quotes` · method · L495-L540 — `async def get_quotes(self, symbols: List[str]) -> List[dict]`
--   `_fetch` · method · L542-L576 — `async def _fetch(self, symbols: List[str]) -> Dict[str, Optional[dict]]`
--   `_parse_line` · method · L579-L618 — `def _parse_line(line: str) -> Optional[dict]`
+-   `_fetch_yahoo_premarket` · method · L265-L294 — `async def _fetch_yahoo_premarket(self, us_symbols: List[str]) -> Dict[str, float]`
+-   `_one` · function · L272-L291 — `async def _one(sym: str)`
+- + `get_quotes` · method · L296-L322 — `async def get_quotes(self, symbols: List[str]) -> List[dict]`
+-   `_get_tencent_quotes` · method · L324-L373 — `async def _get_tencent_quotes(self, symbols: List[str]) -> List[dict]`
+-   `_fetch_raw` · method · L375-L389 — `async def _fetch_raw(self, symbols: List[str]) -> str`
+-   `_parse` · method · L391-L442 — `def _parse(self, text: str, symbols: List[str]) -> Dict[str, Optional[dict]]`
+-   `_to_float` · function · L444-L455 — `def _to_float(s) -> Optional[float]`
+-   `_format_update_time` · function · L457-L461 — `def _format_update_time(raw: str) -> str`
+-   `_error_item` · function · L463-L483 — `def _error_item(symbol: str, status: str, msg: str) -> dict`
+- + `SinaFuturesQuoteProvider` · class · L493-L624 — `class SinaFuturesQuoteProvider`
+-   `__init__` · method · L496-L499 — `def __init__(self) -> None`
+- + `get_quotes` · method · L501-L546 — `async def get_quotes(self, symbols: List[str]) -> List[dict]`
+-   `_fetch` · method · L548-L582 — `async def _fetch(self, symbols: List[str]) -> Dict[str, Optional[dict]]`
+-   `_parse_line` · method · L585-L624 — `def _parse_line(line: str) -> Optional[dict]`
 
 ### stage_one/backend/strategy_adapter.py
 
