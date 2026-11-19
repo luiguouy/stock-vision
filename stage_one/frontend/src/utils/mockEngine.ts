@@ -62,8 +62,30 @@ function findExtrema(data: KLinePoint[], windowSize: number = 5) {
   return extrema;
 }
 
+// 与后端 analysis.py PERIOD_CLAMP_BOUNDS 保持一致
+const PERIOD_CLAMP_BOUNDS: Record<string, [number, number]> = {
+  '5m': [0.0015, 0.008],
+  '15m': [0.002, 0.010],
+  '1h': [0.003, 0.015],
+  '4h': [0.004, 0.020],
+  '1d': [0.006, 0.025],
+  '1w': [0.012, 0.050],
+  '1M': [0.020, 0.080],
+  '3M': [0.030, 0.120],
+  '6M': [0.040, 0.150],
+  '1Y': [0.050, 0.200],
+};
+
+function median(values: number[]): number {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+}
+
 /**
- * 自适应支撑阻力位计算（与后端 analysis.calculate_sr_levels 算法一致）
+ * 自适应支撑阻力位计算（与重构后后端 analysis.calculate_sr_levels 严格一致）：
+ * True Range 中位数相对波动率阈值 + 分周期钳制 + 簇首锚点防漂移单趟聚类
  */
 export function calculateSRLevels(data: KLinePoint[], windowSize: number = 5, period: string = '1d'): SRLevel[] {
   const totalLen = data.length;
@@ -74,59 +96,64 @@ export function calculateSRLevels(data: KLinePoint[], windowSize: number = 5, pe
   if (totalLen < win * 2 + 1) return [];
 
   const latestPrice = data[totalLen - 1].close;
+  if (latestPrice <= 0) return [];
 
-  const lookback = Math.min(20, totalLen);
-  let totalRange = 0;
+  // 1. 相对波动率自适应阈值（含隔夜跳空的 True Range 中位数）
+  const lookback = Math.min(20, totalLen - 1);
+  const relTrList: number[] = [];
   for (let i = totalLen - lookback; i < totalLen; i++) {
-    totalRange += data[i].high - data[i].low;
+    const prevClose = Math.max(data[i - 1].close, 1e-6);
+    const tr = Math.max(
+      data[i].high - data[i].low,
+      Math.abs(data[i].high - prevClose),
+      Math.abs(data[i].low - prevClose)
+    );
+    relTrList.push(tr / prevClose);
   }
-  const atrApprox = totalRange / lookback;
+  const relTrMed = median(relTrList);
+  const [loBound, hiBound] = PERIOD_CLAMP_BOUNDS[period] || [0.006, 0.025];
+  const relThreshold = Math.max(loBound, Math.min(relTrMed * 0.8, hiBound));
 
-  const minDist = latestPrice * 0.006;
-  const maxDist = latestPrice * 0.025;
-  const absThreshold = Math.max(minDist, Math.min(atrApprox * 0.8, maxDist));
-
+  // 2. 局部极值提取并升序排列
   const extrema = findExtrema(data, win);
   if (extrema.length === 0) return [];
-
   extrema.sort((a, b) => a.price - b.price);
 
-  const clusters: { price: number; weight: number; count: number }[] = [];
-
-  extrema.forEach(({ price, idx }) => {
+  // 3. O(M) 簇首锚点防漂移单趟聚类
+  const clusters: { anchor: number; price: number; weight: number; count: number }[] = [];
+  for (const { price, idx } of extrema) {
     const barsAgo = totalLen - 1 - idx;
     const weight = Math.pow(0.5, barsAgo / halfLife);
+    const last = clusters[clusters.length - 1];
 
-    let merged = false;
-    for (const c of clusters) {
-      if (Math.abs(c.price - price) < absThreshold) {
-        c.price = (c.price * c.weight + price * weight) / (c.weight + weight);
-        c.weight += weight;
-        c.count++;
-        merged = true;
-        break;
-      }
+    if (last && (price - last.anchor) / Math.max(last.anchor, 1e-6) <= relThreshold) {
+      const totalW = last.weight + weight;
+      last.price = (last.price * last.weight + price * weight) / totalW;
+      last.weight = totalW;
+      last.count++;
+    } else {
+      clusters.push({ anchor: price, price, weight, count: 1 });
     }
-    if (!merged) {
-      clusters.push({ price, weight, count: 1 });
-    }
-  });
+  }
 
+  // 4. 划分支撑/阻力并按临近度综合打分
+  const maxW = clusters.reduce((m, c) => Math.max(m, c.weight), 1.0);
   const supportCandidates: (SRLevel & { score: number })[] = [];
   const resistanceCandidates: (SRLevel & { score: number })[] = [];
 
   clusters.forEach((c) => {
     const levelPrice = c.price;
-    const distPct = Math.abs(levelPrice - latestPrice) / latestPrice;
+    const distPct = Math.abs(levelPrice - latestPrice) / Math.max(latestPrice, 1e-6);
     const proximityFactor = 1.0 / (1.0 + 8.0 * distPct);
     const score = c.weight * proximityFactor;
+    const relW = c.weight / Math.max(maxW, 1e-6);
 
     let stars = 2;
     let rank: 'Weak' | 'Medium' | 'Strong' = 'Weak';
-    if (c.weight >= 3.5) {
+    if (c.weight >= 3.5 || (maxW >= 1.5 && relW >= 0.85)) {
       stars = 5;
       rank = 'Strong';
-    } else if (c.weight >= 2.0) {
+    } else if (c.weight >= 2.0 || (maxW >= 1.0 && relW >= 0.50)) {
       stars = 3;
       rank = 'Medium';
     }

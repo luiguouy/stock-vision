@@ -766,6 +766,7 @@ const {
 const strategySummary = ref<any>(null);
 const strategyLoading = ref(false);
 let activeStrategyRequestId = 0;
+let activeStrategyAbortController: AbortController | null = null;
 
 // 1. 组合图表视口与 K 线加载
 const viewport = useChartViewport({
@@ -780,6 +781,10 @@ const viewport = useChartViewport({
   updateIndicators,
   onBeforeLoad: () => {
     activeStrategyRequestId++;
+    if (activeStrategyAbortController) {
+      activeStrategyAbortController.abort();
+      activeStrategyAbortController = null;
+    }
     strategySummary.value = null;
   },
   onLoadSuccess: () => {
@@ -950,6 +955,10 @@ const handleSearch = async () => {
 const changePeriod = (period: Period) => {
   if (period === currentPeriod.value) return;
   activeStrategyRequestId++;
+  if (activeStrategyAbortController) {
+    activeStrategyAbortController.abort();
+    activeStrategyAbortController = null;
+  }
   currentPeriod.value = period;
   viewport.clearOverlays();
   strategySummary.value = null;
@@ -1002,6 +1011,13 @@ const handleRunStrategy = async (mode: string = 'swing', isManual: boolean = fal
   const targetPeriod = currentPeriod.value;
   const reqId = ++activeStrategyRequestId;
 
+  if (activeStrategyAbortController) {
+    activeStrategyAbortController.abort();
+    activeStrategyAbortController = null;
+  }
+  const controller = new AbortController();
+  activeStrategyAbortController = controller;
+
   try {
     strategyLoading.value = true;
     if (!srLevels.value.length && klineData.value.length) {
@@ -1011,7 +1027,7 @@ const handleRunStrategy = async (mode: string = 'swing', isManual: boolean = fal
       return;
     }
 
-    const res = await runPAStrategy(targetSymbol, targetPeriod, mode, klineData.value);
+    const res = await runPAStrategy(targetSymbol, targetPeriod, mode, klineData.value, controller.signal);
     if (reqId !== activeStrategyRequestId || currentSymbol.value !== targetSymbol || currentPeriod.value !== targetPeriod) {
       return;
     }
@@ -1021,10 +1037,14 @@ const handleRunStrategy = async (mode: string = 'swing', isManual: boolean = fal
     }
     renderSRLevels(undefined, res.summary);
   } catch (e: any) {
+    if (e.name === 'AbortError') return;
     if (reqId === activeStrategyRequestId && currentSymbol.value === targetSymbol && currentPeriod.value === targetPeriod) {
       if (isManual) errorMsg.value = e.message || '策略执行失败，请检查K线数据';
     }
   } finally {
+    if (activeStrategyAbortController === controller) {
+      activeStrategyAbortController = null;
+    }
     if (reqId === activeStrategyRequestId && currentSymbol.value === targetSymbol && currentPeriod.value === targetPeriod) {
       strategyLoading.value = false;
     }
@@ -1033,6 +1053,10 @@ const handleRunStrategy = async (mode: string = 'swing', isManual: boolean = fal
 
 const handleClearStrategy = () => {
   activeStrategyRequestId++;
+  if (activeStrategyAbortController) {
+    activeStrategyAbortController.abort();
+    activeStrategyAbortController = null;
+  }
   chartAnnotations.clearAnnotations();
   strategySummary.value = null;
   renderSRLevels();

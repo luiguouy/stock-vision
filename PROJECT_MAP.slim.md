@@ -2,7 +2,7 @@
 
 > 本文件由 graft 结构层自动导出，是对代码库的**索引**，不是实现说明。
 > 每条记录都带 `文件:行号`，用于精确定位；这里**不含函数体**，需要实现细节时应另行取源码。
-> 生成时间：2026-11-19 20:02
+> 生成时间：2026-11-19 20:35
 
 ## 1. 概览
 
@@ -10,8 +10,8 @@
 |---|---|
 | 源文件 | 55 |
 | 语言 | javascript, python, typescript, vue |
-| 符号总数 | 699（不含 55 个文件节点） |
-| 符号构成 | function 426 / method 193 / file 55 / class 41 / interface 30 / type 9 |
+| 符号总数 | 700（不含 55 个文件节点） |
+| 符号构成 | function 427 / method 193 / file 55 / class 41 / interface 30 / type 9 |
 | 依赖边 | 245（跨文件调用、导入、继承） |
 
 后端为 FastAPI + WebSockets（Python），前端为 Vue 3 + Vite + Tailwind（TypeScript/Vue）。
@@ -27,7 +27,7 @@
 | `stage_one/frontend/src/` | 2 | 48 | 1 | 61 |
 | `stage_one/frontend/src/components/` | 4 | 41 | 3 | 7 |
 | `stage_one/frontend/src/composables/` | 8 | 134 | 44 | 31 |
-| `stage_one/frontend/src/utils/` | 6 | 58 | 59 | 8 |
+| `stage_one/frontend/src/utils/` | 6 | 59 | 59 | 8 |
 
 ## 3. 核心枢纽
 
@@ -35,7 +35,7 @@
 
 | 符号 | 位置 | 被调用 | 签名 |
 |---|---|---|---|
-| `run_strategy_analysis` | `stage_one/backend/strategy_adapter.py:L1926-L2089` | 28 | `def run_strategy_analysis( symbol: str, period: str = "1d", mode: str = "swing", df: Op...` |
+| `run_strategy_analysis` | `stage_one/backend/strategy_adapter.py:L1926-L2090` | 28 | `def run_strategy_analysis( symbol: str, period: str = "1d", mode: str = "swing", df: Op...` |
 | `canonSym` | `stage_one/frontend/src/composables/useWatchlist.ts:L52-L56` | 14 | `canonSym = (s: string): string` |
 | `normalize_symbol` | `stage_one/backend/symbols.py:L42-L85` | 13 | `def normalize_symbol(raw: str, market: Optional[str] = None) -> Optional[str]` |
 | `normalizeSymbol` | `stage_one/frontend/src/utils/symbols.ts:L87-L136` | 13 | `function normalizeSymbol(raw: string, market?: Market): string` |

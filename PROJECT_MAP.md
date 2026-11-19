@@ -2,7 +2,7 @@
 
 > 本文件由 graft 结构层自动导出，是对代码库的**索引**，不是实现说明。
 > 每条记录都带 `文件:行号`，用于精确定位；这里**不含函数体**，需要实现细节时应另行取源码。
-> 生成时间：2026-11-19 20:02
+> 生成时间：2026-11-19 20:35
 
 ## 1. 概览
 
@@ -10,8 +10,8 @@
 |---|---|
 | 源文件 | 55 |
 | 语言 | javascript, python, typescript, vue |
-| 符号总数 | 699（不含 55 个文件节点） |
-| 符号构成 | function 426 / method 193 / file 55 / class 41 / interface 30 / type 9 |
+| 符号总数 | 700（不含 55 个文件节点） |
+| 符号构成 | function 427 / method 193 / file 55 / class 41 / interface 30 / type 9 |
 | 依赖边 | 245（跨文件调用、导入、继承） |
 
 后端为 FastAPI + WebSockets（Python），前端为 Vue 3 + Vite + Tailwind（TypeScript/Vue）。
@@ -27,7 +27,7 @@
 | `stage_one/frontend/src/` | 2 | 48 | 1 | 61 |
 | `stage_one/frontend/src/components/` | 4 | 41 | 3 | 7 |
 | `stage_one/frontend/src/composables/` | 8 | 134 | 44 | 31 |
-| `stage_one/frontend/src/utils/` | 6 | 58 | 59 | 8 |
+| `stage_one/frontend/src/utils/` | 6 | 59 | 59 | 8 |
 
 ## 3. 核心枢纽
 
@@ -35,7 +35,7 @@
 
 | 符号 | 位置 | 被调用 | 签名 |
 |---|---|---|---|
-| `run_strategy_analysis` | `stage_one/backend/strategy_adapter.py:L1926-L2089` | 28 | `def run_strategy_analysis( symbol: str, period: str = "1d", mode: str = "swing", df: Op...` |
+| `run_strategy_analysis` | `stage_one/backend/strategy_adapter.py:L1926-L2090` | 28 | `def run_strategy_analysis( symbol: str, period: str = "1d", mode: str = "swing", df: Op...` |
 | `canonSym` | `stage_one/frontend/src/composables/useWatchlist.ts:L52-L56` | 14 | `canonSym = (s: string): string` |
 | `normalize_symbol` | `stage_one/backend/symbols.py:L42-L85` | 13 | `def normalize_symbol(raw: str, market: Optional[str] = None) -> Optional[str]` |
 | `normalizeSymbol` | `stage_one/frontend/src/utils/symbols.ts:L87-L136` | 13 | `function normalizeSymbol(raw: string, market?: Market): string` |
@@ -405,8 +405,8 @@
 -   `_format_time_str` · function · L1432-L1444 — `def _format_time_str(val: Any) -> str`
 -   `_resolve_pt_time` · function · L1446-L1450 — `def _resolve_pt_time(pt: Dict[str, Any], idx: int) -> str`
 -   `_generate_depth_diagnosis` · function · L1859-L1923 — `def _generate_depth_diagnosis( struct: Dict[str, Any], trade_plan: Dict[str, Any], turn_windows_res: Dict[str, Any], current_price: float, dow_market_ver: Optional[Dict[str, Any]] = None, ) -> str`
-- + `run_strategy_analysis` · function · L1926-L2089 — `def run_strategy_analysis( symbol: str, period: str = "1d", mode: str = "swing", df: Optional[Any] = None, market: Optional[str] = None, spy_df: Optional[Any] = None, qqq_df: Optional[Any] = None, iwm_df: Optional[Any] = None, ) -> Dict[str, Any]`
-- + `generate_wave_chart_html` · function · L2092-L2135 — `def generate_wave_chart_html(symbol: str, period: str = "1d", df: Optional[Any] = None) -> str`
+- + `run_strategy_analysis` · function · L1926-L2090 — `def run_strategy_analysis( symbol: str, period: str = "1d", mode: str = "swing", df: Optional[Any] = None, market: Optional[str] = None, spy_df: Optional[Any] = None, qqq_df: Optional[Any] = None, iwm_df: Optional[Any] = None, ) -> Dict[str, Any]`
+- + `generate_wave_chart_html` · function · L2093-L2136 — `def generate_wave_chart_html(symbol: str, period: str = "1d", df: Optional[Any] = None) -> str`
 
 ### stage_one/backend/strategy_core/__init__.py
 
@@ -506,11 +506,11 @@
 - + `detect_intraday_2b_sweep` · function · L149-L228 — `def detect_intraday_2b_sweep(df: pd.DataFrame, k: int, level: float, level_name: str, bar_rng: float, buffer_k: float = DEFAULT_DAY_STOP_BUFFER_K, level_type: str = "auto") -> dict`
 - + `detect_orb_breakout_retest` · function · L231-L280 — `def detect_orb_breakout_retest(df: pd.DataFrame, k: int, orh: float, orl: float, bar_rng: float, buffer_k: float = DEFAULT_DAY_STOP_BUFFER_K) -> dict`
 - + `simulate_day_trade` · function · L287-L545 — `def simulate_day_trade(df: pd.DataFrame, entry_t: int, entry_price: float, side: int, stop_price: float, tp_price: float, tp2_price: float = None, min_rr: float = DEFAULT_DAY_MIN_RR, slippage_bps: float = DEFAULT_SLIPPAGE_BPS, commission_bps: float = DEFAULT_COMMISSION_BPS, use_be_at_1_5r: bool = True, eod_exit_time: dtime = DAY_EOD_EXIT_TIME, max_hold_bars: int = 78, pattern: str = None, htf_bias: int = None, market_dow: dict = None, **kwargs) -> dict`
-- + `extract_intraday_htf_bias` · function · L548-L580 — `def extract_intraday_htf_bias(df_5m: pd.DataFrame, cutoff_ts: pd.Timestamp = None) -> int`
-- + `enumerate_day_events` · function · L587-L802 — `def enumerate_day_events(df: pd.DataFrame, strategy_type: str = "day_combined", min_rr: float = DEFAULT_DAY_MIN_RR, buffer_k: float = DEFAULT_DAY_STOP_BUFFER_K, avoid_overlap: bool = True, use_htf_filter: bool = True, slippage_bps: float = DEFAULT_SLIPPAGE_BPS, commission_bps: float = DEFAULT_COMMISSION_BPS, market_data: dict = None, df_1h: pd.DataFrame = None, **kwargs) -> list`
-- + `synthetic_intraday_days` · function · L809-L865 — `def synthetic_intraday_days(n_days: int = 15, seed: int = 42, base_price: float = 150.0) -> pd.DataFrame`
-- + `summarize_day_trades` · function · L872-L949 — `def summarize_day_trades(trades: list, label: str = "") -> dict`
-- + `sub_stats` · function · L913-L925 — `def sub_stats(sub_df)`
+- + `extract_intraday_htf_bias` · function · L548-L579 — `def extract_intraday_htf_bias(df_5m: pd.DataFrame, cutoff_ts: pd.Timestamp = None) -> int`
+- + `enumerate_day_events` · function · L586-L801 — `def enumerate_day_events(df: pd.DataFrame, strategy_type: str = "day_combined", min_rr: float = DEFAULT_DAY_MIN_RR, buffer_k: float = DEFAULT_DAY_STOP_BUFFER_K, avoid_overlap: bool = True, use_htf_filter: bool = True, slippage_bps: float = DEFAULT_SLIPPAGE_BPS, commission_bps: float = DEFAULT_COMMISSION_BPS, market_data: dict = None, df_1h: pd.DataFrame = None, **kwargs) -> list`
+- + `synthetic_intraday_days` · function · L808-L864 — `def synthetic_intraday_days(n_days: int = 15, seed: int = 42, base_price: float = 150.0) -> pd.DataFrame`
+- + `summarize_day_trades` · function · L871-L948 — `def summarize_day_trades(trades: list, label: str = "") -> dict`
+- + `sub_stats` · function · L912-L924 — `def sub_stats(sub_df)`
 
 ### stage_one/backend/strategy_core/strategy_layer.py
 
@@ -716,11 +716,11 @@
 
 共 5 个符号 · 被依赖 2 · 依赖外部 0
 
-- + `add_period_offset` · function · L16-L36 — `def add_period_offset(start_date_str: str, bars_offset: int, period: str = "1d") -> str`
-- + `add_calendar_offset` · function · L39-L49 — `def add_calendar_offset(start_date_str: str, days_offset: int) -> str`
-- + `trading_days_between` · function · L52-L65 — `def trading_days_between(d1_str: str, d2_str: str) -> int`
-- + `predict_turn_windows` · function · L68-L325 — `def predict_turn_windows( df: pd.DataFrame, swings: List[Dict[str, Any]], wave_points: Optional[Dict[str, Any]] = None, period: str = "1d", lookahead_bars: int = 45, lookback_bars: int = 3, ) -> Dict[str, Any]`
--   `_get_bar_date` · function · L90-L96 — `def _get_bar_date(idx: int) -> str`
+- + `add_period_offset` · function · L16-L39 — `def add_period_offset(start_date_str: str, bars_offset: int, period: str = "1d", is_crypto: bool = False) -> str`
+- + `add_calendar_offset` · function · L42-L53 — `def add_calendar_offset(start_date_str: str, days_offset: int, is_crypto: bool = False) -> str`
+- + `trading_days_between` · function · L56-L71 — `def trading_days_between(d1_str: str, d2_str: str, is_crypto: bool = False) -> int`
+- + `predict_turn_windows` · function · L74-L334 — `def predict_turn_windows( df: pd.DataFrame, swings: List[Dict[str, Any]], wave_points: Optional[Dict[str, Any]] = None, period: str = "1d", lookahead_bars: int = 45, lookback_bars: int = 3, is_crypto: bool = False, ) -> Dict[str, Any]`
+-   `_get_bar_date` · function · L97-L103 — `def _get_bar_date(idx: int) -> str`
 
 ### stage_one/frontend/postcss.config.js
 
@@ -732,54 +732,54 @@
 
 共 48 个符号 · 被依赖 1 · 依赖外部 60
 
--   `value` · method · L839-L839 — `get value()`
--   `selectWatchlist` · function · L859-L867 — `selectWatchlist = (sym: string)`
--   `navBack` · function · L904-L910 — `navBack = ()`
--   `navForward` · function · L912-L918 — `navForward = ()`
--   `refreshCurrent` · function · L920-L924 — `refreshCurrent = ()`
--   `selectSuggestion` · function · L926-L929 — `selectSuggestion = (symbol: string)`
--   `resolveSymbol` · function · L931-L940 — `async function resolveSymbol(raw: string): Promise<string>`
--   `handleSearch` · function · L942-L948 — `handleSearch = async ()`
--   `changePeriod` · function · L950-L959 — `changePeriod = (period: Period)`
--   `detectBackend` · function · L964-L985 — `async function detectBackend(): Promise<boolean>`
--   `retryConnection` · function · L987-L996 — `async function retryConnection()`
--   `handleRunStrategy` · function · L999-L1032 — `handleRunStrategy = async (mode: string = 'swing', isManual: boolean = false)`
--   `handleClearStrategy` · function · L1034-L1042 — `handleClearStrategy = ()`
--   `onOpenChart` · method · L1046-L1053 — `onOpenChart(symbol, period)`
--   `onAddMarkers` · method · L1054-L1057 — `onAddMarkers(markers, sym)`
--   `onDrawLines` · method · L1058-L1061 — `onDrawLines(lines, sym)`
--   `onDrawBoxes` · method · L1062-L1065 — `onDrawBoxes(boxes, sym)`
--   `onDrawChannelLines` · method · L1066-L1069 — `onDrawChannelLines(channelLines, sym)`
--   `onDrawWaveLines` · method · L1070-L1073 — `onDrawWaveLines(waveLines, sym)`
--   `onDrawTimeLines` · method · L1074-L1077 — `onDrawTimeLines(timeLines, sym)`
--   `onDrawFibLines` · method · L1078-L1081 — `onDrawFibLines(fibLines, sym)`
--   `onDrawGapBoxes` · method · L1082-L1085 — `onDrawGapBoxes(gapBoxes, sym)`
--   `onDrawEma200` · method · L1086-L1089 — `onDrawEma200(ema200Data, sym)`
--   `onClearAnnotations` · method · L1090-L1102 — `onClearAnnotations(kind, sym)`
--   `onCaptureChart` · method · L1104-L1113 — `onCaptureChart()`
--   `toChartTime` · function · L1117-L1117 — `toChartTime = (timeStr: any): any`
--   `applyChartTheme` · function · L1119-L1139 — `applyChartTheme = (isDark: boolean)`
--   `toggleDarkMode` · function · L1141-L1146 — `toggleDarkMode = ()`
--   `initDarkMode` · function · L1148-L1153 — `initDarkMode = ()`
--   `triggerCreateGroup` · function · L1168-L1172 — `triggerCreateGroup = ()`
--   `triggerManageGroups` · function · L1174-L1177 — `triggerManageGroups = ()`
--   `handleCreateGroupSubmit` · function · L1179-L1183 — `handleCreateGroupSubmit = ()`
--   `confirmRename` · function · L1185-L1189 — `confirmRename = (id: string)`
--   `handleModalSearchInput` · function · L1192-L1210 — `handleModalSearchInput = ()`
--   `handleModalSearchSelect` · function · L1212-L1218 — `handleModalSearchSelect = (sym: string)`
--   `toggleLeftSidebar` · function · L1224-L1232 — `toggleLeftSidebar = ()`
--   `toggleRightSidebar` · function · L1234-L1242 — `toggleRightSidebar = ()`
--   `syncChartSize` · function · L1249-L1253 — `syncChartSize = ()`
--   `createColumnResizer` · function · L1255-L1292 — `createColumnResizer = (getStartWidth: () => number, setWidth: (w: number) => void, sign: 1 | -1)`
--   `handleMouseMove` · function · L1265-L1276 — `handleMouseMove = (moveEvent: MouseEvent)`
--   `cleanup` · function · L1278-L1287 — `cleanup = ()`
--   `formatVolumeNum` · function · L1315-L1320 — `formatVolumeNum = (vol: number): string`
--   `findPrevClose` · function · L1322-L1333 — `findPrevClose = (time: any): number | null`
--   `formatDate` · function · L1335-L1344 — `formatDate = (input: Date | string): string`
--   `updateTooltipPosition` · function · L1346-L1353 — `updateTooltipPosition = (relX: number)`
--   `initChart` · function · L1356-L1400 — `initChart = ()`
--   `handleClickOutside` · function · L1424-L1427 — `handleClickOutside = (e: MouseEvent)`
--   `handleGlobalKeydown` · function · L1440-L1495 — `handleGlobalKeydown = (e: KeyboardEvent)`
+-   `value` · method · L844-L844 — `get value()`
+-   `selectWatchlist` · function · L864-L872 — `selectWatchlist = (sym: string)`
+-   `navBack` · function · L909-L915 — `navBack = ()`
+-   `navForward` · function · L917-L923 — `navForward = ()`
+-   `refreshCurrent` · function · L925-L929 — `refreshCurrent = ()`
+-   `selectSuggestion` · function · L931-L934 — `selectSuggestion = (symbol: string)`
+-   `resolveSymbol` · function · L936-L945 — `async function resolveSymbol(raw: string): Promise<string>`
+-   `handleSearch` · function · L947-L953 — `handleSearch = async ()`
+-   `changePeriod` · function · L955-L968 — `changePeriod = (period: Period)`
+-   `detectBackend` · function · L973-L994 — `async function detectBackend(): Promise<boolean>`
+-   `retryConnection` · function · L996-L1005 — `async function retryConnection()`
+-   `handleRunStrategy` · function · L1008-L1052 — `handleRunStrategy = async (mode: string = 'swing', isManual: boolean = false)`
+-   `handleClearStrategy` · function · L1054-L1066 — `handleClearStrategy = ()`
+-   `onOpenChart` · method · L1070-L1077 — `onOpenChart(symbol, period)`
+-   `onAddMarkers` · method · L1078-L1081 — `onAddMarkers(markers, sym)`
+-   `onDrawLines` · method · L1082-L1085 — `onDrawLines(lines, sym)`
+-   `onDrawBoxes` · method · L1086-L1089 — `onDrawBoxes(boxes, sym)`
+-   `onDrawChannelLines` · method · L1090-L1093 — `onDrawChannelLines(channelLines, sym)`
+-   `onDrawWaveLines` · method · L1094-L1097 — `onDrawWaveLines(waveLines, sym)`
+-   `onDrawTimeLines` · method · L1098-L1101 — `onDrawTimeLines(timeLines, sym)`
+-   `onDrawFibLines` · method · L1102-L1105 — `onDrawFibLines(fibLines, sym)`
+-   `onDrawGapBoxes` · method · L1106-L1109 — `onDrawGapBoxes(gapBoxes, sym)`
+-   `onDrawEma200` · method · L1110-L1113 — `onDrawEma200(ema200Data, sym)`
+-   `onClearAnnotations` · method · L1114-L1126 — `onClearAnnotations(kind, sym)`
+-   `onCaptureChart` · method · L1128-L1137 — `onCaptureChart()`
+-   `toChartTime` · function · L1141-L1141 — `toChartTime = (timeStr: any): any`
+-   `applyChartTheme` · function · L1143-L1163 — `applyChartTheme = (isDark: boolean)`
+-   `toggleDarkMode` · function · L1165-L1170 — `toggleDarkMode = ()`
+-   `initDarkMode` · function · L1172-L1177 — `initDarkMode = ()`
+-   `triggerCreateGroup` · function · L1192-L1196 — `triggerCreateGroup = ()`
+-   `triggerManageGroups` · function · L1198-L1201 — `triggerManageGroups = ()`
+-   `handleCreateGroupSubmit` · function · L1203-L1207 — `handleCreateGroupSubmit = ()`
+-   `confirmRename` · function · L1209-L1213 — `confirmRename = (id: string)`
+-   `handleModalSearchInput` · function · L1216-L1234 — `handleModalSearchInput = ()`
+-   `handleModalSearchSelect` · function · L1236-L1242 — `handleModalSearchSelect = (sym: string)`
+-   `toggleLeftSidebar` · function · L1248-L1256 — `toggleLeftSidebar = ()`
+-   `toggleRightSidebar` · function · L1258-L1266 — `toggleRightSidebar = ()`
+-   `syncChartSize` · function · L1273-L1277 — `syncChartSize = ()`
+-   `createColumnResizer` · function · L1279-L1316 — `createColumnResizer = (getStartWidth: () => number, setWidth: (w: number) => void, sign: 1 | -1)`
+-   `handleMouseMove` · function · L1289-L1300 — `handleMouseMove = (moveEvent: MouseEvent)`
+-   `cleanup` · function · L1302-L1311 — `cleanup = ()`
+-   `formatVolumeNum` · function · L1339-L1344 — `formatVolumeNum = (vol: number): string`
+-   `findPrevClose` · function · L1346-L1357 — `findPrevClose = (time: any): number | null`
+-   `formatDate` · function · L1359-L1368 — `formatDate = (input: Date | string): string`
+-   `updateTooltipPosition` · function · L1370-L1377 — `updateTooltipPosition = (relX: number)`
+-   `initChart` · function · L1380-L1424 — `initChart = ()`
+-   `handleClickOutside` · function · L1448-L1451 — `handleClickOutside = (e: MouseEvent)`
+-   `handleGlobalKeydown` · function · L1464-L1519 — `handleGlobalKeydown = (e: KeyboardEvent)`
 
 ### stage_one/frontend/src/components/DateRangePicker.vue
 
@@ -1012,9 +1012,9 @@
 共 4 个符号 · 被依赖 2 · 依赖外部 0
 
 - + `WSControlMessage` · interface · L5-L36 — `interface WSControlMessage`
-- + `useWebSocketControl` · function · L38-L165 — `function useWebSocketControl(handlers: { onOpenChart?: (symbol: string, period?: string) => void; onAddMarkers?: (markers: any[], symbol?: string) => void; onDrawLines?: (lines: any[], symbol?: string) => void; onDrawBoxes?: (boxes: any[], symbol?: string) => void; onDrawChannelLines?: (channelLines: any[], symbol?: string) => void; onDrawWaveLines?: (waveLines: any, symbol?: string) => void; onDrawTimeLines?: (timeLines: any[], symbol?: string) => void; onDrawFibLines?: (fibLines: any[], symbol?: string) => void; onDrawGapBoxes?: (gapBoxes: any[], symbol?: string) => void; onDrawEma200?: (ema200Data: any[], symbol?: string) => void; onClearAnnotations?: (kind?: string, symbol?: string) => void; onRunStrategy?: (mode?: string, symbol?: string) => void; onCaptureChart?: (requestId?: string) => Promise<string | null> | (string | null); onRefreshWatchlist?: () => void; })`
-- + `connect` · function · L59-L142 — `function connect()`
-- + `sendState` · function · L144-L148 — `function sendState(state: { symbol: string; period: string; current_price?: number })`
+- + `useWebSocketControl` · function · L38-L174 — `function useWebSocketControl(handlers: { onOpenChart?: (symbol: string, period?: string) => void; onAddMarkers?: (markers: any[], symbol?: string) => void; onDrawLines?: (lines: any[], symbol?: string) => void; onDrawBoxes?: (boxes: any[], symbol?: string) => void; onDrawChannelLines?: (channelLines: any[], symbol?: string) => void; onDrawWaveLines?: (waveLines: any, symbol?: string) => void; onDrawTimeLines?: (timeLines: any[], symbol?: string) => void; onDrawFibLines?: (fibLines: any[], symbol?: string) => void; onDrawGapBoxes?: (gapBoxes: any[], symbol?: string) => void; onDrawEma200?: (ema200Data: any[], symbol?: string) => void; onClearAnnotations?: (kind?: string, symbol?: string) => void; onRunStrategy?: (mode?: string, symbol?: string) => void; onCaptureChart?: (requestId?: string) => Promise<string | null> | (string | null); onRefreshWatchlist?: () => void; })`
+- + `connect` · function · L61-L147 — `function connect()`
+- + `sendState` · function · L149-L153 — `function sendState(state: { symbol: string; period: string; current_price?: number })`
 
 ### stage_one/frontend/src/main.ts
 
@@ -1031,12 +1031,12 @@
 - + `WatchGroup` · interface · L45-L49 — `interface WatchGroup`
 - + `AnalysisResponse` · interface · L51-L54 — `interface AnalysisResponse`
 - + `LeveragePairInfo` · interface · L56-L60 — `interface LeveragePairInfo`
-- + `searchStocks` · function · L73-L85 — `async function searchStocks(keyword: string): Promise<StockInfo[]>`
-- + `getKLines` · function · L88-L108 — `async function getKLines( symbol: string, period: Period = '1d', full: boolean = false, fresh: boolean = false, signal?: AbortSignal ): Promise<KLinePoint[]>`
-- + `getStockAnalysis` · function · L111-L147 — `async function getStockAnalysis( symbol: string, startDate: string, endDate: string, klineCache?: KLinePoint[], period: Period = '1d' ): Promise<AnalysisResponse | null>`
-- + `getWatchlist` · function · L150-L160 — `async function getWatchlist(): Promise<WatchGroup[]>`
-- + `saveWatchlist` · function · L162-L170 — `async function saveWatchlist(groups: WatchGroup[]): Promise<void>`
-- + `runPAStrategy` · function · L173-L193 — `async function runPAStrategy( symbol: string, period: string = '1d', mode: string = 'swing', klines?: KLinePoint[] ): Promise<any>`
+- + `searchStocks` · function · L75-L87 — `async function searchStocks(keyword: string): Promise<StockInfo[]>`
+- + `getKLines` · function · L90-L110 — `async function getKLines( symbol: string, period: Period = '1d', full: boolean = false, fresh: boolean = false, signal?: AbortSignal ): Promise<KLinePoint[]>`
+- + `getStockAnalysis` · function · L113-L149 — `async function getStockAnalysis( symbol: string, startDate: string, endDate: string, klineCache?: KLinePoint[], period: Period = '1d' ): Promise<AnalysisResponse | null>`
+- + `getWatchlist` · function · L152-L162 — `async function getWatchlist(): Promise<WatchGroup[]>`
+- + `saveWatchlist` · function · L164-L172 — `async function saveWatchlist(groups: WatchGroup[]): Promise<void>`
+- + `runPAStrategy` · function · L175-L197 — `async function runPAStrategy( symbol: string, period: string = '1d', mode: string = 'swing', klines?: KLinePoint[], signal?: AbortSignal ): Promise<any>`
 
 ### stage_one/frontend/src/utils/chartUtils.ts
 
@@ -1046,15 +1046,16 @@
 
 ### stage_one/frontend/src/utils/mockEngine.ts
 
-共 7 个符号 · 被依赖 5 · 依赖外部 0
+共 8 个符号 · 被依赖 5 · 依赖外部 0
 
 - + `KLinePoint` · interface · L3-L10 — `interface KLinePoint`
 - + `SRLevel` · interface · L12-L18 — `interface SRLevel`
 - + `RangeStatPoint` · interface · L20-L24 — `interface RangeStatPoint`
 - + `RangeStats` · interface · L26-L34 — `interface RangeStats`
 -   `findExtrema` · function · L50-L63 — `function findExtrema(data: KLinePoint[], windowSize: number = 5)`
-- + `calculateSRLevels` · function · L68-L155 — `function calculateSRLevels(data: KLinePoint[], windowSize: number = 5, period: string = '1d'): SRLevel[]`
-- + `calculateRangeStats` · function · L160-L223 — `function calculateRangeStats(data: KLinePoint[], sDate: string, eDate: string): RangeStats | null`
+-   `median` · function · L79-L84 — `function median(values: number[]): number`
+- + `calculateSRLevels` · function · L90-L182 — `function calculateSRLevels(data: KLinePoint[], windowSize: number = 5, period: string = '1d'): SRLevel[]`
+- + `calculateRangeStats` · function · L187-L250 — `function calculateRangeStats(data: KLinePoint[], sDate: string, eDate: string): RangeStats | null`
 
 ### stage_one/frontend/src/utils/quote.ts
 

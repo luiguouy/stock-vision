@@ -575,9 +575,8 @@ def extract_intraday_htf_bias(df_5m: pd.DataFrame, cutoff_ts: pd.Timestamp = Non
             return -1
 
     c_last = float(df_1h["Close"].iloc[-1])
-    ma_len = min(20, len(df_1h))
-    ma = float(df_1h["Close"].rolling(ma_len, min_periods=3).mean().iloc[-1])
-    return 1 if c_last > ma else (-1 if c_last < ma else 0)
+    mid_struct = (float(df_1h["High"].tail(12).max()) + float(df_1h["Low"].tail(12).min())) / 2.0
+    return 1 if c_last > mid_struct else (-1 if c_last < mid_struct else 0)
 
 
 # ==============================================================================
@@ -640,8 +639,8 @@ def enumerate_day_events(df: pd.DataFrame, strategy_type: str = "day_combined",
                     htf_bias = pe.dow_bias(sw_1h, df=sub_1h) if len(sw_1h) >= 2 else 0
                     if htf_bias == 0:
                         c_last = float(sub_1h["Close"].iloc[-1])
-                        ma = float(sub_1h["Close"].rolling(min(20, len(sub_1h)), min_periods=3).mean().iloc[-1])
-                        htf_bias = 1 if c_last > ma else (-1 if c_last < ma else 0)
+                        mid_struct = (float(sub_1h["High"].tail(12).max()) + float(sub_1h["Low"].tail(12).min())) / 2.0
+                        htf_bias = 1 if c_last > mid_struct else (-1 if c_last < mid_struct else 0)
             if htf_bias == 0:
                 htf_bias = extract_intraday_htf_bias(df, cutoff_ts=sess_open_ts)
 
@@ -787,7 +786,7 @@ def enumerate_day_events(df: pd.DataFrame, strategy_type: str = "day_combined",
 
                 # 若开启持仓独占，推演本笔出场并跳过在途 K 线
                 if avoid_overlap:
-                    sim_tr = simulate_day_trade(df, global_entry_t, entry_price, side, stop_p, tp_p,
+                    sim_tr = simulate_day_trade(df_sess, entry_idx, entry_price, side, stop_p, tp_p,
                                                 min_rr=min_rr, slippage_bps=slippage_bps,
                                                 commission_bps=commission_bps, pattern=trig["pattern"],
                                                 htf_bias=htf_bias, market_dow=market_data)

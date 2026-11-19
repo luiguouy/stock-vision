@@ -1987,6 +1987,7 @@ def run_strategy_analysis(
         wave_points=wp_points,
         period=period,
         lookahead_bars=25,
+        is_crypto=is_crypto,
     )
 
     # 美股大盘道氏相互验证 (SPY & QQQ & IWM 广度)

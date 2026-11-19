@@ -63,6 +63,8 @@ export const LEVERAGE_ETF_MAP: Record<string, LeveragePairInfo> = {
   usNVDL: { underlying: 'usNVDA', leverage: 2, label: 'NVDA 2x做多' },
   usAMDL: { underlying: 'usAMD', leverage: 2, label: 'AMD 2x做多' },
   usMUU: { underlying: 'usMU', leverage: 2, label: 'MU 2x做多' },
+  usTSMX: { underlying: 'usTSM', leverage: 2, label: 'TSM 2x做多' },
+  usTSLL: { underlying: 'usTSLA', leverage: 2, label: 'TSLA 2x做多' },
   usTQQQ: { underlying: 'usQQQ', leverage: 3, label: 'QQQ 3x做多' },
   usSQQQ: { underlying: 'usQQQ', leverage: -3, label: 'QQQ 3x做空' },
   usSOXL: { underlying: 'usSOXX', leverage: 3, label: 'SOXX 3x做多' },
@@ -174,7 +176,8 @@ export async function runPAStrategy(
   symbol: string,
   period: string = '1d',
   mode: string = 'swing',
-  klines?: KLinePoint[]
+  klines?: KLinePoint[],
+  signal?: AbortSignal
 ): Promise<any> {
   const body: any = { symbol, period, mode, draw_on_chart: true };
   if (klines && klines.length > 0) {
@@ -184,6 +187,7 @@ export async function runPAStrategy(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
+    signal,
   });
   if (!response.ok) {
     const err = await response.text();

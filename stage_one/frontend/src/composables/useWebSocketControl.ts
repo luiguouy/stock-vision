@@ -55,6 +55,8 @@ export function useWebSocketControl(handlers: {
   let ws: WebSocket | null = null;
   let reconnectTimer: any = null;
   let isClosedManually = false;
+  let reconnectDelay = 2000;
+  const MAX_RECONNECT_DELAY = 15000;
 
   function connect() {
     if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
@@ -70,6 +72,7 @@ export function useWebSocketControl(handlers: {
 
       ws.onopen = () => {
         isConnected.value = true;
+        reconnectDelay = 2000;
         // 注册控制客户端
         ws?.send(JSON.stringify({ type: 'register', role: 'frontend' }));
       };
@@ -83,15 +86,15 @@ export function useWebSocketControl(handlers: {
           }
           if (msg.action === 'open' && msg.symbol && handlers.onOpenChart) {
             handlers.onOpenChart(msg.symbol, msg.period);
-          } else if (msg.action === 'add_markers' && msg.markers && handlers.onAddMarkers) {
-            handlers.onAddMarkers(msg.markers, msg.symbol);
-          } else if (msg.action === 'draw_lines' && msg.lines && handlers.onDrawLines) {
-            handlers.onDrawLines(msg.lines, msg.symbol);
-          } else if (msg.action === 'draw_boxes' && msg.boxes && handlers.onDrawBoxes) {
-            handlers.onDrawBoxes(msg.boxes, msg.symbol);
-          } else if (msg.action === 'draw_channel_lines' && msg.channel_lines && handlers.onDrawChannelLines) {
-            handlers.onDrawChannelLines(msg.channel_lines, msg.symbol);
-          } else if (msg.action === 'draw_wave_lines' && msg.wave_lines && handlers.onDrawWaveLines) {
+          } else if (msg.action === 'add_markers' && msg.markers !== undefined && handlers.onAddMarkers) {
+            handlers.onAddMarkers(msg.markers || [], msg.symbol);
+          } else if (msg.action === 'draw_lines' && msg.lines !== undefined && handlers.onDrawLines) {
+            handlers.onDrawLines(msg.lines || [], msg.symbol);
+          } else if (msg.action === 'draw_boxes' && msg.boxes !== undefined && handlers.onDrawBoxes) {
+            handlers.onDrawBoxes(msg.boxes || [], msg.symbol);
+          } else if (msg.action === 'draw_channel_lines' && msg.channel_lines !== undefined && handlers.onDrawChannelLines) {
+            handlers.onDrawChannelLines(msg.channel_lines || [], msg.symbol);
+          } else if (msg.action === 'draw_wave_lines' && msg.wave_lines !== undefined && handlers.onDrawWaveLines) {
             handlers.onDrawWaveLines(msg.wave_lines, msg.symbol);
           } else if (msg.action === 'draw_time_lines' && handlers.onDrawTimeLines) {
             handlers.onDrawTimeLines(msg.time_lines || [], msg.symbol);
@@ -127,7 +130,8 @@ export function useWebSocketControl(handlers: {
       ws.onclose = () => {
         isConnected.value = false;
         if (!isClosedManually) {
-          reconnectTimer = setTimeout(connect, 2000);
+          reconnectTimer = setTimeout(connect, reconnectDelay);
+          reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT_DELAY);
         }
       };
 
@@ -136,7 +140,8 @@ export function useWebSocketControl(handlers: {
       };
     } catch (e) {
       if (!isClosedManually) {
-        reconnectTimer = setTimeout(connect, 3000);
+        reconnectTimer = setTimeout(connect, reconnectDelay);
+        reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT_DELAY);
       }
     }
   }
@@ -155,7 +160,11 @@ export function useWebSocketControl(handlers: {
   onUnmounted(() => {
     isClosedManually = true;
     clearTimeout(reconnectTimer);
-    if (ws) ws.close();
+    if (ws) {
+      ws.onopen = ws.onmessage = ws.onclose = ws.onerror = null;
+      ws.close();
+      ws = null;
+    }
   });
 
   return {
